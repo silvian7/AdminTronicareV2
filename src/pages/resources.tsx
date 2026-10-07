@@ -796,13 +796,6 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       label: "Assignments",
       children: (
         <>
-          <Alert
-            className="page-alert"
-            type="info"
-            showIcon
-            message="Assigned users and groups can access this asset."
-            description="Removing an assignment can revoke access to the asset and its equipment."
-          />
           <Tabs
             items={[
               {

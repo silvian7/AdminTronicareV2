@@ -231,8 +231,7 @@ test("asset users and groups can be assigned and removed with organization-scope
     );
     await page
       .getByRole("button", {
-        name: `Assign ${assignment.noun.toLowerCase()}`,
-        exact: true,
+        name: new RegExp(`Assign ${assignment.noun.toLowerCase()}$`),
       })
       .click();
     await expect(row).toBeVisible();
@@ -243,8 +242,7 @@ test("asset users and groups can be assigned and removed with organization-scope
     );
     await expect(
       page.getByRole("button", {
-        name: `Assign ${assignment.noun.toLowerCase()}`,
-        exact: true,
+        name: new RegExp(`Assign ${assignment.noun.toLowerCase()}$`),
       }),
     ).toBeDisabled();
     await remove(page, assignment.label);
