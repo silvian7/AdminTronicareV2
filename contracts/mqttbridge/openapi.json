@@ -1,0 +1,809 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tronicare MqttBridge Admin API",
+    "version": "0.1.0",
+    "description": "Source-derived documentation of all five HTTP operations exposed by the mqttbridge-api process. Includes management probes excluded from FastAPI's generated schema. The service disables runtime /openapi.json, Swagger UI and ReDoc. Metrics and diagnostics are unauthenticated; only info checks the case-insensitive Token header. Authentication failure is intentionally HTTP 200 with Status=false. The worker, worker-probe, importer and shadow validator are separate non-HTTP entrypoints."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Base URL of the mqttbridge-api deployment; host and port are configured externally."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Admin compatibility",
+      "description": "Read-only legacy-compatible admin operations."
+    },
+    {
+      "name": "Health",
+      "description": "Management probes for the admin API process."
+    }
+  ],
+  "x-source-files": [
+    "services/mqttbridge/src/tronicare_mqttbridge/api.py",
+    "services/mqttbridge/src/tronicare_mqttbridge/entrypoints/admin_api.py",
+    "services/mqttbridge/src/tronicare_mqttbridge/adapters/auth/legacy_redis.py",
+    "services/mqttbridge/src/tronicare_mqttbridge/adapters/auth/oidc.py",
+    "services/mqttbridge/src/tronicare_mqttbridge/adapters/postgres/admin.py",
+    "services/mqttbridge/src/tronicare_mqttbridge/observability/admin_metrics.py",
+    "packages/foundation/src/tronicare_foundation/health.py",
+    "services/mqttbridge/tests/test_api.py",
+    "services/mqttbridge/tests/contract/test_packaged_openapi.py"
+  ],
+  "paths": {
+    "/v1/mqttbridgeadmin/info": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "mqttbridge_admin_info",
+        "tags": [
+          "Admin compatibility"
+        ],
+        "summary": "Read the current worker identity and heartbeat age",
+        "description": "Authenticates the Token header before reading the latest unstopped persisted worker and its metrics. Missing, empty or rejected credentials, and an unavailable authentication backend, all return HTTP 200 with Status=false and Error='bad authentication'. A successful read without a current worker returns empty Engine_Type, Engine_Uuid and Engine_Version and omits Engine_Lastheartbeat. The current production entrypoint composes a fail-closed legacy Redis transport; a configured internal compatibility token can authenticate. The OIDC adapter is a fail-closed placeholder, not a working OAuth flow.",
+        "security": [
+          {
+            "TokenAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated worker information, or a compatibility authentication failure. Check Status in the response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkerInfo"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AuthenticationFailure"
+                    }
+                  ]
+                },
+                "examples": {
+                  "worker": {
+                    "summary": "Current worker",
+                    "value": {
+                      "Status": true,
+                      "Error": "",
+                      "Engine_Type": "MqttBridge",
+                      "Engine_Uuid": "00000000-0000-4000-8000-000000000001",
+                      "Engine_Version": "0.1.0",
+                      "Engine_Lastheartbeat": 7
+                    }
+                  },
+                  "noWorker": {
+                    "summary": "Authenticated, with no worker snapshot",
+                    "value": {
+                      "Status": true,
+                      "Error": "",
+                      "Engine_Type": "",
+                      "Engine_Uuid": "",
+                      "Engine_Version": ""
+                    }
+                  },
+                  "authenticationFailure": {
+                    "value": {
+                      "Status": false,
+                      "Error": "bad authentication"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FastAPI request validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The authenticated state read failed, including an unavailable database or an incomplete current-worker metrics snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailable"
+                },
+                "examples": {
+                  "unavailable": {
+                    "value": {
+                      "Status": false,
+                      "Error": "service unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mqttbridgeadmin/metrics": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "mqttbridge_admin_metrics",
+        "tags": [
+          "Admin compatibility"
+        ],
+        "summary": "Read five compatibility counters in Prometheus text format",
+        "description": "Unauthenticated read of persisted compatibility metrics. Emits the five declared families in fixed order as HELP, TYPE counter and integer sample lines, with a final LF. Missing values, including an absent worker snapshot, render as zero. There are no metric labels or query parameters.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "LF-delimited compatibility counter exposition. The HTTP Content-Type is text/plain; charset=utf-8.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "# HELP tronicare_mqttbridge_heartbeats_total tronicare_mqttbridge: total number heartbeats\n# TYPE tronicare_mqttbridge_heartbeats_total counter\ntronicare_mqttbridge_heartbeats_total 0\n# HELP tronicare_mqttbridge_mqtt_sleepace_messages_received_total tronicare_mqttbridge: total number sleepace mqtt received messages\n# TYPE tronicare_mqttbridge_mqtt_sleepace_messages_received_total counter\ntronicare_mqttbridge_mqtt_sleepace_messages_received_total 0\n# HELP tronicare_mqttbridge_mqtt_tronicare_messages_received_total tronicare_mqttbridge: total number tronicare mqtt received messages\n# TYPE tronicare_mqttbridge_mqtt_tronicare_messages_received_total counter\ntronicare_mqttbridge_mqtt_tronicare_messages_received_total 0\n# HELP tronicare_mqttbridge_mqtt_sleepace_watchdog_total tronicare_mqttbridge: total number sleepace mqtt watchdog activations\n# TYPE tronicare_mqttbridge_mqtt_sleepace_watchdog_total counter\ntronicare_mqttbridge_mqtt_sleepace_watchdog_total 0\n# HELP tronicare_mqttbridge_mqtt_tronicare_watchdog_total tronicare_mqttbridge: total number tronicare mqtt watchdog activations\n# TYPE tronicare_mqttbridge_mqtt_tronicare_watchdog_total counter\ntronicare_mqttbridge_mqtt_tronicare_watchdog_total 0\n"
+              }
+            }
+          },
+          "503": {
+            "description": "The persisted state could not be read or the current-worker metrics snapshot was incomplete.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "# mqttbridge admin state unavailable\n"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mqttbridgeadmin/test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "mqttbridge_admin_test",
+        "tags": [
+          "Admin compatibility"
+        ],
+        "summary": "Read sanitized configuration and dependency diagnostics",
+        "description": "Unauthenticated compatibility diagnostics. Configuration values are booleans indicating configured dependencies, never connection details. The legacy log path is redacted. Dependencies reflect the current in-memory readiness registry; this operation does not refresh database or worker state and can report a status last updated by the readiness endpoint.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Sanitized diagnostic object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityDiagnostics"
+                },
+                "examples": {
+                  "diagnostics": {
+                    "value": {
+                      "LOG_HEADER": "mqttbridge",
+                      "LOG_FULL_FILENAME": "[REDACTED_PATH]",
+                      "THIS_MODULE_NAME": "mqttbridge-api",
+                      "ENV_VAR_LOCAL_REDIS_URL": false,
+                      "ENV_VAR_LOCAL_REDIS_PORT": false,
+                      "ENV_VAR_GLOBAL_REDIS_URL": false,
+                      "ENV_VAR_GLOBAL_REDIS_PORT": false,
+                      "Component": "MqttBridge",
+                      "Version": "0.1.0",
+                      "Configuration": {
+                        "PostgreSQL": true,
+                        "LegacyRedisAuth": false,
+                        "OIDC": false
+                      },
+                      "Dependencies": {
+                        "PostgreSQL": "unhealthy",
+                        "WorkerDelivery": "unhealthy"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_health/live": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "mqttbridge_health_live",
+        "tags": [
+          "Health"
+        ],
+        "summary": "Check admin API process liveness",
+        "description": "Healthy after process startup and before stopping. Does not probe PostgreSQL, Redis, MQTT or Core. Checks is always an empty array. This route is present in the application despite include_in_schema=False.",
+        "x-runtime-include-in-schema": false,
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process has started and is not stopping.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/LivenessReport"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "healthy"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "examples": {
+                  "healthy": {
+                    "value": {
+                      "service": "mqttbridge",
+                      "role": "api",
+                      "kind": "liveness",
+                      "status": "healthy",
+                      "checks": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The process has not started or is stopping.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/LivenessReport"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unhealthy"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "examples": {
+                  "unhealthy": {
+                    "value": {
+                      "service": "mqttbridge",
+                      "role": "api",
+                      "kind": "liveness",
+                      "status": "unhealthy",
+                      "checks": []
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_health/ready": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RequestId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "mqttbridge_health_ready",
+        "tags": [
+          "Health"
+        ],
+        "summary": "Check admin API readiness and persisted worker delivery health",
+        "description": "Refreshes PostgreSQL and worker_delivery checks using the admin state reader, then evaluates process lifecycle and every required registered check. Production reads use the database clock and the latest unstopped worker heartbeat and health category. A stale/missing worker or an unhealthy delivery category fails readiness. The default API registry also includes business_runtime. Checks are sorted by name. No MQTT or Core request is made. This route is present in the application despite include_in_schema=False.",
+        "x-runtime-include-in-schema": false,
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process is running and all required checks are healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ReadinessReport"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "healthy"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "examples": {
+                  "healthy": {
+                    "value": {
+                      "service": "mqttbridge",
+                      "role": "api",
+                      "kind": "readiness",
+                      "status": "healthy",
+                      "checks": [
+                        {
+                          "name": "business_runtime",
+                          "status": "healthy",
+                          "required": true
+                        },
+                        {
+                          "name": "postgres",
+                          "status": "healthy",
+                          "required": true
+                        },
+                        {
+                          "name": "worker_delivery",
+                          "status": "healthy",
+                          "required": true
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The process is not ready or at least one required check is unhealthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ReadinessReport"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "unhealthy"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "examples": {
+                  "unhealthy": {
+                    "value": {
+                      "service": "mqttbridge",
+                      "role": "api",
+                      "kind": "readiness",
+                      "status": "unhealthy",
+                      "checks": [
+                        {
+                          "name": "business_runtime",
+                          "status": "healthy",
+                          "required": true
+                        },
+                        {
+                          "name": "postgres",
+                          "status": "healthy",
+                          "required": true
+                        },
+                        {
+                          "name": "worker_delivery",
+                          "status": "unhealthy",
+                          "required": true,
+                          "reason_code": "worker_heartbeat_stale"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "TokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Token",
+        "description": "Opaque credential presented in the Token header (header names are case-insensitive). This is not an Authorization: Bearer header. The current entrypoint accepts its configured internal compatibility token; its legacy Redis transport is unavailable. Missing or invalid credentials and backend unavailability return the documented HTTP 200 authentication-failure body."
+      }
+    },
+    "parameters": {
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional logging context. Accepted only when matching [A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}; otherwise a UUID is generated. Invalid values are ignored, not rejected. The API does not echo this header.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional logging context with the same acceptance rule as X-Request-ID. An absent or invalid value falls back to the accepted or generated request ID. The API does not echo this header.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "WorkerInfo": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean",
+            "const": true
+          },
+          "Error": {
+            "type": "string",
+            "const": ""
+          },
+          "Engine_Type": {
+            "type": "string",
+            "description": "Persisted worker engine type, or an empty string when no worker exists."
+          },
+          "Engine_Uuid": {
+            "type": "string",
+            "description": "Persisted UUID rendered as text, or an empty string when no worker exists.",
+            "anyOf": [
+              {
+                "format": "uuid"
+              },
+              {
+                "const": ""
+              }
+            ]
+          },
+          "Engine_Version": {
+            "type": "string",
+            "description": "Persisted build version, or an empty string when no worker exists."
+          },
+          "Engine_Lastheartbeat": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Whole seconds since the worker heartbeat, truncated to an integer and clamped to zero. Omitted when there is no worker snapshot."
+          }
+        },
+        "required": [
+          "Status",
+          "Error",
+          "Engine_Type",
+          "Engine_Uuid",
+          "Engine_Version"
+        ],
+        "additionalProperties": false
+      },
+      "AuthenticationFailure": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean",
+            "const": false
+          },
+          "Error": {
+            "type": "string",
+            "const": "bad authentication"
+          }
+        },
+        "required": [
+          "Status",
+          "Error"
+        ],
+        "additionalProperties": false
+      },
+      "ServiceUnavailable": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean",
+            "const": false
+          },
+          "Error": {
+            "type": "string",
+            "const": "service unavailable"
+          }
+        },
+        "required": [
+          "Status",
+          "Error"
+        ],
+        "additionalProperties": false
+      },
+      "CompatibilityDiagnostics": {
+        "type": "object",
+        "properties": {
+          "LOG_HEADER": {
+            "type": "string",
+            "const": "mqttbridge"
+          },
+          "LOG_FULL_FILENAME": {
+            "type": "string",
+            "const": "[REDACTED_PATH]"
+          },
+          "THIS_MODULE_NAME": {
+            "type": "string",
+            "const": "mqttbridge-api"
+          },
+          "ENV_VAR_LOCAL_REDIS_URL": {
+            "type": "boolean",
+            "const": false
+          },
+          "ENV_VAR_LOCAL_REDIS_PORT": {
+            "type": "boolean",
+            "const": false
+          },
+          "ENV_VAR_GLOBAL_REDIS_URL": {
+            "type": "boolean"
+          },
+          "ENV_VAR_GLOBAL_REDIS_PORT": {
+            "type": "boolean"
+          },
+          "Component": {
+            "type": "string",
+            "const": "MqttBridge"
+          },
+          "Version": {
+            "type": "string"
+          },
+          "Configuration": {
+            "type": "object",
+            "properties": {
+              "PostgreSQL": {
+                "type": "boolean"
+              },
+              "LegacyRedisAuth": {
+                "type": "boolean"
+              },
+              "OIDC": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "PostgreSQL",
+              "LegacyRedisAuth",
+              "OIDC"
+            ],
+            "additionalProperties": false
+          },
+          "Dependencies": {
+            "type": "object",
+            "properties": {
+              "PostgreSQL": {
+                "type": "string",
+                "enum": [
+                  "healthy",
+                  "unhealthy",
+                  "unknown"
+                ]
+              },
+              "WorkerDelivery": {
+                "type": "string",
+                "enum": [
+                  "healthy",
+                  "unhealthy",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "PostgreSQL",
+              "WorkerDelivery"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "LOG_HEADER",
+          "LOG_FULL_FILENAME",
+          "THIS_MODULE_NAME",
+          "ENV_VAR_LOCAL_REDIS_URL",
+          "ENV_VAR_LOCAL_REDIS_PORT",
+          "ENV_VAR_GLOBAL_REDIS_URL",
+          "ENV_VAR_GLOBAL_REDIS_PORT",
+          "Component",
+          "Version",
+          "Configuration",
+          "Dependencies"
+        ],
+        "additionalProperties": false
+      },
+      "HealthCheck": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "description": "Bounded check identifier. Default API checks are business_runtime, postgres and worker_delivery."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "reason_code": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "description": "Optional bounded reason. Examples include database_unavailable, worker_unavailable, worker_heartbeat_stale, worker_delivery_unhealthy, not_checked, not_configured and stopping. Omitted when no reason is set."
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "LivenessReport": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "mqttbridge"
+          },
+          "role": {
+            "type": "string",
+            "const": "api"
+          },
+          "kind": {
+            "type": "string",
+            "const": "liveness"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "maxItems": 0,
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            }
+          }
+        },
+        "required": [
+          "service",
+          "role",
+          "kind",
+          "status",
+          "checks"
+        ],
+        "additionalProperties": false
+      },
+      "ReadinessReport": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "mqttbridge"
+          },
+          "role": {
+            "type": "string",
+            "const": "api"
+          },
+          "kind": {
+            "type": "string",
+            "const": "readiness"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            }
+          }
+        },
+        "required": [
+          "service",
+          "role",
+          "kind",
+          "status",
+          "checks"
+        ],
+        "additionalProperties": false
+      },
+      "HTTPValidationError": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "loc": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            }
+          },
+          "msg": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ]
+      }
+    }
+  }
+}

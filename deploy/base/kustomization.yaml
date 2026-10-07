@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - redis.yaml
+  - disruption-budget.yaml
+configMapGenerator:
+  - name: tronicare-admin-config
+    literals:
+      - PUBLIC_ORIGIN=https://admin.example.com
+      - API_ORIGIN=https://dev.api.tronicare.com
+      - REDIS_URL=redis://tronicare-admin-sessions:6379
+      - ENABLED_WRITE_SERVICES=users,organizations,assets,core,rules,actions
+      - TRUST_PROXY_HOPS=0
+images:
+  - name: tronicare-admin
+    newName: tronicare-admin
+    newTag: local

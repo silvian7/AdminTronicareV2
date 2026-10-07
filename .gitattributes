@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+# Contract hashes cover the original snapshot bytes, including line endings.
+contracts/**/*.json -text whitespace=cr-at-eol

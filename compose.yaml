@@ -1,0 +1,24 @@
+services:
+  admin:
+    build: .
+    ports: ["127.0.0.1:8080:8080"]
+    env_file: .env
+    environment:
+      PUBLIC_ORIGIN: http://localhost:8080
+      ALLOW_HTTP: "true"
+      REDIS_URL: redis://sessions:6379
+    depends_on:
+      sessions:
+        condition: service_healthy
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  sessions:
+    image: redis:7-alpine
+    command: [redis-server, --save, "", --appendonly, "no"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10

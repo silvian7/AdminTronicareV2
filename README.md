@@ -42,9 +42,7 @@ Security regressions use synthetic records and responses. Run `npm test` and the
 
 ## API contract provenance
 
-Snapshots in `contracts/` come from:
-
-`C:\Users\silvi\OneDrive\dev\python\Tronicare_multi\tronicare_py\docs\openapi`
+Snapshots in `contracts/` come from the companion Tronicare Python workspace's `tronicare_py/docs/openapi` directory.
 
 Only each service's business/admin API is copied; Core uses `compat.openapi.json`. `shared/contracts.generated.json` records SHA-256 hashes and the derived field/route metadata for each source. No live API or credential is needed to generate it.
 
@@ -98,5 +96,5 @@ The test suite uses synthetic, isolated service responses. It validates contract
 For a reproducible synthetic browser environment, run `docker compose -f compose.test.yaml up --build -d`, then `npx playwright install chromium` and `npm run test:browser`. This environment uses port 18080 and the synthetic login `fixture-admin` / `fixture-password`; no real account is needed. Stop it with `docker compose -f compose.test.yaml down`. Do not run mutation tests against a real backend. The fixture is a separate Docker build target and is excluded from the production runtime image. Test artifacts are written to `test-results/` and `playwright-report/`.
 
 See [VALIDATION.md](VALIDATION.md) for the checks completed on this implementation and the remaining environment-specific rollout work.
-#   A d m i n T r o n i c a r e V 2  
- 
+
+GitHub Actions runs the contract check, unit tests, production build, dependency audit and Chromium browser tests on pushes to `main` and pull requests. Browser tests use the isolated synthetic Compose environment.

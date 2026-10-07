@@ -1,0 +1,231 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tronicare Mqtt Api",
+    "version": "0.1.0",
+    "description": "Source-derived HTTP contract for the Python implementation. Includes operational endpoints hidden from runtime OpenAPI. Use the base URL of this process; no production host is embedded."
+  },
+  "x-service": "mqtt",
+  "x-process": "api",
+  "x-source-files": [
+    "services/mqtt/src/tronicare_mqtt/api.py"
+  ],
+  "paths": {
+    "/_health/live": {
+      "get": {
+        "operationId": "mqtt_api_get__health_live",
+        "summary": "Process liveness",
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Process is live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "ok"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_health/ready": {
+      "get": {
+        "operationId": "mqtt_api_get__health_ready",
+        "summary": "Process readiness",
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Required dependencies / worker are ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "ready"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependencies / worker are not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "ready"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "This probe does not use application authentication."
+      }
+    },
+    "/v1/mqttadmin/info": {
+      "get": {
+        "operationId": "mqtt_api_get_v1_mqttadmin_info",
+        "summary": "Read service information",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service metadata, or Status=false and Error='bad authentication'.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          }
+        },
+        "description": "Missing or invalid Token returns HTTP 200 with Status=false. Successful metadata fields depend on the worker state."
+      }
+    },
+    "/v1/mqttadmin/metrics": {
+      "get": {
+        "operationId": "mqtt_api_get_v1_mqttadmin_metrics",
+        "summary": "Read Prometheus metrics",
+        "tags": [
+          "API"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "description": "No Token header is required by this handler."
+      }
+    },
+    "/v1/mqttadmin/test": {
+      "get": {
+        "operationId": "mqtt_api_get_v1_mqttadmin_test",
+        "summary": "Test the API listener",
+        "tags": [
+          "API"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Listener test result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "const": "Test OK"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServiceInfo": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean"
+          },
+          "Error": {
+            "type": "string"
+          },
+          "Engine_Type": {
+            "type": "string"
+          },
+          "Engine_Uuid": {
+            "type": "string"
+          },
+          "Engine_Version": {
+            "type": "string"
+          },
+          "Engine_Lastheartbeat": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "Status",
+          "Error"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "Token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Token",
+        "description": "Exactly one Token header, 1-4096 visible ASCII characters. Validated against the service's configured authorization backend."
+      }
+    }
+  }
+}

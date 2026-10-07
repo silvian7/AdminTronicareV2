@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tronicare-admin
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [admin.example.com]
+      secretName: tronicare-admin-tls
+  rules:
+    - host: admin.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tronicare-admin
+                port:
+                  name: http

@@ -1,0 +1,395 @@
+import { useState } from "react";
+import { useList } from "@refinedev/core";
+import {
+  Input,
+  InputNumber,
+  Select,
+  Switch,
+  Space,
+  Button,
+  Tabs,
+  Alert,
+  Typography,
+  Tag,
+} from "antd";
+import { Link } from "react-router";
+import {
+  canonical,
+  fieldLabel,
+  recordTitle,
+  referenceResource,
+  resourceMap,
+  translated,
+  type Field,
+  type RecordData,
+} from "../../shared/resources";
+import { useAdmin } from "../context";
+
+export function ReferenceSelect({
+  id,
+  resource,
+  value,
+  onChange,
+  allowZero = true,
+  disabled = false,
+}: {
+  id?: string;
+  resource: string;
+  value?: string;
+  onChange?: (v: string) => void;
+  allowZero?: boolean;
+  disabled?: boolean;
+}) {
+  const { organization, identity, can } = useAdmin();
+  const { result, query } = useList<RecordData>({
+    resource,
+    pagination: { mode: "off" },
+    meta: { organization },
+    queryOptions: { enabled: can(resourceMap[resource], "list") },
+    errorNotification: false,
+  });
+  const rows = (
+    can(resourceMap[resource], "list") && !query.isError
+      ? (result.data ?? [])
+      : []
+  ).filter((row) => {
+    if (resource !== "usertypes" || identity.level >= 90) return true;
+    const level = row.m_nLevel;
+    return (
+      typeof level === "string" &&
+      /^-?\d+$/.test(level) &&
+      Number.isSafeInteger(Number(level)) &&
+      Number(level) >= -2147483648 &&
+      Number(level) <= 2147483647 &&
+      Number(level) < identity.level
+    );
+  });
+  const options = [
+    ...(allowZero && resource !== "usertypes"
+      ? [{ value: "0", label: "Unassigned" }]
+      : []),
+    ...rows.map((row) => ({
+      value: row.id!,
+      label: `${recordTitle(row)} · ${row.id}`,
+    })),
+    ...(value && value !== "0" && !rows.some((r) => r.id === value)
+      ? [{ value, label: `ID ${value}` }]
+      : []),
+  ];
+  return (
+    <>
+      <Select
+        id={id}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        options={options}
+        showSearch
+        optionFilterProp="label"
+        loading={query.isLoading}
+        style={{ width: "100%" }}
+        status={query.isError ? "error" : undefined}
+        placeholder={`Choose ${resourceMap[resource].singular.toLowerCase()}`}
+        virtual
+      />
+      {query.isError && (
+        <Typography.Text type="danger">
+          Options unavailable.{" "}
+          <Button type="link" size="small" onClick={() => query.refetch()}>
+            Retry
+          </Button>
+        </Typography.Text>
+      )}
+      {result.limited && (
+        <Typography.Text type="warning">
+          The service returned a limited set of options.
+        </Typography.Text>
+      )}
+    </>
+  );
+}
+function TranslationInput({
+  id,
+  value = "",
+  onChange,
+  maxLength,
+}: {
+  id?: string;
+  value?: string;
+  onChange?: (v: string) => void;
+  maxLength?: number;
+}) {
+  let messages: { lang: string; text: string }[] | undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed.messages)) messages = parsed.messages;
+  } catch {
+    /* Plain text. */
+  }
+  const [multilingual, setMultilingual] = useState(!!messages);
+  if (!multilingual)
+    return (
+      <Space.Compact style={{ width: "100%" }}>
+        <Input
+          id={id}
+          value={value}
+          onChange={(e) => onChange?.(e.target.value)}
+          maxLength={maxLength}
+        />
+        <Button
+          onClick={() => {
+            setMultilingual(true);
+            onChange?.(
+              JSON.stringify({
+                messages: [
+                  { lang: "en", text: value },
+                  { lang: "fr", text: "" },
+                  { lang: "nl", text: "" },
+                ],
+              }),
+            );
+          }}
+        >
+          Languages
+        </Button>
+      </Space.Compact>
+    );
+  const current = messages ?? [{ lang: "en", text: value }];
+  return (
+    <div className="translation-input">
+      <Tabs
+        destroyOnHidden
+        size="small"
+        items={["en", "fr", "nl"].map((lang) => ({
+          key: lang,
+          label: { en: "English", fr: "French", nl: "Dutch" }[lang],
+          children: (
+            <Input.TextArea
+              id={id}
+              aria-label={`${id} (${lang})`}
+              autoSize={{ minRows: 2, maxRows: 4 }}
+              value={
+                current.find((m) => m.lang.toLowerCase() === lang)?.text ?? ""
+              }
+              onChange={(e) => {
+                const rest = current.filter(
+                  (m) => m.lang.toLowerCase() !== lang,
+                );
+                onChange?.(
+                  JSON.stringify({
+                    messages: [...rest, { lang, text: e.target.value }],
+                  }),
+                );
+              }}
+            />
+          ),
+        }))}
+      />
+    </div>
+  );
+}
+export function FieldInput({
+  field,
+  resource,
+  value,
+  onChange,
+}: {
+  field: Field;
+  resource: string;
+  value?: unknown;
+  onChange?: (value: unknown) => void;
+}) {
+  const name = canonical(field.key);
+  const target = referenceResource[name];
+  if (target)
+    return (
+      <ReferenceSelect
+        id={field.key}
+        resource={target}
+        value={value == null ? undefined : String(value)}
+        onChange={onChange}
+        allowZero={!field.minimum || BigInt(field.minimum) <= 0n}
+      />
+    );
+  if (name === "Rights")
+    return (
+      <Select
+        id={field.key}
+        mode="multiple"
+        value={typeof value === "string" ? [...value] : []}
+        onChange={(v) => onChange?.(v.join(""))}
+        options={[
+          { value: "r", label: "Read" },
+          { value: "c", label: "Create" },
+          { value: "u", label: "Update" },
+          { value: "d", label: "Delete" },
+        ]}
+      />
+    );
+  if (field.enum)
+    return (
+      <Select
+        id={field.key}
+        value={value == null ? undefined : String(value)}
+        onChange={onChange}
+        options={field.enum.map((v) => ({
+          value: String(v),
+          label:
+            name === "ValueType"
+              ? ((
+                  {
+                    1: "Boolean",
+                    2: "Integer",
+                    3: "Time on",
+                    4: "Real",
+                  } as Record<string, string>
+                )[String(v)] ?? String(v))
+              : String(v),
+        }))}
+      />
+    );
+  if (field.type === "boolean")
+    return (
+      <Switch
+        id={field.key}
+        checked={value === true}
+        onChange={onChange}
+        aria-label={fieldLabel(field.key)}
+      />
+    );
+  if (field.type === "integer" || field.type === "number")
+    return (
+      <InputNumber
+        id={field.key}
+        stringMode
+        value={value == null ? null : String(value)}
+        onChange={(v) => onChange?.(v == null ? undefined : String(v))}
+        precision={field.type === "integer" ? 0 : undefined}
+        style={{ width: "100%" }}
+      />
+    );
+  if (
+    ["Tag", "Label"].includes(name) &&
+    ["rules", "actions", "ruletypes"].includes(resource)
+  )
+    return (
+      <TranslationInput
+        id={field.key}
+        value={String(value ?? "")}
+        onChange={onChange}
+        maxLength={field.maxLength}
+      />
+    );
+  if (name.startsWith("Time") && !name.includes("24"))
+    return (
+      <Input
+        id={field.key}
+        type="time"
+        step="1"
+        value={String(value ?? "")}
+        onChange={(e) =>
+          onChange?.(
+            e.target.value.length === 5
+              ? `${e.target.value}:00`
+              : e.target.value,
+          )
+        }
+      />
+    );
+  if (name.startsWith("Dt") || name === "DateNaissance")
+    return (
+      <Input
+        id={field.key}
+        type="date"
+        value={String(value ?? "").replace(/^0000-00-00$/, "")}
+        onChange={(e) => onChange?.(e.target.value)}
+      />
+    );
+  if (/BodyText|Observations/.test(name))
+    return (
+      <Input.TextArea
+        id={field.key}
+        autoSize={{ minRows: 3, maxRows: 8 }}
+        value={String(value ?? "")}
+        onChange={(e) => onChange?.(e.target.value)}
+        maxLength={field.maxLength}
+        showCount
+      />
+    );
+  return (
+    <Input
+      id={field.key}
+      value={value == null ? "" : String(value)}
+      onChange={(e) => onChange?.(e.target.value)}
+      maxLength={field.maxLength}
+      type={/Email/i.test(name) ? "email" : "text"}
+    />
+  );
+}
+export function FieldValue({
+  field,
+  value,
+  primary = false,
+}: {
+  field: Field;
+  value: unknown;
+  primary?: boolean;
+}) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    /^0000-00-00/.test(String(value))
+  )
+    return <span className="muted">—</span>;
+  const name = canonical(field.key);
+  if (typeof value === "boolean")
+    return <Tag color={value ? "cyan" : "default"}>{value ? "Yes" : "No"}</Tag>;
+  if (!primary && referenceResource[name] && String(value) !== "0")
+    return (
+      <Link to={`/${referenceResource[name]}/${value}`}>#{String(value)}</Link>
+    );
+  if (typeof value === "object")
+    return <pre className="record-value">{JSON.stringify(value, null, 2)}</pre>;
+  if (field.type === "integer")
+    return <span className="numeric-value">{String(value)}</span>;
+  if (/^(Dh|Created|Modified|LastLogin|LastLogout)/.test(name)) {
+    const raw = String(value);
+    let date: Date | undefined;
+    if (!/local datetime/i.test(field.description ?? ""))
+      date = new Date(
+        raw +
+          (raw.includes("T") && !/Z$|[+-]\d{2}:\d{2}$/.test(raw) ? "Z" : ""),
+      );
+    return (
+      <span title={raw}>
+        {date && !isNaN(date.getTime())
+          ? date.toLocaleString()
+          : raw.replace("T", " ")}
+      </span>
+    );
+  }
+  return <span className="record-text">{translated(value)}</span>;
+}
+export const ErrorNotice = ({
+  error,
+  retry,
+}: {
+  error?: { message?: string } | null;
+  retry?: () => void;
+}) =>
+  error ? (
+    <Alert
+      type="error"
+      showIcon
+      message={error.message ?? "This view could not be loaded."}
+      className="page-alert"
+      action={
+        retry ? (
+          <Button size="small" onClick={retry}>
+            Retry
+          </Button>
+        ) : undefined
+      }
+    />
+  ) : null;

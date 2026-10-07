@@ -1,0 +1,36 @@
+# Synthetic browser-test environment; never point this configuration at real APIs.
+name: tronicare-admin-v2-qa
+services:
+  admin:
+    build:
+      context: .
+      target: runtime
+    ports: ["127.0.0.1:18080:8080"]
+    environment:
+      PUBLIC_ORIGIN: http://localhost:18080
+      ALLOW_HTTP: "true"
+      API_ORIGIN: http://fixture-api:4010
+      REDIS_URL: redis://sessions:6379
+      # Fixed zero-byte test key. No real credentials or records exist here.
+      SESSION_SECRET: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    depends_on:
+      sessions:
+        condition: service_healthy
+      fixture-api:
+        condition: service_started
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  fixture-api:
+    build:
+      context: .
+      target: test-api
+  sessions:
+    image: redis:7-alpine
+    command: [redis-server, --save, "", --appendonly, "no"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 2s
+      retries: 15

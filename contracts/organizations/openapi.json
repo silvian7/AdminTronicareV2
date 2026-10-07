@@ -1,0 +1,1858 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tronicare Organizations Api",
+    "version": "0.1.0",
+    "description": "Source-derived HTTP contract for the Python implementation. Includes operational endpoints hidden from runtime OpenAPI. Use the base URL of this process; no production host is embedded."
+  },
+  "x-service": "organizations",
+  "x-process": "api",
+  "x-source-files": [
+    "services/organizations/src/tronicare_organizations/api.py",
+    "services/organizations/src/tronicare_organizations/codec.py",
+    "services/organizations/src/tronicare_organizations/operations.py",
+    "services/organizations/src/tronicare_organizations/legacy_import.py",
+    "services/organizations/src/tronicare_organizations/authorization.py",
+    "services/organizations/src/tronicare_organizations/contracts.py",
+    "services/organizations/src/tronicare_organizations/runtime.py",
+    "services/organizations/src/tronicare_organizations/settings.py"
+  ],
+  "paths": {
+    "/v1/organizations": {
+      "get": {
+        "operationId": "organizations_api_get_v1_organizations",
+        "summary": "GET organizations",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Records, or the single record selected by entity_id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Organization"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Organization"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. IdSession and other query parameters do not filter this collection. Supplying entity_id selects one record and changes the response from an array to an object. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Ordinary list and item access is limited to the current actor organization, including collection entity_id selection. PUT and DELETE check scope inside the authority transaction before state or mutation audit changes.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "organizations_api_post_v1_organizations",
+        "summary": "POST organizations",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organization"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission create. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Creating a server-allocated organization requires platform level 90 or above; ordinary callers cannot create a new tenant. Persisted one-time-password sessions cannot mutate. Organization-type operations retain their applicable method rights and legacy wire/update-path contracts.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      }
+    },
+    "/v1/organizations/{entity_id}": {
+      "get": {
+        "operationId": "organizations_api_get_v1_organizations_entity_id",
+        "summary": "GET organizations",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organization"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Ordinary list and item access is limited to the current actor organization, including collection entity_id selection. PUT and DELETE check scope inside the authority transaction before state or mutation audit changes.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "organizations_api_put_v1_organizations_entity_id",
+        "summary": "PUT organizations",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organization"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission update. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Ordinary list and item access is limited to the current actor organization, including collection entity_id selection. PUT and DELETE check scope inside the authority transaction before state or mutation audit changes. Persisted one-time-password sessions cannot mutate. Organization-type operations retain their applicable method rights and legacy wire/update-path contracts.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      },
+      "delete": {
+        "operationId": "organizations_api_delete_v1_organizations_entity_id",
+        "summary": "DELETE organizations",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record deleted; empty response body."
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission delete. Mutations require both configured and database authority; otherwise HTTP 503. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Ordinary list and item access is limited to the current actor organization, including collection entity_id selection. PUT and DELETE check scope inside the authority transaction before state or mutation audit changes. Persisted one-time-password sessions cannot mutate. Organization-type operations retain their applicable method rights and legacy wire/update-path contracts.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/organizationstypes": {
+      "get": {
+        "operationId": "organizations_api_get_v1_organizationstypes",
+        "summary": "GET organizationstypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Records, or the single record selected by entity_id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OrganizationType"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrganizationType"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. IdSession and other query parameters do not filter this collection. Supplying entity_id selects one record and changes the response from an array to an object. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "organizations_api_post_v1_organizationstypes",
+        "summary": "POST organizationstypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationType"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission create. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Persisted one-time-password sessions cannot mutate. Organization-type operations retain their applicable method rights and legacy wire/update-path contracts.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationTypeWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      }
+    },
+    "/v1/organizationstypes/{entity_id}": {
+      "get": {
+        "operationId": "organizations_api_get_v1_organizationstypes_entity_id",
+        "summary": "GET organizationstypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationType"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "organizations_api_delete_v1_organizationstypes_entity_id",
+        "summary": "DELETE organizationstypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record deleted; empty response body."
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission delete. Mutations require both configured and database authority; otherwise HTTP 503. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Persisted one-time-password sessions cannot mutate. Organization-type operations retain their applicable method rights and legacy wire/update-path contracts.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/organizationstypes/v1/organizationtypes/{entity_id}": {
+      "put": {
+        "operationId": "organizations_api_put_v1_organizationstypes_v1_organizationtypes_entity_id",
+        "summary": "PUT organizationstypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationType"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission update. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. This nested organizationstypes/v1/organizationtypes spelling is the implemented compatibility route. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL actor, signed role level, organization, groups and requested method rights. Stale policy fails closed. Persisted one-time-password sessions cannot mutate. Organization-type operations retain their applicable method rights and legacy wire/update-path contracts.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationTypeWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      }
+    },
+    "/_health/live": {
+      "get": {
+        "operationId": "organizations_api_get__health_live",
+        "summary": "Process liveness",
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Process is live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "const": "organizations"
+                    },
+                    "role": {
+                      "type": "string",
+                      "const": "api"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "healthy"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "role",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": ""
+      }
+    },
+    "/_health/ready": {
+      "get": {
+        "operationId": "organizations_api_get__health_ready",
+        "summary": "Process readiness",
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Required dependencies / worker are ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "const": "organizations"
+                    },
+                    "role": {
+                      "type": "string",
+                      "const": "api"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "healthy",
+                        "unhealthy"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "role",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependencies / worker are not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "const": "organizations"
+                    },
+                    "role": {
+                      "type": "string",
+                      "const": "api"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "healthy",
+                        "unhealthy"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "role",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "This probe does not use application authentication."
+      }
+    },
+    "/v1/organizationsadmin/info": {
+      "get": {
+        "operationId": "organizations_api_get_v1_organizationsadmin_info",
+        "summary": "Read service information",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service metadata, or Status=false and Error='bad authentication'.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Missing or invalid Token returns HTTP 200 with Status=false. Successful metadata fields depend on the worker state. Service information requires current platform level 90 or above. Ordinary authenticated callers receive 403. Public heartbeat metrics retain their existing authentication contract."
+      }
+    },
+    "/v1/organizationsadmin/metrics": {
+      "get": {
+        "operationId": "organizations_api_get_v1_organizationsadmin_metrics",
+        "summary": "Read Prometheus metrics",
+        "tags": [
+          "API"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "No Token header is required by this handler."
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Fault": {
+        "type": "object",
+        "properties": {
+          "fault": {
+            "type": "object",
+            "properties": {
+              "faultcode": {
+                "type": "string",
+                "enum": [
+                  "client",
+                  "serveur"
+                ]
+              },
+              "faultstring": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "faultcode",
+              "faultstring",
+              "detail"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fault"
+        ]
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "m_nIDOrganization": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDOrganizationType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sNuméroInterneClient": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sSociété": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_nCivilité": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -32768,
+            "maximum": 32767
+          },
+          "m_sLastName": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sPrénom": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sPrénom2": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sAdresse": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sAdresseSuite": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sCodePostal": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sVille": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sEtatDep": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sPays": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sTéléphone": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sMobile": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sFax": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sEmail": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_nKind": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "m_sNumTVA": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sBanque": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sIBAN": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_moEnCoursAutorisé": {
+            "type": "number",
+            "minimum": -999999999999999999,
+            "maximum": 999999999999999999,
+            "description": "Exact decimal currency; at most six fractional digits on input."
+          },
+          "m_bExemptTVA": {
+            "type": "boolean"
+          },
+          "m_bLivrerMêmeAdresse": {
+            "type": "boolean"
+          },
+          "m_bFacturerMêmeAdresse": {
+            "type": "boolean"
+          },
+          "m_dDateNaissance": {
+            "type": "string",
+            "description": "YYYY-MM-DD or 0000-00-00 for an empty date. Empty string is also accepted on writes."
+          },
+          "m_bARappeler": {
+            "type": "boolean"
+          },
+          "m_sAdresseIP": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sObservations": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sSaisiPar": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_dSaisiLe": {
+            "type": "string",
+            "description": "YYYY-MM-DD or 0000-00-00 for an empty date. Empty string is also accepted on writes."
+          },
+          "m_sModifiéPar": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_dModifiéLe": {
+            "type": "string",
+            "description": "YYYY-MM-DD or 0000-00-00 for an empty date. Empty string is also accepted on writes."
+          },
+          "m_sNomUtilisateur": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sMobile2": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sEmail2": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDOrganization",
+          "m_nIDOrganizationType",
+          "m_sTag",
+          "m_sLabel",
+          "m_sNuméroInterneClient",
+          "m_sSociété",
+          "m_nCivilité",
+          "m_sLastName",
+          "m_sPrénom",
+          "m_sPrénom2",
+          "m_sAdresse",
+          "m_sAdresseSuite",
+          "m_sCodePostal",
+          "m_sVille",
+          "m_sEtatDep",
+          "m_sPays",
+          "m_sTéléphone",
+          "m_sMobile",
+          "m_sFax",
+          "m_sEmail",
+          "m_nKind",
+          "m_sNumTVA",
+          "m_sBanque",
+          "m_sIBAN",
+          "m_moEnCoursAutorisé",
+          "m_bExemptTVA",
+          "m_bLivrerMêmeAdresse",
+          "m_bFacturerMêmeAdresse",
+          "m_dDateNaissance",
+          "m_bARappeler",
+          "m_sAdresseIP",
+          "m_sObservations",
+          "m_sSaisiPar",
+          "m_dSaisiLe",
+          "m_sModifiéPar",
+          "m_dModifiéLe",
+          "m_sNomUtilisateur",
+          "m_sMobile2",
+          "m_sEmail2"
+        ]
+      },
+      "OrganizationWrite": {
+        "type": "object",
+        "properties": {
+          "m_nIDOrganization": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDOrganizationType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sNuméroInterneClient": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sSociété": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_nCivilité": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -32768,
+            "maximum": 32767
+          },
+          "m_sLastName": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sPrénom": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sPrénom2": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sAdresse": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sAdresseSuite": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sCodePostal": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sVille": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sEtatDep": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sPays": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sTéléphone": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sMobile": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sFax": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sEmail": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_nKind": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "m_sNumTVA": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sBanque": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sIBAN": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_moEnCoursAutorisé": {
+            "type": "number",
+            "minimum": -999999999999999999,
+            "maximum": 999999999999999999,
+            "description": "Exact decimal currency; at most six fractional digits on input."
+          },
+          "m_bExemptTVA": {
+            "type": "boolean"
+          },
+          "m_bLivrerMêmeAdresse": {
+            "type": "boolean"
+          },
+          "m_bFacturerMêmeAdresse": {
+            "type": "boolean"
+          },
+          "m_dDateNaissance": {
+            "type": "string",
+            "description": "YYYY-MM-DD or 0000-00-00 for an empty date. Empty string is also accepted on writes."
+          },
+          "m_bARappeler": {
+            "type": "boolean"
+          },
+          "m_sAdresseIP": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sObservations": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sSaisiPar": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_dSaisiLe": {
+            "type": "string",
+            "description": "YYYY-MM-DD or 0000-00-00 for an empty date. Empty string is also accepted on writes."
+          },
+          "m_sModifiéPar": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_dModifiéLe": {
+            "type": "string",
+            "description": "YYYY-MM-DD or 0000-00-00 for an empty date. Empty string is also accepted on writes."
+          },
+          "m_sNomUtilisateur": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sMobile2": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sEmail2": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "additionalProperties": true
+      },
+      "OrganizationType": {
+        "type": "object",
+        "properties": {
+          "m_nIDOrganizationType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sKind": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDOrganizationType",
+          "m_sTag",
+          "m_sLabel",
+          "m_sKind"
+        ]
+      },
+      "OrganizationTypeWrite": {
+        "type": "object",
+        "properties": {
+          "m_nIDOrganizationType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sKind": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ServiceInfo": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean"
+          },
+          "Error": {
+            "type": "string"
+          },
+          "Engine_Type": {
+            "type": "string"
+          },
+          "Engine_Uuid": {
+            "type": "string"
+          },
+          "Engine_Version": {
+            "type": "string"
+          },
+          "Engine_Lastheartbeat": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "Status",
+          "Error"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "Token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Token",
+        "description": "Exactly one Token header, 1-4096 visible ASCII characters. Validated against the service's configured authorization backend."
+      }
+    }
+  }
+}

@@ -1,0 +1,1887 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tronicare Assets Api",
+    "version": "0.1.0",
+    "description": "Source-derived HTTP contract for the Python implementation. Includes operational endpoints hidden from runtime OpenAPI. Use the base URL of this process; no production host is embedded."
+  },
+  "x-service": "assets",
+  "x-process": "api",
+  "x-source-files": [
+    "services/assets/src/tronicare_assets/api.py",
+    "services/assets/src/tronicare_assets/codec.py",
+    "services/assets/src/tronicare_assets/contracts.py",
+    "services/assets/src/tronicare_assets/operations.py",
+    "services/assets/src/tronicare_assets/authorization.py",
+    "services/assets/src/tronicare_assets/runtime.py",
+    "services/assets/src/tronicare_assets/settings.py"
+  ],
+  "paths": {
+    "/v1/assets": {
+      "get": {
+        "operationId": "assets_api_get_v1_assets",
+        "summary": "GET assets",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Records, or the single record selected by entity_id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Asset"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Asset"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. Supplying entity_id selects one record and changes the response from an array to an object. Ordinary callers are scoped by their organization AND (user OR groups); privileged callers may use the documented filters. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. Ordinary asset access requires the caller organization AND an explicit user OR current group assignment. Item GET and item-selected collection GET enforce the same SQL scope; denied PUT and DELETE cannot change state or append mutation audit.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": -10000,
+              "maximum": 10000,
+              "default": 50
+            },
+            "description": "Missing/empty/zero becomes 50. Legacy list appends before checking the limit, so positive n may return n+1 rows; negative values return at most one. Duplicate parameters are rejected."
+          },
+          {
+            "name": "idorganization",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "description": "Optional signed-64-bit filter, applied only to internal or usertypelevel >= 90 callers."
+          },
+          {
+            "name": "iduser",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "description": "Optional signed-64-bit filter, applied only to internal or usertypelevel >= 90 callers."
+          },
+          {
+            "name": "idusergroup",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "description": "Optional signed-64-bit filter, applied only to internal or usertypelevel >= 90 callers."
+          },
+          {
+            "name": "idhub",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": -9223372036854775808,
+              "maximum": 9223372036854775807
+            },
+            "description": "Optional signed-64-bit filter, applied only to internal or usertypelevel >= 90 callers."
+          },
+          {
+            "name": "includeusergroups",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^([01]|[tT][rR][uU][eE]|[fF][aA][lL][sS][eE]|)$"
+            },
+            "description": "Case-insensitive boolean. True uses the principal's groups instead of idusergroup. Privileged callers only."
+          }
+        ]
+      },
+      "post": {
+        "operationId": "assets_api_post_v1_assets",
+        "summary": "POST assets",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission create. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. Ordinary asset access requires the caller organization AND an explicit user OR current group assignment. Item GET and item-selected collection GET enforce the same SQL scope; denied PUT and DELETE cannot change state or append mutation audit. One-time-password sessions cannot mutate. Ordinary asset creation targets the caller organization; ordinary updates preserve that organization and require an existing assignment checked within the write transaction. Platform callers retain their method-right-controlled scope.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      }
+    },
+    "/v1/assets/{entity_id}": {
+      "get": {
+        "operationId": "assets_api_get_v1_assets_entity_id",
+        "summary": "GET assets",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. Ordinary asset access requires the caller organization AND an explicit user OR current group assignment. Item GET and item-selected collection GET enforce the same SQL scope; denied PUT and DELETE cannot change state or append mutation audit.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "assets_api_put_v1_assets_entity_id",
+        "summary": "PUT assets",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission update. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. Ordinary asset access requires the caller organization AND an explicit user OR current group assignment. Item GET and item-selected collection GET enforce the same SQL scope; denied PUT and DELETE cannot change state or append mutation audit. One-time-password sessions cannot mutate. Ordinary asset creation targets the caller organization; ordinary updates preserve that organization and require an existing assignment checked within the write transaction. Platform callers retain their method-right-controlled scope.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      },
+      "delete": {
+        "operationId": "assets_api_delete_v1_assets_entity_id",
+        "summary": "DELETE assets",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record deleted; empty response body."
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission delete. Mutations require both configured and database authority; otherwise HTTP 503. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. Ordinary asset access requires the caller organization AND an explicit user OR current group assignment. Item GET and item-selected collection GET enforce the same SQL scope; denied PUT and DELETE cannot change state or append mutation audit. One-time-password sessions cannot mutate. Ordinary asset creation targets the caller organization; ordinary updates preserve that organization and require an existing assignment checked within the write transaction. Platform callers retain their method-right-controlled scope.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/assettypes": {
+      "get": {
+        "operationId": "assets_api_get_v1_assettypes",
+        "summary": "GET assettypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Records, or the single record selected by entity_id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AssetType"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/AssetType"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. Supplying entity_id selects one record and changes the response from an array to an object. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "assets_api_post_v1_assettypes",
+        "summary": "POST assettypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetType"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission create. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. One-time-password sessions cannot mutate. Ordinary asset creation targets the caller organization; ordinary updates preserve that organization and require an existing assignment checked within the write transaction. Platform callers retain their method-right-controlled scope.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "description": "Implicit FastAPI parameter: a positive decimal ID up to 9223372036854775807. GET returns that record instead of the list. POST validates this value but still allocates its own new ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetTypeWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      }
+    },
+    "/v1/assettypes/{entity_id}": {
+      "get": {
+        "operationId": "assets_api_get_v1_assettypes_entity_id",
+        "summary": "GET assettypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetType"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission read. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "assets_api_put_v1_assettypes_entity_id",
+        "summary": "PUT assettypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record returned as legacy JSON members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetType"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds 1048576 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission update. Mutations require both configured and database authority; otherwise HTTP 503. JSON object only; duplicate keys and non-finite numbers are rejected. Unknown members are ignored and omitted members retain their values (or defaults on create). The POST identity is allocated by the server; a PUT identity, if supplied, must match the path. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. One-time-password sessions cannot mutate. Ordinary asset creation targets the caller organization; ordinary updates preserve that organization and require an existing assignment checked within the write transaction. Platform callers retain their method-right-controlled scope.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssetTypeWrite"
+              }
+            }
+          },
+          "x-max-bytes": 1048576
+        }
+      },
+      "delete": {
+        "operationId": "assets_api_delete_v1_assettypes_entity_id",
+        "summary": "DELETE assettypes",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record deleted; empty response body."
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Invalid record format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires entity permission delete. Mutations require both configured and database authority; otherwise HTTP 503. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. One-time-password sessions cannot mutate. Ordinary asset creation targets the caller organization; ordinary updates preserve that organization and require an existing assignment checked within the write transaction. Platform callers retain their method-right-controlled scope.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal ID, 1-19 digits, at most 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/assets/scope": {
+      "get": {
+        "operationId": "assets_api_get_v1_assets_scope",
+        "summary": "Read AssetScope",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetScope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Complete ID-only authorization scope. No query parameters. Fails with 503 if more than 4096 visible assets or malformed IDs; never truncates grants. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority. Ordinary asset access requires the caller organization AND an explicit user OR current group assignment. Item GET and item-selected collection GET enforce the same SQL scope; denied PUT and DELETE cannot change state or append mutation audit."
+      }
+    },
+    "/v1/assets/{entity_id}/policy": {
+      "get": {
+        "operationId": "assets_api_get_v1_assets_entity_id_policy",
+        "summary": "Read AssetPolicy",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetPolicy"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid path, query, JSON or wire member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependency or mutation authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Internal credential only (ordinary principals receive 403). No query parameters. Fresh authorization and database authority checks apply. The default API runtime supplements Redis method rights with bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, signed role level, memberships and requested method rights. Stale cached actor state fails closed; the separately configured trusted internal credential keeps its explicit service authority.",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive signed-64-bit decimal ID.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
+    "/_health/live": {
+      "get": {
+        "operationId": "assets_api_get__health_live",
+        "summary": "Process liveness",
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Process is live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "const": "assets"
+                    },
+                    "role": {
+                      "type": "string",
+                      "const": "api"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "healthy"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "role",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_health/ready": {
+      "get": {
+        "operationId": "assets_api_get__health_ready",
+        "summary": "Process readiness",
+        "tags": [
+          "Health"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Required dependencies / worker are ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "const": "assets"
+                    },
+                    "role": {
+                      "type": "string",
+                      "const": "api"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "healthy",
+                        "unhealthy"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "role",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required dependencies / worker are not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "const": "assets"
+                    },
+                    "role": {
+                      "type": "string",
+                      "const": "api"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "healthy",
+                        "unhealthy"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "service",
+                    "role",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "This probe does not use application authentication."
+      }
+    },
+    "/v1/assetsadmin/info": {
+      "get": {
+        "operationId": "assets_api_get_v1_assetsadmin_info",
+        "summary": "Read service information",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service metadata, or Status=false and Error='bad authentication'.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Missing or invalid Token returns HTTP 200 with Status=false. Successful metadata fields depend on the worker state. Service information requires current platform level 90 or above, or the configured trusted internal credential. Ordinary authenticated callers receive 403. Public heartbeat metrics retain their existing authentication contract."
+      }
+    },
+    "/v1/assetsadmin/metrics": {
+      "get": {
+        "operationId": "assets_api_get_v1_assetsadmin_metrics",
+        "summary": "Read Prometheus metrics",
+        "tags": [
+          "API"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "No Token header is required by this handler."
+      }
+    },
+    "/v1/assetsadmin/test": {
+      "get": {
+        "operationId": "assets_api_get_v1_assetsadmin_test",
+        "summary": "Test the API listener",
+        "tags": [
+          "API"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Listener test result.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "const": "Test: OK"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Fault": {
+        "type": "object",
+        "properties": {
+          "fault": {
+            "type": "object",
+            "properties": {
+              "faultcode": {
+                "type": "string",
+                "enum": [
+                  "client",
+                  "serveur"
+                ]
+              },
+              "faultstring": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "faultcode",
+              "faultstring",
+              "detail"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fault"
+        ]
+      },
+      "Asset": {
+        "type": "object",
+        "properties": {
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDAssetType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDOrganization": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_dhDhCreated": {
+            "type": "string",
+            "description": "Local datetime, no timezone, millisecond precision. YYYY-MM-DDThh:mm:ss.SSS; empty value is 0000-00-00T00:00:00.000."
+          },
+          "m_dhDhModified": {
+            "type": "string",
+            "description": "Local datetime, no timezone, millisecond precision. YYYY-MM-DDThh:mm:ss.SSS; empty value is 0000-00-00T00:00:00.000."
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_bPauseRules": {
+            "type": "boolean"
+          },
+          "m_dDtPauseRulesStart": {
+            "type": "string",
+            "description": "YYYY-MM-DD; empty value is 0000-00-00."
+          },
+          "m_dDtPauseRulesEnd": {
+            "type": "string",
+            "description": "YYYY-MM-DD; empty value is 0000-00-00."
+          },
+          "m_dhDhLastEvent": {
+            "type": "string",
+            "description": "Local datetime, no timezone, millisecond precision. YYYY-MM-DDThh:mm:ss.SSS; empty value is 0000-00-00T00:00:00.000."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDAsset",
+          "m_nIDAssetType",
+          "m_nIDOrganization",
+          "m_dhDhCreated",
+          "m_dhDhModified",
+          "m_sTag",
+          "m_sLabel",
+          "m_bPauseRules",
+          "m_dDtPauseRulesStart",
+          "m_dDtPauseRulesEnd",
+          "m_dhDhLastEvent"
+        ]
+      },
+      "AssetWrite": {
+        "type": "object",
+        "properties": {
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDAssetType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDOrganization": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_dhDhCreated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local datetime, no timezone, millisecond precision. Accepts YYYYMMDDhhmmss[SSS] or YYYY-MM-DDThh:mm:ss[.fraction]; null/empty/zero sentinel clears the value."
+          },
+          "m_dhDhModified": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local datetime, no timezone, millisecond precision. Accepts YYYYMMDDhhmmss[SSS] or YYYY-MM-DDThh:mm:ss[.fraction]; null/empty/zero sentinel clears the value."
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_bPauseRules": {
+            "type": "boolean"
+          },
+          "m_dDtPauseRulesStart": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Date as YYYY-MM-DD or YYYYMMDD; null/empty/zero sentinel clears it."
+          },
+          "m_dDtPauseRulesEnd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Date as YYYY-MM-DD or YYYYMMDD; null/empty/zero sentinel clears it."
+          },
+          "m_dhDhLastEvent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local datetime, no timezone, millisecond precision. Accepts YYYYMMDDhhmmss[SSS] or YYYY-MM-DDThh:mm:ss[.fraction]; null/empty/zero sentinel clears the value."
+          }
+        },
+        "additionalProperties": true
+      },
+      "AssetType": {
+        "type": "object",
+        "properties": {
+          "m_nIDAssetType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_dhDhCreated": {
+            "type": "string",
+            "description": "Local datetime, no timezone, millisecond precision. YYYY-MM-DDThh:mm:ss.SSS; empty value is 0000-00-00T00:00:00.000."
+          },
+          "m_dhDhModified": {
+            "type": "string",
+            "description": "Local datetime, no timezone, millisecond precision. YYYY-MM-DDThh:mm:ss.SSS; empty value is 0000-00-00T00:00:00.000."
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sKind": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDAssetType",
+          "m_dhDhCreated",
+          "m_dhDhModified",
+          "m_sTag",
+          "m_sLabel",
+          "m_sKind"
+        ]
+      },
+      "AssetTypeWrite": {
+        "type": "object",
+        "properties": {
+          "m_nIDAssetType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_dhDhCreated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local datetime, no timezone, millisecond precision. Accepts YYYYMMDDhhmmss[SSS] or YYYY-MM-DDThh:mm:ss[.fraction]; null/empty/zero sentinel clears the value."
+          },
+          "m_dhDhModified": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Local datetime, no timezone, millisecond precision. Accepts YYYYMMDDhhmmss[SSS] or YYYY-MM-DDThh:mm:ss[.fraction]; null/empty/zero sentinel clears the value."
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          },
+          "m_sKind": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$"
+          }
+        },
+        "additionalProperties": true
+      },
+      "AssetScope": {
+        "type": "array",
+        "maxItems": 4096,
+        "items": {
+          "type": "object",
+          "properties": {
+            "m_nIDAsset": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            },
+            "m_nIDOrganization": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "maximum": 9223372036854775807
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "m_nIDAsset",
+            "m_nIDOrganization"
+          ]
+        }
+      },
+      "AssetPolicy": {
+        "type": "object",
+        "properties": {
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_bPauseRules": {
+            "type": "boolean"
+          },
+          "m_dDtPauseRulesStart": {
+            "type": "string",
+            "description": "YYYY-MM-DD; empty value is 0000-00-00."
+          },
+          "m_dDtPauseRulesEnd": {
+            "type": "string",
+            "description": "YYYY-MM-DD; empty value is 0000-00-00."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDAsset",
+          "m_bPauseRules",
+          "m_dDtPauseRulesStart",
+          "m_dDtPauseRulesEnd"
+        ]
+      },
+      "ServiceInfo": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean"
+          },
+          "Error": {
+            "type": "string"
+          },
+          "Engine_Type": {
+            "type": "string"
+          },
+          "Engine_Uuid": {
+            "type": "string"
+          },
+          "Engine_Version": {
+            "type": "string"
+          },
+          "Engine_Lastheartbeat": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "Status",
+          "Error"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "Token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Token",
+        "description": "Exactly one Token header, 1-4096 visible ASCII characters. Validated against the service's configured authorization backend."
+      }
+    }
+  }
+}

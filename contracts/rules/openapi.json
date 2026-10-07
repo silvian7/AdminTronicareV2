@@ -1,0 +1,2394 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Tronicare Rules API",
+    "version": "0.1.0",
+    "description": "Source-derived HTTP contract for the rules api process. Mutation routes return 503 while mutations are disabled or write authority is unavailable. JSON records preserve legacy member spelling and signed 64-bit integer values. Unknown JSON members are ignored, but duplicate keys, non-finite numbers and invalid UTF-8 are rejected. Request bodies are limited to 1,048,576 bytes. This offline document does not enable a runtime /openapi.json or interactive docs endpoint."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "The selected rules api listener; configure the deployment base URL."
+    }
+  ],
+  "paths": {
+    "/_health/live": {
+      "get": {
+        "operationId": "rules_get__health_live",
+        "summary": "Check process liveness",
+        "description": "Check process liveness.",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/_health/ready": {
+      "get": {
+        "operationId": "rules_get__health_ready",
+        "summary": "Check process readiness",
+        "description": "Returns 200 when ready and 503 when unavailable. API dependency checks time out after five seconds.",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyStatus"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Process or dependencies are not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyStatus"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/rules": {
+      "get": {
+        "operationId": "rules_get_v1_rules",
+        "summary": "List rules",
+        "description": "Requires entity rules right r. Returns a raw array ordered by primary key.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved.",
+        "tags": [
+          "rules"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Rules"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Rules"
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "x-authorization": {
+          "entity": "rules",
+          "right": "r"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            },
+            "description": "Implicit FastAPI query argument from the shared handler. If supplied to GET, this reads one record instead of listing; collection filters are ignored. POST validates this value but still creates a new record with a generated ID. Repeated entity_id values use the last value. Positive integer at most 9223372036854775807."
+          },
+          {
+            "name": "idsensor",
+            "in": "query",
+            "required": false,
+            "description": "Filter by sensor. Signed 64-bit decimal integer; empty means omitted. Repeated values are rejected. The numeric value must be between -9223372036854775808 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:-?[0-9]{1,19})?$",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "idasset",
+            "in": "query",
+            "required": false,
+            "description": "Filter by asset. Signed 64-bit decimal integer; empty means omitted. Repeated values are rejected. The numeric value must be between -9223372036854775808 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:-?[0-9]{1,19})?$",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "istemplate",
+            "in": "query",
+            "required": false,
+            "description": "Filter by the template flag. Accepts 0, 1, true or false (case-insensitive); empty means omitted. Repeated values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:0|1|[tT][rR][uU][eE]|[fF][aA][lL][sS][eE])?$",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Legacy list bound. Missing, empty or zero uses 50. At most max(1, limit + 1) rows are returned, so the default can return 51. Negative values are accepted. Repeated values are rejected.",
+            "schema": {
+              "type": "integer",
+              "minimum": -10000,
+              "maximum": 10000,
+              "default": 50
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "rules_post_v1_rules",
+        "summary": "Create rules",
+        "description": "Requires entity rules right c. Requires enabled mutations and authoritative write state. Returns the created record with HTTP 200 and a generated primary key.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes. Templates may be created, edited, converted to instances or deleted only by platform administrators. Ordinary instance writes require a granted asset and valid same-asset authoritative Core sensor.",
+        "tags": [
+          "rules"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rules"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "rules",
+          "right": "c"
+        },
+        "requestBody": {
+          "required": true,
+          "description": "A JSON object, at most 1,048,576 UTF-8 bytes. Empty object is accepted.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            },
+            "description": "Implicit FastAPI query argument from the shared handler. If supplied to GET, this reads one record instead of listing; collection filters are ignored. POST validates this value but still creates a new record with a generated ID. Repeated entity_id values use the last value. Positive integer at most 9223372036854775807."
+          }
+        ]
+      }
+    },
+    "/v1/rules/{entity_id}": {
+      "get": {
+        "operationId": "rules_get_v1_rules_entity_id",
+        "summary": "Read rules",
+        "description": "Requires entity rules right r. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved.",
+        "tags": [
+          "rules"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rules"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "x-authorization": {
+          "entity": "rules",
+          "right": "r"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "rules_put_v1_rules_entity_id",
+        "summary": "Update rules",
+        "description": "Requires entity rules right u. Requires enabled mutations and authoritative write state. Merges the supplied fields; omitted fields are preserved. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes. Templates may be created, edited, converted to instances or deleted only by platform administrators. Ordinary instance writes require a granted asset and valid same-asset authoritative Core sensor.",
+        "tags": [
+          "rules"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rules"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "rules",
+          "right": "u"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "A JSON object, at most 1,048,576 UTF-8 bytes. Empty object is accepted.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "rules_delete_v1_rules_entity_id",
+        "summary": "Delete rules",
+        "description": "Requires entity rules right d. Requires enabled mutations and authoritative write state. Successful response has an empty body. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes. Templates may be created, edited, converted to instances or deleted only by platform administrators. Ordinary instance writes require a granted asset and valid same-asset authoritative Core sensor.",
+        "tags": [
+          "rules"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "rules",
+          "right": "d"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ]
+      }
+    },
+    "/v1/ruletypes": {
+      "get": {
+        "operationId": "rules_get_v1_ruletypes",
+        "summary": "List ruletypes",
+        "description": "Requires entity ruletypes right r. Returns a raw array ordered by primary key. More than 10,000 candidate rows returns 503.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights.",
+        "tags": [
+          "ruletypes"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Ruletypes"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Ruletypes"
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "x-authorization": {
+          "entity": "ruletypes",
+          "right": "r"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            },
+            "description": "Implicit FastAPI query argument from the shared handler. If supplied to GET, this reads one record instead of listing; collection filters are ignored. POST validates this value but still creates a new record with a generated ID. Repeated entity_id values use the last value. Positive integer at most 9223372036854775807."
+          }
+        ]
+      },
+      "post": {
+        "operationId": "rules_post_v1_ruletypes",
+        "summary": "Create ruletypes",
+        "description": "Requires entity ruletypes right c. Requires enabled mutations and authoritative write state. Returns the created record with HTTP 200 and a generated primary key.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes.",
+        "tags": [
+          "ruletypes"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ruletypes"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "ruletypes",
+          "right": "c"
+        },
+        "requestBody": {
+          "required": true,
+          "description": "A JSON object, at most 1,048,576 UTF-8 bytes. Empty object is accepted.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuletypesRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            },
+            "description": "Implicit FastAPI query argument from the shared handler. If supplied to GET, this reads one record instead of listing; collection filters are ignored. POST validates this value but still creates a new record with a generated ID. Repeated entity_id values use the last value. Positive integer at most 9223372036854775807."
+          }
+        ]
+      }
+    },
+    "/v1/ruletypes/{entity_id}": {
+      "get": {
+        "operationId": "rules_get_v1_ruletypes_entity_id",
+        "summary": "Read ruletypes",
+        "description": "Requires entity ruletypes right r. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights.",
+        "tags": [
+          "ruletypes"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ruletypes"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "x-authorization": {
+          "entity": "ruletypes",
+          "right": "r"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "rules_put_v1_ruletypes_entity_id",
+        "summary": "Update ruletypes",
+        "description": "Requires entity ruletypes right u. Requires enabled mutations and authoritative write state. Merges the supplied fields; omitted fields are preserved. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes.",
+        "tags": [
+          "ruletypes"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ruletypes"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "ruletypes",
+          "right": "u"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "A JSON object, at most 1,048,576 UTF-8 bytes. Empty object is accepted.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuletypesRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "rules_delete_v1_ruletypes_entity_id",
+        "summary": "Delete ruletypes",
+        "description": "Requires entity ruletypes right d. Requires enabled mutations and authoritative write state. Successful response has an empty body. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes.",
+        "tags": [
+          "ruletypes"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "ruletypes",
+          "right": "d"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ]
+      }
+    },
+    "/v1/rulesforward": {
+      "get": {
+        "operationId": "rules_get_v1_rulesforward",
+        "summary": "List rulesforward",
+        "description": "Requires entity rulesforward right r. Returns a raw array ordered by primary key. More than 10,000 candidate rows returns 503.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved.",
+        "tags": [
+          "rulesforward"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Rulesforward"
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/Rulesforward"
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "x-authorization": {
+          "entity": "rulesforward",
+          "right": "r"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            },
+            "description": "Implicit FastAPI query argument from the shared handler. If supplied to GET, this reads one record instead of listing; collection filters are ignored. POST validates this value but still creates a new record with a generated ID. Repeated entity_id values use the last value. Positive integer at most 9223372036854775807."
+          },
+          {
+            "name": "idasset",
+            "in": "query",
+            "required": false,
+            "description": "Comma-separated signed 64-bit integers, at most 256 entries. Empty and nonpositive entries are ignored. No remaining IDs means no asset filter. Repeated query values are rejected.",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "fromdate",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive date bound. Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'. Missing or empty uses the current UTC day boundary. Repeated values are rejected.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "todate",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive date bound. Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'. Missing or empty uses the current UTC day boundary. Repeated values are rejected.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "levelmin",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive level bound. Signed 64-bit decimal integer; empty means omitted. Repeated values are rejected. The numeric value must be between -9223372036854775808 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:-?[0-9]{1,19})?$",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "levelmax",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive level bound. Signed 64-bit decimal integer; empty means omitted. Repeated values are rejected. The numeric value must be between -9223372036854775808 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:-?[0-9]{1,19})?$",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "isread",
+            "in": "query",
+            "required": false,
+            "description": "Filter by read status; omitted includes either status. Accepts 0, 1, true or false (case-insensitive); empty means omitted. Repeated values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:0|1|[tT][rR][uU][eE]|[fF][aA][lL][sS][eE])?$",
+              "maxLength": 128
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "rules_post_v1_rulesforward",
+        "summary": "Create rulesforward",
+        "description": "Requires entity rulesforward right c. Requires enabled mutations and authoritative write state. Returns the created record with HTTP 200 and a generated primary key.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes. Ordinary POST and DELETE are forbidden. Ordinary PUT may change only m_bIsRead; saved ownership, routing, payload and engine-result members are immutable. Flag updates authorize against the saved asset snapshot even if the original parents were moved or deleted. Platform callers retain method-right-controlled CRUD and existing dispatch-claim conflict rules.",
+        "tags": [
+          "rulesforward"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rulesforward"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "x-authorization": {
+          "entity": "rulesforward",
+          "right": "c"
+        },
+        "requestBody": {
+          "required": true,
+          "description": "A JSON object, at most 1,048,576 UTF-8 bytes. Empty object is accepted.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesforwardRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            },
+            "description": "Implicit FastAPI query argument from the shared handler. If supplied to GET, this reads one record instead of listing; collection filters are ignored. POST validates this value but still creates a new record with a generated ID. Repeated entity_id values use the last value. Positive integer at most 9223372036854775807."
+          }
+        ]
+      }
+    },
+    "/v1/rulesforward/{entity_id}": {
+      "get": {
+        "operationId": "rules_get_v1_rulesforward_entity_id",
+        "summary": "Read rulesforward",
+        "description": "Requires entity rulesforward right r. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved.",
+        "tags": [
+          "rulesforward"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rulesforward"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "x-authorization": {
+          "entity": "rulesforward",
+          "right": "r"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "rules_put_v1_rulesforward_entity_id",
+        "summary": "Update rulesforward",
+        "description": "Requires entity rulesforward right u. Requires enabled mutations and authoritative write state. Merges the supplied fields; omitted fields are preserved. Returns 409 when a dispatcher claim prevents deletion or changes to protected fields. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes. Ordinary POST and DELETE are forbidden. Ordinary PUT may change only m_bIsRead; saved ownership, routing, payload and engine-result members are immutable. Flag updates authorize against the saved asset snapshot even if the original parents were moved or deleted. Platform callers retain method-right-controlled CRUD and existing dispatch-claim conflict rules.",
+        "tags": [
+          "rulesforward"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rulesforward"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "x-authorization": {
+          "entity": "rulesforward",
+          "right": "u"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "A JSON object, at most 1,048,576 UTF-8 bytes. Empty object is accepted.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesforwardRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "rules_delete_v1_rulesforward_entity_id",
+        "summary": "Delete rulesforward",
+        "description": "Requires entity rulesforward right d. Requires enabled mutations and authoritative write state. Successful response has an empty body. Returns 409 when a dispatcher claim prevents deletion or changes to protected fields. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved. Persisted one-time-password sessions cannot mutate. Dependency reads finish before the fenced database mutation; effective persisted-plus-submitted ownership and references are checked again under the row lock before state or audit changes. Ordinary POST and DELETE are forbidden. Ordinary PUT may change only m_bIsRead; saved ownership, routing, payload and engine-result members are immutable. Flag updates authorize against the saved asset snapshot even if the original parents were moved or deleted. Platform callers retain method-right-controlled CRUD and existing dispatch-claim conflict rules.",
+        "tags": [
+          "rulesforward"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "x-authorization": {
+          "entity": "rulesforward",
+          "right": "d"
+        },
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "description": "Positive decimal integer between 1 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$",
+              "maxLength": 19
+            }
+          }
+        ]
+      }
+    },
+    "/v1/rulesforwardbrief": {
+      "get": {
+        "operationId": "rules_get_v1_rulesforwardbrief",
+        "summary": "Count forwarded records by level and read status",
+        "description": "Requires rulesforward read permission. Missing dates use the current UTC day; both read statuses are included. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved.",
+        "tags": [
+          "rulesforwardbrief"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForwardBrief"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "idasset",
+            "in": "query",
+            "required": false,
+            "description": "Filter by asset ID. Signed 64-bit decimal integer; empty means omitted. Repeated values are rejected. The numeric value must be between -9223372036854775808 and 9223372036854775807.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:-?[0-9]{1,19})?$",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "fromdate",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive date bound. Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'. Missing or empty uses the current UTC day boundary. Repeated values are rejected.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "todate",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive date bound. Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'. Missing or empty uses the current UTC day boundary. Repeated values are rejected.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ]
+      }
+    },
+    "/v1/rulesadmin/info": {
+      "get": {
+        "operationId": "rules_get_v1_rulesadmin_info",
+        "summary": "Read engine information",
+        "description": "Requires authentication. Missing, invalid or unauthenticated Token is represented by HTTP 200 with Status=false. Other authorization and dependency errors use the fault response. Service information requires current platform level 90 or above, or the configured trusted internal credential. Ordinary authenticated callers receive 403. Public heartbeat metrics retain their existing authentication contract.",
+        "tags": [
+          "rulesadmin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminInfo"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/v1/rulesadmin/metrics": {
+      "get": {
+        "operationId": "rules_get_v1_rulesadmin_metrics",
+        "summary": "Read Prometheus heartbeat counter",
+        "description": "Unauthenticated text exposition of tronicare_rules_heartbeats_total.",
+        "tags": [
+          "rulesadmin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Fault": {
+        "type": "object",
+        "properties": {
+          "fault": {
+            "type": "object",
+            "properties": {
+              "faultcode": {
+                "type": "string",
+                "enum": [
+                  "client",
+                  "serveur"
+                ]
+              },
+              "faultstring": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "faultcode",
+              "faultstring",
+              "detail"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fault"
+        ]
+      },
+      "RulesRequest": {
+        "type": "object",
+        "properties": {
+          "m_nIDRule": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDSensor": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDRuleType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 600,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          },
+          "m_dhDhCreated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_dhDhModified": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_duValueDuree": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807,
+            "description": "Duration in milliseconds."
+          },
+          "m_nValueThreshold": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_bOutput": {
+            "type": "boolean"
+          },
+          "m_nLevel": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_dhDhActivated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_dhDhDeactivated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_dhDhTimeout": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_bTimeoutStarted": {
+            "type": "boolean"
+          },
+          "m_bTimeoutElapsed": {
+            "type": "boolean"
+          },
+          "m_bTimeoutCanceled": {
+            "type": "boolean"
+          },
+          "m_bCanceled": {
+            "type": "boolean"
+          },
+          "m_dhDhCanceled": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_hTimeStart": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Time as HH:mm:ss with optional fraction, at millisecond precision. null or an empty string means midnight.",
+            "examples": [
+              "08:30:00.000"
+            ]
+          },
+          "m_hTimeEnd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Time as HH:mm:ss with optional fraction, at millisecond precision. null or an empty string means midnight.",
+            "examples": [
+              "08:30:00.000"
+            ]
+          },
+          "m_bTime24h": {
+            "type": "boolean"
+          },
+          "m_bEnabled": {
+            "type": "boolean"
+          },
+          "m_bIsTemplate": {
+            "type": "boolean"
+          },
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sAssetTag": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          }
+        },
+        "additionalProperties": true,
+        "description": "All members are optional. POST uses defaults for omitted fields and generates the primary key. PUT merges supplied members into the existing record; a supplied primary key must match the path. Unknown members are ignored. Integer members accept JSON integers, not strings, booleans or decimal numbers. DhCreated and DhModified are assigned on creation; DhModified is assigned on update."
+      },
+      "Rules": {
+        "type": "object",
+        "properties": {
+          "m_nIDRule": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDSensor": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDRuleType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string"
+          },
+          "m_sLabel": {
+            "type": "string"
+          },
+          "m_dhDhCreated": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_dhDhModified": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_duValueDuree": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807,
+            "description": "Duration in milliseconds."
+          },
+          "m_nValueThreshold": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_bOutput": {
+            "type": "boolean"
+          },
+          "m_nLevel": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_dhDhActivated": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_dhDhDeactivated": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_dhDhTimeout": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_bTimeoutStarted": {
+            "type": "boolean"
+          },
+          "m_bTimeoutElapsed": {
+            "type": "boolean"
+          },
+          "m_bTimeoutCanceled": {
+            "type": "boolean"
+          },
+          "m_bCanceled": {
+            "type": "boolean"
+          },
+          "m_dhDhCanceled": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_hTimeStart": {
+            "type": "string",
+            "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "Time of day at millisecond precision, with no timezone."
+          },
+          "m_hTimeEnd": {
+            "type": "string",
+            "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "Time of day at millisecond precision, with no timezone."
+          },
+          "m_bTime24h": {
+            "type": "boolean"
+          },
+          "m_bEnabled": {
+            "type": "boolean"
+          },
+          "m_bIsTemplate": {
+            "type": "boolean"
+          },
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sAssetTag": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDRule",
+          "m_nIDSensor",
+          "m_nIDRuleType",
+          "m_sTag",
+          "m_sLabel",
+          "m_dhDhCreated",
+          "m_dhDhModified",
+          "m_duValueDuree",
+          "m_nValueThreshold",
+          "m_bOutput",
+          "m_nLevel",
+          "m_dhDhActivated",
+          "m_dhDhDeactivated",
+          "m_dhDhTimeout",
+          "m_bTimeoutStarted",
+          "m_bTimeoutElapsed",
+          "m_bTimeoutCanceled",
+          "m_bCanceled",
+          "m_dhDhCanceled",
+          "m_hTimeStart",
+          "m_hTimeEnd",
+          "m_bTime24h",
+          "m_bEnabled",
+          "m_bIsTemplate",
+          "m_nIDAsset",
+          "m_sAssetTag"
+        ],
+        "description": "Raw legacy wire record returned by the configured PostgreSQL store. Null database values are projected as zero, false, empty string, epoch or midnight according to field type.",
+        "examples": [
+          {
+            "m_nIDRule": 0,
+            "m_nIDSensor": 0,
+            "m_nIDRuleType": 0,
+            "m_sTag": "",
+            "m_sLabel": "",
+            "m_dhDhCreated": "1970-01-01T00:00:00.000",
+            "m_dhDhModified": "1970-01-01T00:00:00.000",
+            "m_duValueDuree": 0,
+            "m_nValueThreshold": 0,
+            "m_bOutput": false,
+            "m_nLevel": 0,
+            "m_dhDhActivated": "1970-01-01T00:00:00.000",
+            "m_dhDhDeactivated": "1970-01-01T00:00:00.000",
+            "m_dhDhTimeout": "1970-01-01T00:00:00.000",
+            "m_bTimeoutStarted": false,
+            "m_bTimeoutElapsed": false,
+            "m_bTimeoutCanceled": false,
+            "m_bCanceled": false,
+            "m_dhDhCanceled": "1970-01-01T00:00:00.000",
+            "m_hTimeStart": "00:00:00.000",
+            "m_hTimeEnd": "00:00:00.000",
+            "m_bTime24h": false,
+            "m_bEnabled": false,
+            "m_bIsTemplate": false,
+            "m_nIDAsset": 0,
+            "m_sAssetTag": ""
+          }
+        ]
+      },
+      "RuletypesRequest": {
+        "type": "object",
+        "properties": {
+          "m_nIDRuleType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          },
+          "m_sKind": {
+            "type": "string",
+            "maxLength": 50,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          }
+        },
+        "additionalProperties": true,
+        "description": "All members are optional. POST uses defaults for omitted fields and generates the primary key. PUT merges supplied members into the existing record; a supplied primary key must match the path. Unknown members are ignored. Integer members accept JSON integers, not strings, booleans or decimal numbers."
+      },
+      "Ruletypes": {
+        "type": "object",
+        "properties": {
+          "m_nIDRuleType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string"
+          },
+          "m_sLabel": {
+            "type": "string"
+          },
+          "m_sKind": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDRuleType",
+          "m_sTag",
+          "m_sLabel",
+          "m_sKind"
+        ],
+        "description": "Raw legacy wire record returned by the configured PostgreSQL store. Null database values are projected as zero, false, empty string, epoch or midnight according to field type.",
+        "examples": [
+          {
+            "m_nIDRuleType": 0,
+            "m_sTag": "",
+            "m_sLabel": "",
+            "m_sKind": ""
+          }
+        ]
+      },
+      "RulesforwardRequest": {
+        "type": "object",
+        "properties": {
+          "m_nIDRuleForwarded": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDRule": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDSensor": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDRuleType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          },
+          "m_sLabel": {
+            "type": "string",
+            "maxLength": 600,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          },
+          "m_bOutput": {
+            "type": "boolean"
+          },
+          "m_nLevel": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_dhDhActivated": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_dhDhProcessed": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_bProcessed": {
+            "type": "boolean"
+          },
+          "m_nTries": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_bFailed": {
+            "type": "boolean"
+          },
+          "m_dhDhForwarded": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_dhDhTimeoutForwarded": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Timestamp in YYYYMMDDhhmmss[SSS] or ISO 8601 with optional offset, normalized to UTC. Missing timezone means UTC. Millisecond precision only. null and these empty date sentinels mean the Unix epoch: '', '00000000000000', '00000000000000000', '0000-00-00T00:00:00', '0000-00-00T00:00:00.000'.",
+            "examples": [
+              "2026-01-01T12:00:00.000Z"
+            ]
+          },
+          "m_bIsRead": {
+            "type": "boolean"
+          },
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sAssetTag": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "^[^\\u0000]*$",
+            "description": "Unicode string; NUL is rejected."
+          }
+        },
+        "additionalProperties": true,
+        "description": "All members are optional. POST uses defaults for omitted fields and generates the primary key. PUT merges supplied members into the existing record; a supplied primary key must match the path. Unknown members are ignored. Integer members accept JSON integers, not strings, booleans or decimal numbers."
+      },
+      "Rulesforward": {
+        "type": "object",
+        "properties": {
+          "m_nIDRuleForwarded": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDRule": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDSensor": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_nIDRuleType": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sTag": {
+            "type": "string"
+          },
+          "m_sLabel": {
+            "type": "string"
+          },
+          "m_bOutput": {
+            "type": "boolean"
+          },
+          "m_nLevel": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_dhDhActivated": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_dhDhProcessed": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_bProcessed": {
+            "type": "boolean"
+          },
+          "m_nTries": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "m_bFailed": {
+            "type": "boolean"
+          },
+          "m_dhDhForwarded": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_dhDhTimeoutForwarded": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "description": "UTC timestamp with exactly three fractional digits and no timezone suffix. It is intentionally not declared format=date-time because the wire value omits an offset.",
+            "examples": [
+              "2026-01-01T12:00:00.000"
+            ]
+          },
+          "m_bIsRead": {
+            "type": "boolean"
+          },
+          "m_nIDAsset": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -9223372036854775808,
+            "maximum": 9223372036854775807
+          },
+          "m_sAssetTag": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "m_nIDRuleForwarded",
+          "m_nIDRule",
+          "m_nIDSensor",
+          "m_nIDRuleType",
+          "m_sTag",
+          "m_sLabel",
+          "m_bOutput",
+          "m_nLevel",
+          "m_dhDhActivated",
+          "m_dhDhProcessed",
+          "m_bProcessed",
+          "m_nTries",
+          "m_bFailed",
+          "m_dhDhForwarded",
+          "m_dhDhTimeoutForwarded",
+          "m_bIsRead",
+          "m_nIDAsset",
+          "m_sAssetTag"
+        ],
+        "description": "Raw legacy wire record returned by the configured PostgreSQL store. Null database values are projected as zero, false, empty string, epoch or midnight according to field type.",
+        "examples": [
+          {
+            "m_nIDRuleForwarded": 0,
+            "m_nIDRule": 0,
+            "m_nIDSensor": 0,
+            "m_nIDRuleType": 0,
+            "m_sTag": "",
+            "m_sLabel": "",
+            "m_bOutput": false,
+            "m_nLevel": 0,
+            "m_dhDhActivated": "1970-01-01T00:00:00.000",
+            "m_dhDhProcessed": "1970-01-01T00:00:00.000",
+            "m_bProcessed": false,
+            "m_nTries": 0,
+            "m_bFailed": false,
+            "m_dhDhForwarded": "1970-01-01T00:00:00.000",
+            "m_dhDhTimeoutForwarded": "1970-01-01T00:00:00.000",
+            "m_bIsRead": false,
+            "m_nIDAsset": 0,
+            "m_sAssetTag": ""
+          }
+        ]
+      },
+      "LiveStatus": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "rules"
+          },
+          "role": {
+            "type": "string",
+            "const": "api"
+          },
+          "status": {
+            "type": "string",
+            "const": "healthy"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "role",
+          "status"
+        ]
+      },
+      "ReadyStatus": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "rules"
+          },
+          "role": {
+            "type": "string",
+            "const": "api"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "role",
+          "status"
+        ]
+      },
+      "AdminInfo": {
+        "type": "object",
+        "properties": {
+          "Status": {
+            "type": "boolean"
+          },
+          "Error": {
+            "type": "string"
+          },
+          "Engine_Type": {
+            "type": "string"
+          },
+          "Engine_Uuid": {
+            "type": "string"
+          },
+          "Engine_Version": {
+            "type": "string"
+          },
+          "Engine_Lastheartbeat": {
+            "type": "integer",
+            "description": "Seconds since the engine heartbeat; optional if unavailable."
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "Status",
+          "Error"
+        ],
+        "description": "Authentication failure is an HTTP 200 object with Status=false and Error=\"bad authentication\". Successful responses also include engine metadata."
+      },
+      "ForwardBrief": {
+        "type": "array",
+        "minItems": 6,
+        "maxItems": 6,
+        "items": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "integer",
+              "enum": [
+                1,
+                2,
+                3
+              ]
+            },
+            "isread": {
+              "type": "boolean"
+            },
+            "counter": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "level",
+            "isread",
+            "counter"
+          ]
+        },
+        "description": "Six count buckets: levels 1, 2, 3, each with isread=true followed by false."
+      }
+    },
+    "securitySchemes": {
+      "TokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Token",
+        "description": "Exactly one Token header: 1 to 4096 printable ASCII characters in the range U+0021 through U+007E. No spaces. CRUD operations require authentication; entity permissions are documented per operation."
+      }
+    },
+    "responses": {
+      "401": {
+        "description": "Authentication failed or invalid Token header.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      },
+      "403": {
+        "description": "Authorization denied.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      },
+      "404": {
+        "description": "Resource not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      },
+      "409": {
+        "description": "Request conflicts with the current state.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      },
+      "413": {
+        "description": "Request body exceeds 1,048,576 bytes.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      },
+      "422": {
+        "description": "Malformed or invalid request value.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      },
+      "503": {
+        "description": "Required dependency unavailable, timeout, disabled mutations or unavailable write authority.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Fault"
+            }
+          }
+        },
+        "headers": {
+          "Cache-Control": {
+            "description": "Responses must not be cached.",
+            "schema": {
+              "type": "string",
+              "const": "no-store"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-source-files": [
+    "services/rules/src/tronicare_rules/api.py",
+    "services/rules/src/tronicare_rules/codec.py",
+    "services/rules/src/tronicare_rules/contracts.py",
+    "services/rules/src/tronicare_rules/operations.py",
+    "services/rules/src/tronicare_rules/authorization.py",
+    "services/rules/src/tronicare_rules/security.py",
+    "services/rules/src/tronicare_rules/security_client.py",
+    "services/rules/src/tronicare_rules/runtime.py",
+    "services/rules/src/tronicare_rules/settings.py"
+  ],
+  "x-process-role": "api",
+  "security": [
+    {
+      "TokenAuth": []
+    }
+  ],
+  "x-app-factory": "tronicare_rules.api:create_app"
+}
