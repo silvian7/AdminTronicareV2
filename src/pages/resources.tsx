@@ -71,6 +71,7 @@ import {
   FieldInput,
   FieldValue,
   ReferenceSelect,
+  SensorCurrentValue,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 
@@ -409,6 +410,7 @@ function RelatedList({
 }) {
   const { organization, can } = useAdmin();
   const r = resourceMap[resource];
+  const refreshEquipmentTypes = useRefreshEquipmentTypes(resource);
   const { result, query } = useList<RecordData>({
     resource,
     filters: [{ field: filterName, operator: "eq", value: filterValue }],
@@ -432,6 +434,21 @@ function RelatedList({
           message="This collection is limited by the service."
         />
       )}
+      {resource === "sensors" && (
+        <div className="table-toolbar">
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            loading={query.isFetching}
+            onClick={async () => {
+              await query.refetch();
+              await refreshEquipmentTypes();
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
+      )}
       <Table
         rowKey="id"
         loading={query.isLoading}
@@ -453,6 +470,17 @@ function RelatedList({
               dataIndex: f.key,
               render: (v: unknown) => <FieldValue field={f} value={v} />,
             })),
+          ...(resource === "sensors"
+            ? [
+                {
+                  title: "Current value",
+                  key: "currentValue",
+                  render: (_: unknown, row: RecordData) => (
+                    <SensorCurrentValue row={row} />
+                  ),
+                },
+              ]
+            : []),
         ]}
         scroll={{ x: 600 }}
       />

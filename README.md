@@ -25,7 +25,7 @@ Login uses your Tronicare account. Select **One-time code** for recovery credent
 - Search, sorting, pagination of loaded results, documented service filters, record details and schema-derived forms. Hub, device and sensor lists and details display their corresponding type tags. Core writes use canonical input names while reads preserve legacy DTO names. Organization-type updates use the documented nested compatibility path.
 - Role-aware navigation and actions; backend permission enforcement remains authoritative. Service write switches can disable mutations independently while backend authority gates continue to apply.
 - Asset details support assigning and removing users and groups through the Assets assignment APIs. Changes require Asset update permission and enabled Assets writes. Removing an assignment refreshes asset and equipment visibility. User/group memberships use the separate Users link commands.
-- Equipment hierarchy, rule/action editing, multilingual message fields, explicit UTC rule times, sensor history with fenced keyset continuation, password recovery/change, and service availability.
+- Equipment hierarchy, current readings in related sensor lists, rule/action editing, multilingual message fields, explicit UTC rule times, sensor history with fenced keyset continuation, password recovery/change, and service availability.
 - User activity and permission-resource definitions are intentionally read-only. Forwarded history supports administrative read/acknowledge/archive flags, rather than editing engine-produced fields. Ingest/worker/outbox listeners are backend process interfaces, not administration screens; they are not exposed by the gateway.
 
 ## Security boundaries

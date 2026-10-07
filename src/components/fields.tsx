@@ -384,13 +384,7 @@ const equipmentTypeReferences: Partial<Record<string, EquipmentTypeResource>> =
     IDDeviceType: "devicetypes",
     IDSensorType: "sensortypes",
   };
-function EquipmentTypeTag({
-  resource,
-  value,
-}: {
-  resource: EquipmentTypeResource;
-  value: unknown;
-}) {
+function useEquipmentType(resource: EquipmentTypeResource, value: unknown) {
   const { organization, can } = useAdmin();
   const id =
     typeof value === "string"
@@ -411,10 +405,21 @@ function EquipmentTypeTag({
     },
     errorNotification: false,
   });
-  const tag =
+  const record =
     allowed && validId && !query.isError && result?.id === id
-      ? translated(valueOf(result, "Tag"))
-      : "";
+      ? result
+      : undefined;
+  return { id, allowed, validId, record };
+}
+function EquipmentTypeTag({
+  resource,
+  value,
+}: {
+  resource: EquipmentTypeResource;
+  value: unknown;
+}) {
+  const { id, allowed, validId, record } = useEquipmentType(resource, value);
+  const tag = record ? translated(valueOf(record, "Tag")) : "";
   if (String(value) === "0") return <span className="numeric-value">0</span>;
   const label =
     typeof tag === "string" && tag.trim() ? tag : `#${String(value)}`;
@@ -427,6 +432,51 @@ function EquipmentTypeTag({
     </Link>
   ) : (
     <span>{label}</span>
+  );
+}
+export function SensorCurrentValue({ row }: { row: RecordData }) {
+  const { record: sensorType } = useEquipmentType(
+    "sensortypes",
+    valueOf(row, "IDSensorType"),
+  );
+  const valueType = sensorType ? String(valueOf(sensorType, "ValueType")) : "";
+  const boolean = valueOf(row, "ValueBool");
+  const integer = valueOf(row, "ValueInt");
+  const real = valueOf(row, "ValueReal");
+  const present = (value: unknown) =>
+    value !== null && value !== undefined && value !== "";
+  const renderValue = (name: string, value: unknown) => (
+    <FieldValue
+      field={resourceMap.sensors.fields.find((f) => canonical(f.key) === name)!}
+      value={value}
+    />
+  );
+  if (valueType === "1") return renderValue("ValueBool", boolean);
+  if (valueType === "2") return renderValue("ValueInt", integer);
+  if (valueType === "3")
+    return (
+      <span>
+        {typeof boolean === "boolean" ? (boolean ? "On" : "Off") : "—"}
+        {" · "}
+        {renderValue("ValueInt", integer)}
+        {present(integer) && " s"}
+      </span>
+    );
+  if (valueType === "4") return renderValue("ValueReal", real);
+  const values = [
+    { name: "ValueBool", label: "Boolean", value: boolean },
+    { name: "ValueInt", label: "Integer", value: integer },
+    { name: "ValueReal", label: "Real", value: real },
+  ].filter(({ value }) => present(value));
+  if (!values.length) return <span className="muted">—</span>;
+  return (
+    <Space direction="vertical" size={0}>
+      {values.map(({ name, label, value }) => (
+        <span key={name}>
+          {label}: {renderValue(name, value)}
+        </span>
+      ))}
+    </Space>
   );
 }
 export const ErrorNotice = ({
