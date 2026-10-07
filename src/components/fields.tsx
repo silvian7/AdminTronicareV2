@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useList } from "@refinedev/core";
+import { useList, useOne } from "@refinedev/core";
 import {
   Input,
   InputNumber,
@@ -20,6 +20,7 @@ import {
   referenceResource,
   resourceMap,
   translated,
+  valueOf,
   type Field,
   type RecordData,
 } from "../../shared/resources";
@@ -347,6 +348,7 @@ export function FieldValue({
   const name = canonical(field.key);
   if (typeof value === "boolean")
     return <Tag color={value ? "cyan" : "default"}>{value ? "Yes" : "No"}</Tag>;
+  if (!primary && name === "IDHubType") return <HubTypeTag value={value} />;
   if (!primary && referenceResource[name] && String(value) !== "0")
     return (
       <Link to={`/${referenceResource[name]}/${value}`}>#{String(value)}</Link>
@@ -372,6 +374,42 @@ export function FieldValue({
     );
   }
   return <span className="record-text">{translated(value)}</span>;
+}
+function HubTypeTag({ value }: { value: unknown }) {
+  const { organization, can } = useAdmin();
+  const id =
+    typeof value === "string"
+      ? value
+      : typeof value === "number" && Number.isSafeInteger(value)
+        ? String(value)
+        : "";
+  const validId =
+    /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
+  const allowed = can(resourceMap.hubtypes, "show");
+  const { result, query } = useOne<RecordData>({
+    resource: "hubtypes",
+    id: validId ? id : "0",
+    meta: { organization },
+    queryOptions: {
+      enabled: allowed && validId,
+      meta: { hubTypeReference: true, organization },
+    },
+    errorNotification: false,
+  });
+  const tag =
+    allowed && validId && !query.isError && result?.id === id
+      ? translated(valueOf(result, "Tag"))
+      : "";
+  if (String(value) === "0") return <span className="numeric-value">0</span>;
+  const label =
+    typeof tag === "string" && tag.trim() ? tag : `#${String(value)}`;
+  return allowed && validId ? (
+    <Link to={`/hubtypes/${id}`} title={`Hub type #${id}`}>
+      {label}
+    </Link>
+  ) : (
+    <span>{label}</span>
+  );
 }
 export const ErrorNotice = ({
   error,

@@ -7,6 +7,7 @@ import {
   useCreate,
   useUpdate,
   useDelete,
+  useInvalidate,
   type HttpError,
   type CrudFilter,
 } from "@refinedev/core";
@@ -123,6 +124,7 @@ function selectedColumns(resource: Resource) {
     "First_name",
     "Last_name",
     "SerialNr",
+    "IDHubType",
     "IDOrganization",
     "IDAsset",
     "IDHub",
@@ -155,8 +157,25 @@ function selectedColumns(resource: Resource) {
     )
     .slice(0, 7);
 }
+function useRefreshHubTypes() {
+  const { organization, can } = useAdmin();
+  const invalidate = useInvalidate();
+  return async () => {
+    if (!can(resourceMap.hubtypes, "show")) return;
+    await invalidate({
+      resource: "hubtypes",
+      invalidates: ["resourceAll"],
+      invalidationFilters: {
+        predicate: ({ meta }) =>
+          meta?.hubTypeReference === true &&
+          meta?.organization === organization,
+      },
+    });
+  };
+}
 export function ResourceList({ resource }: { resource: Resource }) {
   const { organization, can } = useAdmin();
+  const refreshHubTypes = useRefreshHubTypes();
   const navigate = useNavigate();
   const [showFilters, setShowFilters] = useState(false);
   const {
@@ -242,7 +261,10 @@ export function ResourceList({ resource }: { resource: Resource }) {
           <>
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => tableQuery.refetch()}
+              onClick={async () => {
+                await tableQuery.refetch();
+                if (resource.name === "hubs") await refreshHubTypes();
+              }}
               loading={tableQuery.isFetching}
             >
               Refresh
@@ -755,6 +777,7 @@ function Memberships({ userId }: { userId: string }) {
 export function ResourceDetail({ resource }: { resource: Resource }) {
   const { id } = useParams();
   const { organization, can } = useAdmin();
+  const refreshHubTypes = useRefreshHubTypes();
   const navigate = useNavigate();
   const { modal, message } = App.useApp();
   const deletion = useDelete();
@@ -977,7 +1000,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         subtitle={`Record #${id}`}
         extra={
           <>
-            <Button icon={<ReloadOutlined />} onClick={() => query.refetch()}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={async () => {
+                await query.refetch();
+                if (resource.name === "hubs") await refreshHubTypes();
+              }}
+            >
               Refresh
             </Button>
             {resource.name === "sensors" && (
