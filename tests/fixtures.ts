@@ -82,6 +82,10 @@ export interface CapturedCall {
 export function fixtureTransport(identity = testIdentity) {
   const calls: CapturedCall[] = [];
   const records = new Map(resources.map((r) => [r.name, [fixtureRecord(r)]]));
+  const assetAssignments = {
+    users: new Map([["1", new Set(["1"])]]),
+    usergroups: new Map([["1", new Set(["1"])]]),
+  };
   let forced: Response | undefined;
   const transport: Transport = async (input, init) => {
     const url = new URL(String(input));
@@ -114,6 +118,32 @@ export function fixtureTransport(identity = testIdentity) {
       return Response.json([
         { m_nIDAsset: "1", m_nIDOrganization: identity.organizationId },
       ]);
+    const assignment = url.pathname.match(
+      /^\/v1\/assets\/(\d+)\/(users|usergroups)\/(\d+)$/,
+    );
+    if (assignment) {
+      const [, assetId, target, relatedId] = assignment;
+      const related = resourceMap[target];
+      if (
+        !records.get("assets")!.some((row) => row.m_nIDAsset === assetId) ||
+        !records
+          .get(target)!
+          .some((row) => row[related.primaryKey] === relatedId)
+      )
+        return new Response(null, { status: 404 });
+      const assignments =
+        assetAssignments[target as keyof typeof assetAssignments];
+      const linked = assignments.get(assetId) ?? new Set<string>();
+      if (method === "POST") {
+        if (linked.has(relatedId)) return new Response(null, { status: 409 });
+        linked.add(relatedId);
+        assignments.set(assetId, linked);
+      } else if (method === "DELETE") {
+        if (!linked.delete(relatedId))
+          return new Response(null, { status: 409 });
+      } else return new Response(null, { status: 405 });
+      return new Response(null, { status: 200 });
+    }
     if (
       url.pathname.startsWith("/v1/usersadmin/") ||
       url.pathname.includes("/users2usergroups/")
@@ -143,11 +173,23 @@ export function fixtureTransport(identity = testIdentity) {
       );
       return new Response(null, { status: 200 });
     }
-    if (method === "GET" && url.pathname === resource.routes.list)
+    if (method === "GET" && url.pathname === resource.routes.list) {
+      const assetId = url.searchParams.get("idasset");
+      const linked =
+        assetId && resource.name in assetAssignments
+          ? assetAssignments[
+              resource.name as keyof typeof assetAssignments
+            ].get(assetId)
+          : undefined;
+      const selected =
+        assetId && resource.name in assetAssignments
+          ? rows.filter((row) => linked?.has(String(row[resource.primaryKey])))
+          : rows;
       return new Response(
-        `[${rows.map((row) => wireRecord(resource, row)).join(",")}]`,
+        `[${selected.map((row) => wireRecord(resource, row)).join(",")}]`,
         { headers: { "Content-Type": "application/json" } },
       );
+    }
     let row = rows.find((row) => row[resource.primaryKey] === id);
     if (method === "POST") {
       row = fixtureRecord(resource, String(100 + rows.length));
@@ -167,6 +209,7 @@ export function fixtureTransport(identity = testIdentity) {
     transport,
     calls,
     records,
+    assetAssignments,
     respondNext: (response: Response) => {
       forced = response;
     },

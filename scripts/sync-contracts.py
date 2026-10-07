@@ -113,13 +113,20 @@ def main():
             "query": [field(service, p["name"], p.get("schema",{})) for p in paths[base]["get"].get("parameters",[]) if p["in"] == "query" and p["name"] != "entity_id"],
             "description": paths[base]["get"].get("description", ""),
         }
-    generated = json.dumps({"resources":resources, "sources":hashes}, indent=2, ensure_ascii=False)+"\n"
+    asset_assignments = {}
+    for kind in ("users", "usergroups"):
+        path = f"/v1/assets/{{asset_id}}/{kind}/{{related_id}}"
+        operations = docs["assets"]["paths"].get(path, {})
+        if not all(method in operations for method in ("post", "delete")):
+            raise ValueError(f"Missing Assets assignment operations for {kind}")
+        asset_assignments[kind] = {"add": path, "remove": path}
+    generated = json.dumps({"resources":resources, "assetAssignments":asset_assignments, "sources":hashes}, indent=2, ensure_ascii=False)+"\n"
     target = ROOT / "shared" / "contracts.generated.json"
     if args.check:
         if target.read_text(encoding="utf-8") != generated: raise SystemExit("Generated contract metadata is stale")
     else:
         target.parent.mkdir(parents=True,exist_ok=True)
-        target.write_text(generated,encoding="utf-8")
+        target.write_text(generated,encoding="utf-8",newline="\n")
     print(f"Validated {len(docs)} API documents and {len(resources)} resource definitions.")
 
 if __name__ == "__main__": main()

@@ -6441,6 +6441,16 @@
       "description": "Requires entity actionsforward right r. Returns a raw array ordered by primary key.  The shared handler also accepts the implicit entity_id query parameter; GET then returns one record and skips collection filters. The Redis method-right gate is supplemented by bounded caller-token Users /v1/usersadmin/context checks of current SQL identity, organization, role, group memberships and method rights. Stale or malformed policy state fails closed. Platform level is 90 or above; configured internal credentials do not inherit business-entity rights. Ordinary instance access is limited to the complete Assets /v1/assets/scope grants for the caller organization. An empty grant set never selects global instances or history. Readable shared templates are preserved."
     }
   },
+  "assetAssignments": {
+    "users": {
+      "add": "/v1/assets/{asset_id}/users/{related_id}",
+      "remove": "/v1/assets/{asset_id}/users/{related_id}"
+    },
+    "usergroups": {
+      "add": "/v1/assets/{asset_id}/usergroups/{related_id}",
+      "remove": "/v1/assets/{asset_id}/usergroups/{related_id}"
+    }
+  },
   "sources": {
     "users": {
       "file": "users/openapi.json",
@@ -6452,7 +6462,7 @@
     },
     "assets": {
       "file": "assets/openapi.json",
-      "sha256": "7505be2f218f5810b19814737e33ae4ebfb586e6da34c93781ac4a31bbf90d48"
+      "sha256": "373cf2529731a56386d0aa003eb4a91079a3992b7082bd275e1ee039885370b4"
     },
     "rules": {
       "file": "rules/openapi.json",

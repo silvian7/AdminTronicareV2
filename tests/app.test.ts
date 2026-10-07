@@ -177,7 +177,7 @@ describe("contract routing", () => {
     expect(call.method).toBe("GET");
     expect(call.url.pathname).toBe("/v1/users2usergroups/addlink");
   });
-  it("keeps asset assignment mutations unavailable", async () => {
+  it("rejects the undocumented legacy asset-link route", async () => {
     const { api, csrf } = await setup();
     expect(
       (

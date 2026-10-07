@@ -32,6 +32,7 @@ export function ReferenceSelect({
   onChange,
   allowZero = true,
   disabled = false,
+  organizationOverride,
 }: {
   id?: string;
   resource: string;
@@ -39,12 +40,13 @@ export function ReferenceSelect({
   onChange?: (v: string) => void;
   allowZero?: boolean;
   disabled?: boolean;
+  organizationOverride?: string;
 }) {
   const { organization, identity, can } = useAdmin();
   const { result, query } = useList<RecordData>({
     resource,
     pagination: { mode: "off" },
-    meta: { organization },
+    meta: { organization: organizationOverride ?? organization },
     queryOptions: { enabled: can(resourceMap[resource], "list") },
     errorNotification: false,
   });

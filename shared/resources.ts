@@ -13,6 +13,11 @@ export type Service =
   | "mqtt"
   | "mqttbridge";
 export type Operation = "list" | "show" | "create" | "edit" | "delete";
+export type AssetAssignmentKind = "users" | "usergroups";
+export const assetAssignmentRoutes: Record<
+  AssetAssignmentKind,
+  { add: string; remove: string }
+> = generated.assetAssignments;
 export type RecordData = Record<string, unknown> & { id?: string };
 export interface Field {
   key: string;

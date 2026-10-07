@@ -1,5 +1,26 @@
 # Implementation validation
 
+## Asset assignment API integration — 7 October 2026
+
+Asset details now add and remove user/group assignments through the updated Assets
+POST/DELETE APIs. The refreshed Assets snapshot and generated route metadata match
+the companion Python workspace; its Core compatibility contract is unchanged.
+The gateway enforces Asset update permission, session/CSRF and write gates, exact
+positive 64-bit IDs, existing target records and ordinary organization/asset scope.
+The UI confirms removals, reloads actual links after changes/conflicts, and cancels
+old queries before refreshing asset and equipment access.
+
+- Unit tests: **158 passed**, one opt-in real-Redis test skipped; 30 new gateway cases.
+- Chromium browser suite: **22 passed** against the isolated synthetic Compose environment.
+- New browser coverage includes user/group add/remove, scoped candidates, read-only
+  access, disabled writes, retry/conflict handling, retained duplicate associations,
+  self-revocation and rejection of delayed equipment responses after revocation.
+- TypeScript and production builds: pass on Windows and in the Linux Docker build.
+- Contract synchronization, source snapshot hashes and changed TypeScript formatting: pass.
+
+This run used synthetic accounts and records. The running application and companion
+services were not redeployed; deployment must include the new Assets assignment APIs.
+
 ## GitHub publication validation — 7 October 2026
 
 Fixed failed sign-in form resets, reversed sensor-history filter values, the Windows
@@ -105,4 +126,4 @@ The original shared Kubernetes context remained `kubernetes-admin@dev`. No resou
 
 Before a real deployment, supply the registry/image tag, hostname/TLS configuration, session secret and service origins in an environment overlay. Validate sign-in and representative authorized workflows with that environment's Python services. The tests establish adapter and UI behavior against the supplied contracts; they do not prove that live services have enabled every write gate or completed their migration.
 
-Asset-to-user and asset-to-group assignment changes remain unavailable, as requested. User/group membership changes use the documented Users commands. API collection ceilings still apply; displayed totals describe loaded matches. The initial frontend bundle is approximately 547 KB gzipped; route/library splitting is a remaining performance improvement for slow connections.
+Asset-to-user and asset-to-group assignment changes require the updated Assets service's documented POST/DELETE assignment routes and enabled mutation authority. User/group membership changes use the separate Users commands. API collection ceilings still apply; displayed totals describe loaded matches. The initial frontend bundle is approximately 547 KB gzipped; route/library splitting is a remaining performance improvement for slow connections.

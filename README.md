@@ -24,7 +24,7 @@ Login uses your Tronicare account. Select **One-time code** for recovery credent
 - 22 resource definitions from the supplied OpenAPI specifications: organizations and types; users, groups, user types, permissions, permission resources and user activity; assets and types; hubs/devices/sensors and types; rules/actions, types and forwarded history.
 - Search, sorting, pagination of loaded results, documented service filters, record details and schema-derived forms. Core writes use canonical input names while reads preserve legacy DTO names. Organization-type updates use the documented nested compatibility path.
 - Role-aware navigation and actions; backend permission enforcement remains authoritative. Service write switches can disable mutations independently while backend authority gates continue to apply.
-- Asset user/group assignments are **view-only**, as requested. Their mutation endpoints are absent from the supplied Assets API. User/group memberships use the documented Users link commands.
+- Asset details support assigning and removing users and groups through the Assets assignment APIs. Changes require Asset update permission and enabled Assets writes. Removing an assignment refreshes asset and equipment visibility. User/group memberships use the separate Users link commands.
 - Equipment hierarchy, rule/action editing, multilingual message fields, explicit UTC rule times, sensor history with fenced keyset continuation, password recovery/change, and service availability.
 - User activity and permission-resource definitions are intentionally read-only. Forwarded history supports administrative read/acknowledge/archive flags, rather than editing engine-produced fields. Ingest/worker/outbox listeners are backend process interfaces, not administration screens; they are not exposed by the gateway.
 
@@ -90,6 +90,8 @@ Runtime settings:
 No internal service credential is embedded in the frontend. MqttBridge's documented admin authentication may require a service credential rather than a user session; its status will show unavailable when the service declines the current user's token.
 
 ## Validation and deployment boundaries
+
+Assignment controls require the Assets service version exposing `POST` and `DELETE /v1/assets/{asset_id}/users/{related_id}` and `/v1/assets/{asset_id}/usergroups/{related_id}`. Admin resolves existing target records through Users; listing and selecting users/groups requires access to those records. Ordinary administrators must already have access to the asset and select users/groups in their organization. Platform administrators retain broader scope. The service removes one matching association per request; legacy duplicate links can keep an assignment visible after removal, so the screen reloads the actual links.
 
 The test suite uses synthetic, isolated service responses. It validates contract routes, 64-bit IDs, field allowlists, auth/session behavior, tenant scope, mutation errors and history continuation without changing real records. A successful build/container test does not establish that every environment has enabled Python writes or completed its backend migration. Backend readiness and authority errors remain visible to operators.
 

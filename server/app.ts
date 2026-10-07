@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import {
   resourceMap,
+  assetAssignmentRoutes,
   services,
   canAccess,
   canonical,
@@ -517,6 +518,57 @@ export function createApp(
     );
     res.json({ success: true });
   });
+  async function changeAssetAssignment(req: Request, res: Response) {
+    const r = requirePermission(req, resourceMap.assets, "edit");
+    const assetId = idValue(req.params.assetId);
+    const relatedId = idValue(req.params.relatedId);
+    const kind = String(req.params.kind);
+    if (kind !== "users" && kind !== "usergroups")
+      throw new ApiError(400, "Choose a user or user group assignment.");
+    if (
+      Object.keys(req.query).length ||
+      Number(req.headers["content-length"] ?? 0) > 0 ||
+      req.headers["transfer-encoding"] !== undefined
+    )
+      throw new ApiError(400, "Assignment changes accept no query or body.");
+    const asset = await authorization.read(r.session, "assets", assetId);
+    if (
+      !(
+        await authorization.scopeRecords(r.session, resourceMap.assets, [asset])
+      ).length
+    )
+      throw new ApiError(403, "This asset is outside your access.");
+    const related = await authorization.read(r.session, kind, relatedId);
+    if (r.session.identity.level < 90) {
+      const organization = r.session.identity.organizationId;
+      if (
+        String(valueOf(asset, "IDOrganization")) !== organization ||
+        String(valueOf(related, "IDOrganization")) !== organization
+      )
+        throw new ApiError(
+          403,
+          "This assignment is outside your organization.",
+        );
+    }
+    const operation = req.method === "POST" ? "add" : "remove";
+    await upstream(
+      "assets",
+      assetAssignmentRoutes[kind][operation]
+        .replace("{asset_id}", assetId)
+        .replace("{related_id}", relatedId),
+      r.session.token,
+      { method: req.method },
+    );
+    res.json({ success: true });
+  }
+  app.post(
+    "/api/assets/:assetId/assignments/:kind/:relatedId",
+    changeAssetAssignment,
+  );
+  app.delete(
+    "/api/assets/:assetId/assignments/:kind/:relatedId",
+    changeAssetAssignment,
+  );
   app.get("/api/history", async (req, res) => {
     const r = requirePermission(req, resourceMap.sensors, "list");
     const query: Record<string, string> = { limit: "100", filter: "1" };

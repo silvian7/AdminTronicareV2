@@ -35,7 +35,7 @@ test("all resource lists and details render without browser errors", async ({
   }
   expect(errors).toEqual([]);
 });
-test("asset create, edit, view-only assignments and delete", async ({
+test("asset create, edit, user/group assignments and delete", async ({
   page,
 }) => {
   await login(page);
@@ -46,14 +46,40 @@ test("asset create, edit, view-only assignments and delete", async ({
     page.getByRole("heading", { name: "Browser QA asset", exact: true }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Assignments", exact: true }).click();
-  await expect(
-    page.getByText("User and group assignments are view-only.", {
+  for (const assignment of [
+    { tab: "Users", target: "User", fixture: "User fixture" },
+    { tab: "User groups", target: "Group", fixture: "User group fixture" },
+  ]) {
+    await page.getByRole("tab", { name: assignment.tab, exact: true }).click();
+    const linked = page.getByRole("link", {
+      name: assignment.fixture,
       exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /assign|membership/i }),
-  ).toHaveCount(0);
+    });
+    await expect(linked).toHaveCount(0);
+    await page
+      .getByLabel(`${assignment.target} to assign`, { exact: true })
+      .click();
+    await page
+      .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")
+      .getByText(`${assignment.fixture} · 1`, { exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: `Assign ${assignment.target.toLowerCase()}`,
+        exact: true,
+      })
+      .click();
+    await expect(linked).toBeVisible();
+    await linked
+      .locator("xpath=ancestor::tr")
+      .getByRole("button", { name: "Remove", exact: true })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Remove assignment", exact: true })
+      .click();
+    await expect(linked).toHaveCount(0);
+  }
   await page.getByRole("button", { name: /Edit$/ }).click();
   await page.getByLabel("Label", { exact: true }).fill("Updated QA asset");
   await page.getByRole("button", { name: /Save asset$/ }).click();

@@ -615,6 +615,446 @@
         ]
       }
     },
+    "/v1/assets/{asset_id}/users/{related_id}": {
+      "post": {
+        "operationId": "assets_api_post_v1_assets_asset_id_users_related_id",
+        "summary": "Assign user to asset",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assignment added. Empty response body.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Assignment mutation responses are not cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient assets update permission, one-time-password session, or existing asset outside the caller organization/user/group scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The asset and related-ID pair already exists; no change or audit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed, zero or out-of-range path ID, or any query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Mutations disabled, or required dependency or configured/database write authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires a Token and assets update right (u), including fresh Users actor authorization. One-time-password sessions cannot mutate. Mutations must be enabled and both configured and database write authority must be available. No query parameters are accepted and no request body is required. The write transaction locks the asset row and verifies ordinary callers' existing organization AND (direct user OR current group) grant before testing whether the assignment exists. The configured internal credential and platform level 90 or above bypass those asset filters while retaining method-right checks. Related IDs follow the source association semantics: no target Users record lookup or foreign-key relationship is imposed. Successful changes and their audit record commit atomically; a no-op does not append audit. POST refuses any existing pair.",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          },
+          {
+            "name": "related_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "assets_api_delete_v1_assets_asset_id_users_related_id",
+        "summary": "Remove user assignment from asset",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "First matching assignment removed. Empty response body.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Assignment mutation responses are not cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient assets update permission, one-time-password session, or existing asset outside the caller organization/user/group scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The asset and related-ID pair is missing; no change or audit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed, zero or out-of-range path ID, or any query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Mutations disabled, or required dependency or configured/database write authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires a Token and assets update right (u), including fresh Users actor authorization. One-time-password sessions cannot mutate. Mutations must be enabled and both configured and database write authority must be available. No query parameters are accepted and no request body is required. The write transaction locks the asset row and verifies ordinary callers' existing organization AND (direct user OR current group) grant before testing whether the assignment exists. The configured internal credential and platform level 90 or above bypass those asset filters while retaining method-right checks. Related IDs follow the source association semantics: no target Users record lookup or foreign-key relationship is imposed. Successful changes and their audit record commit atomically; a no-op does not append audit. DELETE removes the first matching association by its primary key; imported duplicate pairs can retain a grant until remaining matches are removed.",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          },
+          {
+            "name": "related_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/assets/{asset_id}/usergroups/{related_id}": {
+      "post": {
+        "operationId": "assets_api_post_v1_assets_asset_id_usergroups_related_id",
+        "summary": "Assign user group to asset",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assignment added. Empty response body.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Assignment mutation responses are not cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient assets update permission, one-time-password session, or existing asset outside the caller organization/user/group scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The asset and related-ID pair already exists; no change or audit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed, zero or out-of-range path ID, or any query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Mutations disabled, or required dependency or configured/database write authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires a Token and assets update right (u), including fresh Users actor authorization. One-time-password sessions cannot mutate. Mutations must be enabled and both configured and database write authority must be available. No query parameters are accepted and no request body is required. The write transaction locks the asset row and verifies ordinary callers' existing organization AND (direct user OR current group) grant before testing whether the assignment exists. The configured internal credential and platform level 90 or above bypass those asset filters while retaining method-right checks. Related IDs follow the source association semantics: no target Users record lookup or foreign-key relationship is imposed. Successful changes and their audit record commit atomically; a no-op does not append audit. POST refuses any existing pair.",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          },
+          {
+            "name": "related_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "assets_api_delete_v1_assets_asset_id_usergroups_related_id",
+        "summary": "Remove user group assignment from asset",
+        "tags": [
+          "API"
+        ],
+        "security": [
+          {
+            "Token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "First matching assignment removed. Empty response body.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Assignment mutation responses are not cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient assets update permission, one-time-password session, or existing asset outside the caller organization/user/group scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The asset and related-ID pair is missing; no change or audit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed, zero or out-of-range path ID, or any query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Mutations disabled, or required dependency or configured/database write authority unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fault"
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires a Token and assets update right (u), including fresh Users actor authorization. One-time-password sessions cannot mutate. Mutations must be enabled and both configured and database write authority must be available. No query parameters are accepted and no request body is required. The write transaction locks the asset row and verifies ordinary callers' existing organization AND (direct user OR current group) grant before testing whether the assignment exists. The configured internal credential and platform level 90 or above bypass those asset filters while retaining method-right checks. Related IDs follow the source association semantics: no target Users record lookup or foreign-key relationship is imposed. Successful changes and their audit record commit atomically; a no-op does not append audit. DELETE removes the first matching association by its primary key; imported duplicate pairs can retain a grant until remaining matches are removed.",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          },
+          {
+            "name": "related_id",
+            "in": "path",
+            "required": true,
+            "description": "Strict decimal ID: 1-19 ASCII digits representing a positive signed-64-bit integer, at most 9223372036854775807. Signs, whitespace, zero and out-of-range values are rejected.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,19}$"
+            }
+          }
+        ]
+      }
+    },
     "/v1/assettypes": {
       "get": {
         "operationId": "assets_api_get_v1_assettypes",

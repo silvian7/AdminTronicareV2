@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTable } from "@refinedev/antd";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useList,
   useOne,
@@ -61,6 +62,7 @@ import {
   type Field,
   type Resource,
   type RecordData,
+  type AssetAssignmentKind,
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import {
@@ -69,7 +71,7 @@ import {
   FieldValue,
   ReferenceSelect,
 } from "../components/fields";
-import { request } from "../api";
+import { getSessionEpoch, request } from "../api";
 
 const queryLabels: Record<string, string> = {
   idasset: "Asset ID",
@@ -428,6 +430,221 @@ function RelatedList({
     </>
   );
 }
+function AssetAssignments({
+  assetId,
+  kind,
+  assetOrganization,
+}: {
+  assetId: string;
+  kind: AssetAssignmentKind;
+  assetOrganization?: string;
+}) {
+  const { organization, can } = useAdmin();
+  const { message, modal } = App.useApp();
+  const queryClient = useQueryClient();
+  const related = resourceMap[kind];
+  const noun = kind === "users" ? "user" : "group";
+  const scopedOrganization = assetOrganization ?? organization;
+  const canRead = can(related, "list");
+  const canEdit = can(resourceMap.assets, "edit");
+  const [selected, setSelected] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const mounted = useRef(false);
+  const busy = useRef(false);
+  const confirmation = useRef<{ destroy: () => void } | null>(null);
+  const viewKey = `${assetId}:${kind}:${organization}:${scopedOrganization}`;
+  const currentView = useRef(viewKey);
+  currentView.current = viewKey;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      confirmation.current?.destroy();
+    };
+  }, []);
+  useEffect(() => {
+    setSelected(undefined);
+    setError("");
+  }, [viewKey]);
+  const linked = useList<RecordData>({
+    resource: kind,
+    filters: [{ field: "idasset", operator: "eq", value: assetId }],
+    pagination: { mode: "off" },
+    meta: { organization: scopedOrganization },
+    errorNotification: false,
+    queryOptions: { enabled: canRead },
+  });
+  async function refreshVisibility(epoch: number) {
+    if (getSessionEpoch() !== epoch) return;
+    // A first fetch can still be pending without cached data. Cancel it so a
+    // pre-change response cannot win against the authoritative refetch.
+    await queryClient.cancelQueries({ queryKey: ["data"] });
+    if (getSessionEpoch() !== epoch) return;
+    // Assignment changes also affect asset and equipment visibility. Discard
+    // inactive records before they can be displayed during later navigation.
+    queryClient.removeQueries({ queryKey: ["data"], type: "inactive" });
+    await queryClient.invalidateQueries({ queryKey: ["data"] });
+    if (getSessionEpoch() !== epoch) return;
+    queryClient.removeQueries({
+      queryKey: ["data"],
+      predicate: (query) => {
+        const status = (query.state.error as HttpError | null)?.statusCode;
+        return status === 403 || status === 404;
+      },
+    });
+  }
+  async function change(relatedId: string, action: "add" | "remove") {
+    if (
+      !mounted.current ||
+      busy.current ||
+      !canRead ||
+      !canEdit ||
+      currentView.current !== viewKey ||
+      linked.query.isFetching ||
+      linked.query.isError
+    )
+      return;
+    const epoch = getSessionEpoch();
+    const current = () =>
+      mounted.current &&
+      currentView.current === viewKey &&
+      getSessionEpoch() === epoch;
+    busy.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await request(
+        `/api/assets/${encodeURIComponent(assetId)}/assignments/${kind}/${encodeURIComponent(relatedId)}`,
+        { method: action === "add" ? "POST" : "DELETE" },
+      );
+      if (getSessionEpoch() !== epoch) return;
+      await refreshVisibility(epoch);
+      if (current()) {
+        setSelected(undefined);
+        // Use the refetched list: imported duplicate links may still exist
+        // after the service removes one assignment.
+        message.success(
+          `${kind === "users" ? "User" : "Group"} assignment updated.`,
+        );
+      }
+    } catch (e) {
+      if ([403, 404, 409].includes((e as HttpError).statusCode))
+        await refreshVisibility(epoch);
+      if (current())
+        setError((e as Error).message ?? "Assignment changes failed.");
+    } finally {
+      busy.current = false;
+      if (current()) setSaving(false);
+    }
+  }
+  if (!canRead)
+    return (
+      <Alert type="info" message="You do not have access to these records." />
+    );
+  if (linked.query.error)
+    return (
+      <ErrorNotice
+        error={linked.query.error}
+        retry={() => linked.query.refetch()}
+      />
+    );
+  return (
+    <>
+      {error && (
+        <Alert type="error" showIcon message={error} className="page-alert" />
+      )}
+      {canEdit ? (
+        <div className="membership-add">
+          <div style={{ flex: 1 }}>
+            <label htmlFor={`asset-${assetId}-${kind}-assignment`}>
+              {kind === "users" ? "User to assign" : "Group to assign"}
+            </label>
+            <ReferenceSelect
+              id={`asset-${assetId}-${kind}-assignment`}
+              resource={kind}
+              organizationOverride={scopedOrganization}
+              value={selected}
+              onChange={setSelected}
+              allowZero={false}
+              disabled={saving || linked.query.isFetching}
+            />
+          </div>
+          <Button
+            type="primary"
+            loading={saving}
+            disabled={
+              saving ||
+              linked.query.isFetching ||
+              !selected ||
+              linked.result.data?.some((row) => row.id === selected)
+            }
+            onClick={() => selected && change(selected, "add")}
+          >
+            Assign {noun}
+          </Button>
+        </div>
+      ) : (
+        <Alert
+          className="page-alert"
+          type="info"
+          message="Your permissions or the Assets service's write settings do not allow assignment changes."
+        />
+      )}
+      {linked.result.limited && (
+        <Alert
+          type="warning"
+          message="This collection is limited by the service."
+        />
+      )}
+      <Table
+        rowKey="id"
+        dataSource={linked.result.data}
+        loading={linked.query.isLoading}
+        pagination={{ pageSize: 10 }}
+        columns={[
+          {
+            title: related.singular,
+            render: (_, row) => (
+              <Link to={`/${kind}/${row.id}`}>{recordTitle(row)}</Link>
+            ),
+          },
+          { title: "ID", dataIndex: "id" },
+          ...(canEdit
+            ? [
+                {
+                  title: "",
+                  render: (_: unknown, row: RecordData) => (
+                    <Button
+                      danger
+                      disabled={saving || linked.query.isFetching}
+                      onClick={() => {
+                        const epoch = getSessionEpoch();
+                        confirmation.current = modal.confirm({
+                          title: `Remove this ${noun} assignment?`,
+                          content: `${recordTitle(row)} may lose access to this asset and its equipment. Other assignments can still grant access.`,
+                          okText: "Remove assignment",
+                          okButtonProps: { danger: true },
+                          onOk: () =>
+                            epoch === getSessionEpoch() &&
+                            currentView.current === viewKey
+                              ? change(row.id!, "remove")
+                              : undefined,
+                        });
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+        scroll={{ x: 600 }}
+      />
+    </>
+  );
+}
 function Memberships({ userId }: { userId: string }) {
   const { organization, can } = useAdmin();
   const { message, modal } = App.useApp();
@@ -583,8 +800,8 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
             className="page-alert"
             type="info"
             showIcon
-            message="User and group assignments are view-only."
-            description="Changes will become available when the Assets API supports them."
+            message="Assigned users and groups can access this asset."
+            description="Removing an assignment can revoke access to the asset and its equipment."
           />
           <Tabs
             items={[
@@ -592,10 +809,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 key: "users",
                 label: "Users",
                 children: (
-                  <RelatedList
-                    resource="users"
-                    filterName="idasset"
-                    filterValue={id!}
+                  <AssetAssignments
+                    key={`${id}:${organization}:users`}
+                    assetId={id!}
+                    kind="users"
+                    assetOrganization={
+                      record &&
+                      String(valueOf(record, "IDOrganization") ?? organization)
+                    }
                   />
                 ),
               },
@@ -603,10 +824,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 key: "groups",
                 label: "User groups",
                 children: (
-                  <RelatedList
-                    resource="usergroups"
-                    filterName="idasset"
-                    filterValue={id!}
+                  <AssetAssignments
+                    key={`${id}:${organization}:usergroups`}
+                    assetId={id!}
+                    kind="usergroups"
+                    assetOrganization={
+                      record &&
+                      String(valueOf(record, "IDOrganization") ?? organization)
+                    }
                   />
                 ),
               },
