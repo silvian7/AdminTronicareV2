@@ -125,11 +125,12 @@ function selectedColumns(resource: Resource) {
     "Last_name",
     "SerialNr",
     "IDHubType",
+    "IDDeviceType",
+    "IDSensorType",
     "IDOrganization",
     "IDAsset",
     "IDHub",
     "IDDevice",
-    "IDSensorType",
     "IDUserType",
     "Rights",
     "ValueBool",
@@ -155,19 +156,25 @@ function selectedColumns(resource: Resource) {
           !hiddenField(f.key),
       ),
     )
-    .slice(0, 7);
+    .slice(0, resource.name === "devices" ? 8 : 7);
 }
-function useRefreshHubTypes() {
+const equipmentTypeResources: Partial<Record<string, string>> = {
+  hubs: "hubtypes",
+  devices: "devicetypes",
+  sensors: "sensortypes",
+};
+function useRefreshEquipmentTypes(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
   return async () => {
-    if (!can(resourceMap.hubtypes, "show")) return;
+    const typeResource = equipmentTypeResources[resource];
+    if (!typeResource || !can(resourceMap[typeResource], "show")) return;
     await invalidate({
-      resource: "hubtypes",
+      resource: typeResource,
       invalidates: ["resourceAll"],
       invalidationFilters: {
         predicate: ({ meta }) =>
-          meta?.hubTypeReference === true &&
+          meta?.equipmentTypeReference === true &&
           meta?.organization === organization,
       },
     });
@@ -175,7 +182,7 @@ function useRefreshHubTypes() {
 }
 export function ResourceList({ resource }: { resource: Resource }) {
   const { organization, can } = useAdmin();
-  const refreshHubTypes = useRefreshHubTypes();
+  const refreshEquipmentTypes = useRefreshEquipmentTypes(resource.name);
   const navigate = useNavigate();
   const [showFilters, setShowFilters] = useState(false);
   const {
@@ -263,7 +270,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
               icon={<ReloadOutlined />}
               onClick={async () => {
                 await tableQuery.refetch();
-                if (resource.name === "hubs") await refreshHubTypes();
+                await refreshEquipmentTypes();
               }}
               loading={tableQuery.isFetching}
             >
@@ -777,7 +784,7 @@ function Memberships({ userId }: { userId: string }) {
 export function ResourceDetail({ resource }: { resource: Resource }) {
   const { id } = useParams();
   const { organization, can } = useAdmin();
-  const refreshHubTypes = useRefreshHubTypes();
+  const refreshEquipmentTypes = useRefreshEquipmentTypes(resource.name);
   const navigate = useNavigate();
   const { modal, message } = App.useApp();
   const deletion = useDelete();
@@ -1004,7 +1011,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
               icon={<ReloadOutlined />}
               onClick={async () => {
                 await query.refetch();
-                if (resource.name === "hubs") await refreshHubTypes();
+                await refreshEquipmentTypes();
               }}
             >
               Refresh

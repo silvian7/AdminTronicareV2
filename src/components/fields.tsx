@@ -346,9 +346,11 @@ export function FieldValue({
   )
     return <span className="muted">—</span>;
   const name = canonical(field.key);
+  const equipmentType = equipmentTypeReferences[name];
   if (typeof value === "boolean")
     return <Tag color={value ? "cyan" : "default"}>{value ? "Yes" : "No"}</Tag>;
-  if (!primary && name === "IDHubType") return <HubTypeTag value={value} />;
+  if (!primary && equipmentType)
+    return <EquipmentTypeTag resource={equipmentType} value={value} />;
   if (!primary && referenceResource[name] && String(value) !== "0")
     return (
       <Link to={`/${referenceResource[name]}/${value}`}>#{String(value)}</Link>
@@ -375,7 +377,20 @@ export function FieldValue({
   }
   return <span className="record-text">{translated(value)}</span>;
 }
-function HubTypeTag({ value }: { value: unknown }) {
+type EquipmentTypeResource = "hubtypes" | "devicetypes" | "sensortypes";
+const equipmentTypeReferences: Partial<Record<string, EquipmentTypeResource>> =
+  {
+    IDHubType: "hubtypes",
+    IDDeviceType: "devicetypes",
+    IDSensorType: "sensortypes",
+  };
+function EquipmentTypeTag({
+  resource,
+  value,
+}: {
+  resource: EquipmentTypeResource;
+  value: unknown;
+}) {
   const { organization, can } = useAdmin();
   const id =
     typeof value === "string"
@@ -385,14 +400,14 @@ function HubTypeTag({ value }: { value: unknown }) {
         : "";
   const validId =
     /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
-  const allowed = can(resourceMap.hubtypes, "show");
+  const allowed = can(resourceMap[resource], "show");
   const { result, query } = useOne<RecordData>({
-    resource: "hubtypes",
+    resource,
     id: validId ? id : "0",
     meta: { organization },
     queryOptions: {
       enabled: allowed && validId,
-      meta: { hubTypeReference: true, organization },
+      meta: { equipmentTypeReference: true, organization },
     },
     errorNotification: false,
   });
@@ -404,7 +419,10 @@ function HubTypeTag({ value }: { value: unknown }) {
   const label =
     typeof tag === "string" && tag.trim() ? tag : `#${String(value)}`;
   return allowed && validId ? (
-    <Link to={`/hubtypes/${id}`} title={`Hub type #${id}`}>
+    <Link
+      to={`/${resource}/${id}`}
+      title={`${resourceMap[resource].singular} #${id}`}
+    >
       {label}
     </Link>
   ) : (
