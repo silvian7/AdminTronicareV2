@@ -382,12 +382,14 @@ type TypeResource =
   | "devicetypes"
   | "sensortypes"
   | "organizationstypes"
-  | "actiontypes";
+  | "actiontypes"
+  | "ruletypes";
 const equipmentTypeReferences: Partial<Record<string, TypeResource>> = {
   IDHubType: "hubtypes",
   IDDeviceType: "devicetypes",
   IDSensorType: "sensortypes",
   IDActionType: "actiontypes",
+  IDRuleType: "ruletypes",
 };
 const referenceId = (value: unknown) =>
   typeof value === "string"
@@ -417,6 +419,7 @@ function useReferenceRecord(
           "devicetypes",
           "sensortypes",
           "actiontypes",
+          "ruletypes",
         ].includes(resource),
         organizationReference: resource === "organizations",
         organizationTypeReference: resource === "organizationstypes",

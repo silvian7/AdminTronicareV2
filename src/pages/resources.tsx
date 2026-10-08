@@ -135,6 +135,7 @@ function selectedColumns(resource: Resource) {
     "IDDeviceType",
     "IDSensorType",
     ...(resource.name === "actions" ? ["IDActionType"] : []),
+    ...(resource.name === "rules" ? ["IDRuleType"] : []),
     "IDOrganization",
     "IDAsset",
     "IDHub",
@@ -172,6 +173,7 @@ const equipmentTypeResources: Partial<Record<string, string>> = {
   devices: "devicetypes",
   sensors: "sensortypes",
   actions: "actiontypes",
+  rules: "ruletypes",
 };
 const organizationIdentityResources = new Set([
   "assets",
@@ -291,7 +293,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
         .filter((f) => !["Label", "Tag"].includes(canonical(f.key)))
         .map((f) => ({
           title:
-            resource.name === "actions" && canonical(f.key) === "IDActionType"
+            (resource.name === "actions" &&
+              canonical(f.key) === "IDActionType") ||
+            (resource.name === "rules" && canonical(f.key) === "IDRuleType")
               ? "Type"
               : fieldLabel(f.key),
           dataIndex: f.key,
@@ -302,7 +306,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
               canonical(f.key) === "IDOrganization") ||
             (assetIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDAsset") ||
-            (resource.name === "actions" && canonical(f.key) === "IDActionType")
+            (resource.name === "actions" &&
+              canonical(f.key) === "IDActionType") ||
+            (resource.name === "rules" && canonical(f.key) === "IDRuleType")
           ),
           render: (value: unknown) =>
             organizationIdentityResources.has(resource.name) &&
@@ -550,13 +556,15 @@ function RelatedList({
               <Link to={`/${resource}/${row.id}`}>{recordTitle(row)}</Link>
             ),
           },
-          { title: "ID", dataIndex: "id" },
+          ...(resource === "rules" ? [] : [{ title: "ID", dataIndex: "id" }]),
           ...selectedColumns(r)
             .filter((f) => !["Tag", "Label"].includes(canonical(f.key)))
-            .slice(0, ["rules", "actions"].includes(resource) ? 4 : 3)
+            .slice(0, resource === "rules" ? 5 : resource === "actions" ? 4 : 3)
             .map((f) => ({
               title:
-                resource === "actions" && canonical(f.key) === "IDActionType"
+                (resource === "actions" &&
+                  canonical(f.key) === "IDActionType") ||
+                (resource === "rules" && canonical(f.key) === "IDRuleType")
                   ? "Type"
                   : fieldLabel(f.key),
               dataIndex: f.key,
@@ -568,6 +576,7 @@ function RelatedList({
                   <FieldValue field={f} value={v} />
                 ),
             })),
+          ...(resource === "rules" ? [{ title: "ID", dataIndex: "id" }] : []),
           ...(resource === "sensors"
             ? [
                 {
