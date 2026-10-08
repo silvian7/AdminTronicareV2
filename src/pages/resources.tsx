@@ -172,19 +172,18 @@ function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
   return async () => {
-    const targetResource =
-      resource === "assets"
-        ? "organizations"
-        : resource === "organizations"
-          ? "organizationstypes"
-          : equipmentTypeResources[resource];
+    const targetResource = ["assets", "users"].includes(resource)
+      ? "organizations"
+      : resource === "organizations"
+        ? "organizationstypes"
+        : equipmentTypeResources[resource];
     if (!targetResource || !can(resourceMap[targetResource], "show")) return;
     await invalidate({
       resource: targetResource,
       invalidates: ["resourceAll"],
       invalidationFilters: {
         predicate: ({ meta }) =>
-          (resource === "assets"
+          (["assets", "users"].includes(resource)
             ? meta?.organizationReference === true
             : resource === "organizations"
               ? meta?.organizationTypeReference === true
@@ -259,9 +258,10 @@ export function ResourceList({ resource }: { resource: Resource }) {
           key: f.key,
           sorter: true,
           ellipsis:
-            resource.name !== "assets" || canonical(f.key) !== "IDOrganization",
+            !["assets", "users"].includes(resource.name) ||
+            canonical(f.key) !== "IDOrganization",
           render: (value: unknown) =>
-            resource.name === "assets" &&
+            ["assets", "users"].includes(resource.name) &&
             canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
             ) : resource.name === "organizations" &&
