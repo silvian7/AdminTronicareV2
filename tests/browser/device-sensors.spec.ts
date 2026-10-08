@@ -7,11 +7,14 @@ const organizationId = "7";
 const hubId = "1407374883553285";
 const deviceId = "9223372036854775806";
 const sensorId = "9223372036854775805";
+const assetId = "9223372036854775804";
 const deviceTypeId = "81";
 const sensorTypeId = "71";
 const hubLabel = "Synthetic MStronic hub";
 const deviceLabel = "Synthetic realtime device";
 const sensorLabel = "Synthetic associated sensor";
+const assetTag = "SYNTHETIC-ASSOCIATED-ASSET";
+const assetLabel = "Synthetic associated asset";
 const realValue = "21.37500000000000000009";
 const lastReading = "2025-01-06T08:30:45Z";
 const lastReadingLocal = "06/01/2025, 09:30:45";
@@ -30,6 +33,7 @@ async function syntheticHierarchy(
     mustChangePassword: false,
     permissions: [
       { entity: "organizations", rights: "r" },
+      { entity: "assets", rights: "r" },
       { entity: "hubs", rights: "r" },
       { entity: "devices", rights: "r" },
       { entity: "devicetypes", rights: "r" },
@@ -66,6 +70,7 @@ async function syntheticHierarchy(
     m_nIDSensor: sensorId,
     m_nIDDevice: deviceId,
     m_nIDSensorType: sensorTypeId,
+    m_nIDAsset: assetId,
     m_sTag: "SYNTHETIC-ASSOCIATED-SENSOR",
     m_sLabel: sensorLabel,
     m_bValueBool: false,
@@ -85,6 +90,18 @@ async function syntheticHierarchy(
     m_sTag: "SYNTHETIC-REAL-TYPE",
     m_sLabel: "Synthetic real sensor type",
     m_nValueType: "4",
+  };
+  const asset = {
+    id: assetId,
+    m_nIDAsset: assetId,
+    m_nIDOrganization: organizationId,
+    m_sTag: assetTag,
+    m_sLabel: JSON.stringify({
+      messages: [
+        { lang: "fr", text: "Synthetic French asset label" },
+        { lang: "en", text: assetLabel },
+      ],
+    }),
   };
   const reads: URL[] = [];
   const mutations: string[] = [];
@@ -130,6 +147,8 @@ async function syntheticHierarchy(
       return reply({ data: sensor });
     if (path === `/api/resources/sensortypes/${sensorTypeId}`)
       return reply({ data: sensorType });
+    if (path === `/api/resources/assets/${assetId}`)
+      return reply({ data: asset });
     // Every API call is intercepted, including unrelated mounted detail tabs.
     return reply({ data: [], total: 0 });
   });
@@ -172,6 +191,20 @@ async function expectAssociatedSensors(page: Page) {
   await expect(
     row.getByRole("cell").nth(timeColumn).locator("time"),
   ).toHaveAttribute("datetime", lastReadingInstant);
+  const assetColumn = await page
+    .getByRole("columnheader", { name: "Asset", exact: true })
+    .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
+  const assetCell = row.getByRole("cell").nth(assetColumn);
+  await expect(assetCell.getByRole("link")).toHaveCount(2);
+  for (const name of [assetTag, assetLabel]) {
+    const link = assetCell.getByRole("link", { name, exact: true });
+    await expect(link).toHaveAttribute("href", `/assets/${assetId}`);
+    await expect(link).toHaveCSS("font-size", "14px");
+    await expect(link).toHaveCSS("font-weight", "600");
+  }
+  const id = assetCell.getByText(`#${assetId}`, { exact: true });
+  await expect(id).toHaveCSS("font-size", "12px");
+  await expect(id).toHaveCSS("color", "rgb(138, 154, 165)");
   return row;
 }
 

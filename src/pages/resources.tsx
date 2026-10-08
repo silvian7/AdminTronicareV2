@@ -545,7 +545,13 @@ function RelatedList({
             .map((f) => ({
               title: fieldLabel(f.key),
               dataIndex: f.key,
-              render: (v: unknown) => <FieldValue field={f} value={v} />,
+              render: (v: unknown) =>
+                assetIdentityResources.has(resource) &&
+                canonical(f.key) === "IDAsset" ? (
+                  <AssetIdentity value={v} />
+                ) : (
+                  <FieldValue field={f} value={v} />
+                ),
             })),
           ...(resource === "sensors"
             ? [
