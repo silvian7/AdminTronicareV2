@@ -384,7 +384,10 @@ const equipmentTypeReferences: Partial<Record<string, EquipmentTypeResource>> =
     IDDeviceType: "devicetypes",
     IDSensorType: "sensortypes",
   };
-function useEquipmentType(resource: EquipmentTypeResource, value: unknown) {
+function useReferenceRecord(
+  resource: EquipmentTypeResource | "organizations",
+  value: unknown,
+) {
   const { organization, can } = useAdmin();
   const id =
     typeof value === "string"
@@ -401,7 +404,11 @@ function useEquipmentType(resource: EquipmentTypeResource, value: unknown) {
     meta: { organization },
     queryOptions: {
       enabled: allowed && validId,
-      meta: { equipmentTypeReference: true, organization },
+      meta: {
+        equipmentTypeReference: resource !== "organizations",
+        organizationReference: resource === "organizations",
+        organization,
+      },
     },
     errorNotification: false,
   });
@@ -411,6 +418,26 @@ function useEquipmentType(resource: EquipmentTypeResource, value: unknown) {
       : undefined;
   return { id, allowed, validId, record };
 }
+export function OrganizationIdentity({ value }: { value: unknown }) {
+  const { id, record } = useReferenceRecord("organizations", value);
+  if (value === null || value === undefined || value === "")
+    return <span className="muted">—</span>;
+  return (
+    <div className="record-identity">
+      {record && (
+        <>
+          <Link to={`/organizations/${id}`}>
+            {translated(valueOf(record, "Tag")) || "—"}
+          </Link>
+          <Link to={`/organizations/${id}`}>
+            {translated(valueOf(record, "Label")) || "—"}
+          </Link>
+        </>
+      )}
+      <span>#{String(value)}</span>
+    </div>
+  );
+}
 function EquipmentTypeTag({
   resource,
   value,
@@ -418,7 +445,7 @@ function EquipmentTypeTag({
   resource: EquipmentTypeResource;
   value: unknown;
 }) {
-  const { id, allowed, validId, record } = useEquipmentType(resource, value);
+  const { id, allowed, validId, record } = useReferenceRecord(resource, value);
   const tag = record ? translated(valueOf(record, "Tag")) : "";
   if (String(value) === "0") return <span className="numeric-value">0</span>;
   const label =
@@ -435,7 +462,7 @@ function EquipmentTypeTag({
   );
 }
 export function SensorCurrentValue({ row }: { row: RecordData }) {
-  const { record: sensorType } = useEquipmentType(
+  const { record: sensorType } = useReferenceRecord(
     "sensortypes",
     valueOf(row, "IDSensorType"),
   );

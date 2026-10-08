@@ -71,6 +71,7 @@ import {
   ErrorNotice,
   FieldInput,
   FieldValue,
+  OrganizationIdentity,
   ReferenceSelect,
   SensorCurrentValue,
 } from "../components/fields";
@@ -165,18 +166,23 @@ const equipmentTypeResources: Partial<Record<string, string>> = {
   devices: "devicetypes",
   sensors: "sensortypes",
 };
-function useRefreshEquipmentTypes(resource: string) {
+function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
   return async () => {
-    const typeResource = equipmentTypeResources[resource];
-    if (!typeResource || !can(resourceMap[typeResource], "show")) return;
+    const targetResource =
+      resource === "assets"
+        ? "organizations"
+        : equipmentTypeResources[resource];
+    if (!targetResource || !can(resourceMap[targetResource], "show")) return;
     await invalidate({
-      resource: typeResource,
+      resource: targetResource,
       invalidates: ["resourceAll"],
       invalidationFilters: {
         predicate: ({ meta }) =>
-          meta?.equipmentTypeReference === true &&
+          (resource === "assets"
+            ? meta?.organizationReference === true
+            : meta?.equipmentTypeReference === true) &&
           meta?.organization === organization,
       },
     });
@@ -184,7 +190,7 @@ function useRefreshEquipmentTypes(resource: string) {
 }
 export function ResourceList({ resource }: { resource: Resource }) {
   const { organization, can } = useAdmin();
-  const refreshEquipmentTypes = useRefreshEquipmentTypes(resource.name);
+  const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
   const [showFilters, setShowFilters] = useState(false);
   const {
@@ -245,8 +251,15 @@ export function ResourceList({ resource }: { resource: Resource }) {
           dataIndex: f.key,
           key: f.key,
           sorter: true,
-          ellipsis: true,
-          render: (value: unknown) => <FieldValue field={f} value={value} />,
+          ellipsis:
+            resource.name !== "assets" || canonical(f.key) !== "IDOrganization",
+          render: (value: unknown) =>
+            resource.name === "assets" &&
+            canonical(f.key) === "IDOrganization" ? (
+              <OrganizationIdentity value={value} />
+            ) : (
+              <FieldValue field={f} value={value} />
+            ),
         })),
       {
         title: "",
@@ -285,7 +298,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
               icon={<ReloadOutlined />}
               onClick={async () => {
                 await tableQuery.refetch();
-                await refreshEquipmentTypes();
+                await refreshRecordReferences();
               }}
               loading={tableQuery.isFetching}
             >
@@ -424,7 +437,7 @@ function RelatedList({
 }) {
   const { organization, can } = useAdmin();
   const r = resourceMap[resource];
-  const refreshEquipmentTypes = useRefreshEquipmentTypes(resource);
+  const refreshRecordReferences = useRefreshRecordReferences(resource);
   const { result, query } = useList<RecordData>({
     resource,
     filters: [{ field: filterName, operator: "eq", value: filterValue }],
@@ -456,7 +469,7 @@ function RelatedList({
             loading={query.isFetching}
             onClick={async () => {
               await query.refetch();
-              await refreshEquipmentTypes();
+              await refreshRecordReferences();
             }}
           >
             Refresh
@@ -826,7 +839,7 @@ function Memberships({ userId }: { userId: string }) {
 export function ResourceDetail({ resource }: { resource: Resource }) {
   const { id } = useParams();
   const { organization, can } = useAdmin();
-  const refreshEquipmentTypes = useRefreshEquipmentTypes(resource.name);
+  const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
   const { modal, message } = App.useApp();
   const deletion = useDelete();
@@ -1053,7 +1066,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
               icon={<ReloadOutlined />}
               onClick={async () => {
                 await query.refetch();
-                await refreshEquipmentTypes();
+                await refreshRecordReferences();
               }}
             >
               Refresh
