@@ -59,6 +59,7 @@ import {
   referenceResource,
   resourceMap,
   responseKey,
+  translated,
   valueOf,
   type Field,
   type Resource,
@@ -217,12 +218,25 @@ export function ResourceList({ resource }: { resource: Resource }) {
         title: resource.singular,
         key: "record",
         width: 240,
-        render: (_: unknown, row: RecordData) => (
-          <div className="record-identity">
-            <Link to={`/${resource.name}/${row.id}`}>{recordTitle(row)}</Link>
-            <span>#{row.id}</span>
-          </div>
-        ),
+        render: (_: unknown, row: RecordData) => {
+          const tag =
+            resource.name === "assets" ? translated(valueOf(row, "Tag")) : "";
+          const label = translated(valueOf(row, "Label"));
+          const path = `/${resource.name}/${row.id}`;
+          return (
+            <div className="record-identity">
+              {tag ? (
+                <>
+                  <Link to={path}>{tag}</Link>
+                  {label && <Link to={path}>{label}</Link>}
+                </>
+              ) : (
+                <Link to={path}>{recordTitle(row)}</Link>
+              )}
+              <span>#{row.id}</span>
+            </div>
+          );
+        },
       },
       ...selectedColumns(resource)
         .filter((f) => !["Label", "Tag"].includes(canonical(f.key)))
