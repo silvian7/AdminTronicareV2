@@ -177,7 +177,7 @@ const organizationIdentityResources = new Set([
   "hubs",
   "devices",
 ]);
-const assetIdentityResources = new Set(["sensors", "devices"]);
+const assetIdentityResources = new Set(["sensors", "devices", "rules"]);
 function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
