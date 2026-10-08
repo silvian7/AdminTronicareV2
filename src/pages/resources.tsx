@@ -134,6 +134,7 @@ function selectedColumns(resource: Resource) {
     "IDHubType",
     "IDDeviceType",
     "IDSensorType",
+    ...(resource.name === "actions" ? ["IDActionType"] : []),
     "IDOrganization",
     "IDAsset",
     "IDHub",
@@ -170,6 +171,7 @@ const equipmentTypeResources: Partial<Record<string, string>> = {
   hubs: "hubtypes",
   devices: "devicetypes",
   sensors: "sensortypes",
+  actions: "actiontypes",
 };
 const organizationIdentityResources = new Set([
   "assets",
@@ -288,7 +290,10 @@ export function ResourceList({ resource }: { resource: Resource }) {
       ...selectedColumns(resource)
         .filter((f) => !["Label", "Tag"].includes(canonical(f.key)))
         .map((f) => ({
-          title: fieldLabel(f.key),
+          title:
+            resource.name === "actions" && canonical(f.key) === "IDActionType"
+              ? "Type"
+              : fieldLabel(f.key),
           dataIndex: f.key,
           key: f.key,
           sorter: true,
@@ -296,7 +301,8 @@ export function ResourceList({ resource }: { resource: Resource }) {
             (organizationIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDOrganization") ||
             (assetIdentityResources.has(resource.name) &&
-              canonical(f.key) === "IDAsset")
+              canonical(f.key) === "IDAsset") ||
+            (resource.name === "actions" && canonical(f.key) === "IDActionType")
           ),
           render: (value: unknown) =>
             organizationIdentityResources.has(resource.name) &&
@@ -547,9 +553,12 @@ function RelatedList({
           { title: "ID", dataIndex: "id" },
           ...selectedColumns(r)
             .filter((f) => !["Tag", "Label"].includes(canonical(f.key)))
-            .slice(0, resource === "rules" ? 4 : 3)
+            .slice(0, ["rules", "actions"].includes(resource) ? 4 : 3)
             .map((f) => ({
-              title: fieldLabel(f.key),
+              title:
+                resource === "actions" && canonical(f.key) === "IDActionType"
+                  ? "Type"
+                  : fieldLabel(f.key),
               dataIndex: f.key,
               render: (v: unknown) =>
                 assetIdentityResources.has(resource) &&

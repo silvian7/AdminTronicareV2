@@ -378,11 +378,16 @@ export function FieldValue({
   return <span className="record-text">{translated(value)}</span>;
 }
 type TypeResource =
-  "hubtypes" | "devicetypes" | "sensortypes" | "organizationstypes";
+  | "hubtypes"
+  | "devicetypes"
+  | "sensortypes"
+  | "organizationstypes"
+  | "actiontypes";
 const equipmentTypeReferences: Partial<Record<string, TypeResource>> = {
   IDHubType: "hubtypes",
   IDDeviceType: "devicetypes",
   IDSensorType: "sensortypes",
+  IDActionType: "actiontypes",
 };
 const referenceId = (value: unknown) =>
   typeof value === "string"
@@ -411,6 +416,7 @@ function useReferenceRecord(
           "hubtypes",
           "devicetypes",
           "sensortypes",
+          "actiontypes",
         ].includes(resource),
         organizationReference: resource === "organizations",
         organizationTypeReference: resource === "organizationstypes",
