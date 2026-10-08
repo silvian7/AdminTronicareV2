@@ -168,29 +168,48 @@ const equipmentTypeResources: Partial<Record<string, string>> = {
   devices: "devicetypes",
   sensors: "sensortypes",
 };
+const organizationIdentityResources = new Set([
+  "assets",
+  "users",
+  "hubs",
+  "devices",
+]);
 function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
   return async () => {
-    const targetResource = ["assets", "users"].includes(resource)
-      ? "organizations"
-      : resource === "organizations"
-        ? "organizationstypes"
-        : equipmentTypeResources[resource];
-    if (!targetResource || !can(resourceMap[targetResource], "show")) return;
-    await invalidate({
-      resource: targetResource,
-      invalidates: ["resourceAll"],
-      invalidationFilters: {
-        predicate: ({ meta }) =>
-          (["assets", "users"].includes(resource)
-            ? meta?.organizationReference === true
-            : resource === "organizations"
-              ? meta?.organizationTypeReference === true
-              : meta?.equipmentTypeReference === true) &&
-          meta?.organization === organization,
-      },
-    });
+    const references: { resource: string; marker: string }[] = [];
+    if (organizationIdentityResources.has(resource))
+      references.push({
+        resource: "organizations",
+        marker: "organizationReference",
+      });
+    if (resource === "organizations")
+      references.push({
+        resource: "organizationstypes",
+        marker: "organizationTypeReference",
+      });
+    const equipmentTypeResource = equipmentTypeResources[resource];
+    if (equipmentTypeResource)
+      references.push({
+        resource: equipmentTypeResource,
+        marker: "equipmentTypeReference",
+      });
+    await Promise.all(
+      references
+        .filter((reference) => can(resourceMap[reference.resource], "show"))
+        .map((reference) =>
+          invalidate({
+            resource: reference.resource,
+            invalidates: ["resourceAll"],
+            invalidationFilters: {
+              predicate: ({ meta }) =>
+                meta?.[reference.marker] === true &&
+                meta?.organization === organization,
+            },
+          }),
+        ),
+    );
   };
 }
 export function ResourceList({ resource }: { resource: Resource }) {
@@ -258,10 +277,10 @@ export function ResourceList({ resource }: { resource: Resource }) {
           key: f.key,
           sorter: true,
           ellipsis:
-            !["assets", "users"].includes(resource.name) ||
+            !organizationIdentityResources.has(resource.name) ||
             canonical(f.key) !== "IDOrganization",
           render: (value: unknown) =>
-            ["assets", "users"].includes(resource.name) &&
+            organizationIdentityResources.has(resource.name) &&
             canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
             ) : resource.name === "organizations" &&
