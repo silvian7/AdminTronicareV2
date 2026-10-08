@@ -175,6 +175,7 @@ const organizationIdentityResources = new Set([
   "hubs",
   "devices",
 ]);
+const assetIdentityResources = new Set(["sensors", "devices"]);
 function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
@@ -190,7 +191,7 @@ function useRefreshRecordReferences(resource: string) {
         resource: "organizationstypes",
         marker: "organizationTypeReference",
       });
-    if (resource === "sensors")
+    if (assetIdentityResources.has(resource))
       references.push({ resource: "assets", marker: "assetReference" });
     const equipmentTypeResource = equipmentTypeResources[resource];
     if (equipmentTypeResource)
@@ -282,13 +283,14 @@ export function ResourceList({ resource }: { resource: Resource }) {
           ellipsis: !(
             (organizationIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDOrganization") ||
-            (resource.name === "sensors" && canonical(f.key) === "IDAsset")
+            (assetIdentityResources.has(resource.name) &&
+              canonical(f.key) === "IDAsset")
           ),
           render: (value: unknown) =>
             organizationIdentityResources.has(resource.name) &&
             canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
-            ) : resource.name === "sensors" &&
+            ) : assetIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDAsset" ? (
               <AssetIdentity value={value} />
             ) : resource.name === "organizations" &&
