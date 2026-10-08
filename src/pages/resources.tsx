@@ -150,7 +150,7 @@ function selectedColumns(resource: Resource) {
     "IsRead",
     "IsAck",
     "ResultSuccess",
-    "Kind",
+    ...(resource.name === "organizations" ? [] : ["Kind"]),
     "Data",
     "dhCreated",
   ];
