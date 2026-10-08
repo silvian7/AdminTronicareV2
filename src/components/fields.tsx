@@ -350,7 +350,7 @@ export function FieldValue({
   if (typeof value === "boolean")
     return <Tag color={value ? "cyan" : "default"}>{value ? "Yes" : "No"}</Tag>;
   if (!primary && equipmentType)
-    return <EquipmentTypeTag resource={equipmentType} value={value} />;
+    return <TypeTag resource={equipmentType} value={value} />;
   if (!primary && referenceResource[name] && String(value) !== "0")
     return (
       <Link to={`/${referenceResource[name]}/${value}`}>#{String(value)}</Link>
@@ -377,15 +377,15 @@ export function FieldValue({
   }
   return <span className="record-text">{translated(value)}</span>;
 }
-type EquipmentTypeResource = "hubtypes" | "devicetypes" | "sensortypes";
-const equipmentTypeReferences: Partial<Record<string, EquipmentTypeResource>> =
-  {
-    IDHubType: "hubtypes",
-    IDDeviceType: "devicetypes",
-    IDSensorType: "sensortypes",
-  };
+type TypeResource =
+  "hubtypes" | "devicetypes" | "sensortypes" | "organizationstypes";
+const equipmentTypeReferences: Partial<Record<string, TypeResource>> = {
+  IDHubType: "hubtypes",
+  IDDeviceType: "devicetypes",
+  IDSensorType: "sensortypes",
+};
 function useReferenceRecord(
-  resource: EquipmentTypeResource | "organizations",
+  resource: TypeResource | "organizations",
   value: unknown,
 ) {
   const { organization, can } = useAdmin();
@@ -405,8 +405,10 @@ function useReferenceRecord(
     queryOptions: {
       enabled: allowed && validId,
       meta: {
-        equipmentTypeReference: resource !== "organizations",
+        equipmentTypeReference:
+          resource !== "organizations" && resource !== "organizationstypes",
         organizationReference: resource === "organizations",
+        organizationTypeReference: resource === "organizationstypes",
         organization,
       },
     },
@@ -438,14 +440,16 @@ export function OrganizationIdentity({ value }: { value: unknown }) {
     </div>
   );
 }
-function EquipmentTypeTag({
+export function TypeTag({
   resource,
   value,
 }: {
-  resource: EquipmentTypeResource;
+  resource: TypeResource;
   value: unknown;
 }) {
   const { id, allowed, validId, record } = useReferenceRecord(resource, value);
+  if (value === null || value === undefined || value === "")
+    return <span className="muted">—</span>;
   const tag = record ? translated(valueOf(record, "Tag")) : "";
   if (String(value) === "0") return <span className="numeric-value">0</span>;
   const label =

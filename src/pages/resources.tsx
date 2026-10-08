@@ -74,6 +74,7 @@ import {
   OrganizationIdentity,
   ReferenceSelect,
   SensorCurrentValue,
+  TypeTag,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 
@@ -123,6 +124,7 @@ function selectedColumns(resource: Resource) {
   const priority = [
     "Label",
     "Tag",
+    ...(resource.name === "organizations" ? ["IDOrganizationType"] : []),
     "Login",
     "First_name",
     "Last_name",
@@ -173,7 +175,9 @@ function useRefreshRecordReferences(resource: string) {
     const targetResource =
       resource === "assets"
         ? "organizations"
-        : equipmentTypeResources[resource];
+        : resource === "organizations"
+          ? "organizationstypes"
+          : equipmentTypeResources[resource];
     if (!targetResource || !can(resourceMap[targetResource], "show")) return;
     await invalidate({
       resource: targetResource,
@@ -182,7 +186,9 @@ function useRefreshRecordReferences(resource: string) {
         predicate: ({ meta }) =>
           (resource === "assets"
             ? meta?.organizationReference === true
-            : meta?.equipmentTypeReference === true) &&
+            : resource === "organizations"
+              ? meta?.organizationTypeReference === true
+              : meta?.equipmentTypeReference === true) &&
           meta?.organization === organization,
       },
     });
@@ -225,8 +231,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
         key: "record",
         width: 240,
         render: (_: unknown, row: RecordData) => {
-          const tag =
-            resource.name === "assets" ? translated(valueOf(row, "Tag")) : "";
+          const tag = ["assets", "organizations"].includes(resource.name)
+            ? translated(valueOf(row, "Tag"))
+            : "";
           const label = translated(valueOf(row, "Label"));
           const path = `/${resource.name}/${row.id}`;
           return (
@@ -257,6 +264,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
             resource.name === "assets" &&
             canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
+            ) : resource.name === "organizations" &&
+              canonical(f.key) === "IDOrganizationType" ? (
+              <TypeTag resource="organizationstypes" value={value} />
             ) : (
               <FieldValue field={f} value={value} />
             ),
