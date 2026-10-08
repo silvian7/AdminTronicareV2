@@ -1,17 +1,6 @@
 import { useState } from "react";
 import { useInvalidate } from "@refinedev/core";
-import {
-  Alert,
-  Button,
-  Card,
-  Form,
-  Input,
-  Radio,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from "antd";
+import { Button, Card, Form, Input, Radio, Table, Typography } from "antd";
 import { useSearchParams } from "react-router";
 import { SearchOutlined } from "@ant-design/icons";
 import { request } from "../api";
@@ -19,6 +8,7 @@ import {
   ReferenceSelect,
   ErrorNotice,
   SensorHistoryIdentity,
+  SensorHistoryValue,
 } from "../components/fields";
 import { resourceMap, type RecordData } from "../../shared/resources";
 import { useAdmin } from "../context";
@@ -110,14 +100,10 @@ export function SensorHistory() {
       ),
     },
     {
-      title: "Boolean",
-      dataIndex: "m_bValueBool",
-      render: (v: boolean) => (
-        <Tag color={v ? "cyan" : "default"}>{v ? "True" : "False"}</Tag>
-      ),
+      title: "Value",
+      key: "value",
+      render: (_: unknown, row: RecordData) => <SensorHistoryValue row={row} />,
     },
-    { title: "Integer", dataIndex: "m_nValueInt" },
-    { title: "Real", dataIndex: "m_rValueReal" },
   ];
   return (
     <>

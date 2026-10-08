@@ -17,7 +17,7 @@ function reading(
   historyId: string,
   sensorId: string,
   typeId: unknown,
-  integer: string,
+  integer: unknown,
   event = "20261008101010",
 ): RecordData {
   return {
@@ -66,6 +66,7 @@ async function syntheticHistory(
       data: {
         id: largeTypeId,
         m_nIDSensorType: largeTypeId,
+        m_nValueType: "2",
         m_sTag: "RECORDED-TEMPERATURE-TYPE",
         m_sLabel: JSON.stringify({
           messages: [
@@ -79,6 +80,7 @@ async function syntheticHistory(
       data: {
         id: "77",
         m_nIDSensorType: "77",
+        m_nValueType: "2",
         m_sTag: "RECORDED-MOTION-TYPE",
         m_sLabel: "Recorded motion label",
       },
@@ -155,6 +157,9 @@ async function syntheticHistory(
     updateTypeTag: (id: string, tag: string) => {
       if (types[id]?.data) types[id].data!.m_sTag = tag;
     },
+    updateValueType: (id: string, valueType: string) => {
+      if (types[id]?.data) types[id].data!.m_nValueType = valueType;
+    },
     denyTypeReads: (id: string) => {
       if (types[id]) types[id].status = 403;
     },
@@ -166,10 +171,12 @@ async function loadHistory(page: Page) {
   await page.getByRole("button", { name: /Load history$/ }).click();
 }
 
-function readingRow(page: Page, integer: string) {
-  return page
-    .getByRole("cell", { name: integer, exact: true })
-    .locator("xpath=ancestor::tr");
+function readingRow(page: Page, historyId: string) {
+  return page.locator(`tr[data-row-key="${historyId}"]`);
+}
+
+function readingValue(page: Page, historyId: string) {
+  return readingRow(page, historyId).getByRole("cell").nth(2);
 }
 
 test("history Sensor column shows recorded type tag, translated label and exact sensor ID", async ({
@@ -192,12 +199,12 @@ test("history Sensor column shows recorded type tag, translated label and exact 
   await expect(
     page.getByRole("columnheader", { name: "Sensor ID", exact: true }),
   ).toHaveCount(0);
-  for (const [integer, id] of [
-    ["101", largeSensorId],
-    ["102", largeSensorId],
-    ["103", "41"],
+  for (const [historyId, id] of [
+    ["11", largeSensorId],
+    ["12", largeSensorId],
+    ["13", "41"],
   ]) {
-    const row = readingRow(page, integer);
+    const row = readingRow(page, historyId);
     await expect(
       row.getByRole("link", {
         name: "RECORDED-TEMPERATURE-TYPE",
@@ -216,7 +223,7 @@ test("history Sensor column shows recorded type tag, translated label and exact 
     await expect(identifier).toHaveCSS("color", "rgb(138, 154, 165)");
   }
   await expect(
-    readingRow(page, "104").getByRole("link", {
+    readingRow(page, "14").getByRole("link", {
       name: "RECORDED-MOTION-TYPE",
       exact: true,
     }),
@@ -233,7 +240,7 @@ test("history Sensor column shows recorded type tag, translated label and exact 
   ).toHaveCount(0);
 });
 
-test("unavailable or absent history type preserves the sensor ID and recorded readings", async ({
+test("unavailable or absent history type preserves the sensor ID and row without guessing its value", async ({
   page,
 }) => {
   const mock = await syntheticHistory(page, {
@@ -253,21 +260,16 @@ test("unavailable or absent history type preserves the sensor ID and recorded re
     },
   });
   await loadHistory(page);
-  for (const [integer, id] of [
-    ["201", "51"],
-    ["202", "52"],
-    ["203", "53"],
-    ["204", "54"],
-    ["205", "55"],
+  for (const [historyId, id] of [
+    ["21", "51"],
+    ["22", "52"],
+    ["23", "53"],
+    ["24", "54"],
+    ["25", "55"],
   ]) {
-    const row = readingRow(page, integer);
+    const row = readingRow(page, historyId);
     await expect(row.getByText(`#${id}`, { exact: true })).toBeVisible();
-    await expect(
-      row.getByRole("cell", { name: "False", exact: true }),
-    ).toBeVisible();
-    await expect(
-      row.getByRole("cell", { name: "0.125", exact: true }),
-    ).toBeVisible();
+    await expect(readingValue(page, historyId)).toHaveText("—");
   }
   await expect.poll(() => mock.typeReads.length).toBe(3);
   expect(mock.typeReads.sort()).toEqual([
@@ -287,7 +289,7 @@ test("history type permission is required before any metadata lookup", async ({
     pages: [historyPage([reading("31", largeSensorId, largeTypeId, "301")])],
   });
   await loadHistory(page);
-  const row = readingRow(page, "301");
+  const row = readingRow(page, "31");
   await expect(
     row.getByText(`#${largeSensorId}`, { exact: true }),
   ).toBeVisible();
@@ -299,6 +301,7 @@ test("history type permission is required before any metadata lookup", async ({
   ).toHaveCount(0);
   expect(mock.typeReads).toEqual([]);
   expect(mock.sensorReads).toEqual([]);
+  await expect(readingValue(page, "31")).toHaveText("—");
 });
 
 test("history remains readable without sensor access and offers no forbidden sensor links", async ({
@@ -309,7 +312,7 @@ test("history remains readable without sensor access and offers no forbidden sen
     pages: [historyPage([reading("41", largeSensorId, largeTypeId, "401")])],
   });
   await loadHistory(page);
-  const row = readingRow(page, "401");
+  const row = readingRow(page, "41");
   await expect(
     row.getByText("RECORDED-TEMPERATURE-TYPE", { exact: true }),
   ).toBeVisible();
@@ -344,7 +347,7 @@ test("enriched Sensor cells preserve exact history continuation cursors and shar
   });
   await loadHistory(page);
   await expect(
-    readingRow(page, "502").getByText("Recorded temperature label", {
+    readingRow(page, afterId).getByText("Recorded temperature label", {
       exact: true,
     }),
   ).toBeVisible();
@@ -352,14 +355,14 @@ test("enriched Sensor cells preserve exact history continuation cursors and shar
     .getByRole("button", { name: "Load next 100 readings", exact: true })
     .click();
   await expect(
-    readingRow(page, "503").getByRole("link", {
+    readingRow(page, "53").getByRole("link", {
       name: "RECORDED-TEMPERATURE-TYPE",
       exact: true,
     }),
   ).toHaveAttribute("href", "/sensors/62");
   await expect(page.getByText("3 loaded", { exact: true })).toBeVisible();
-  await expect(readingRow(page, "501")).toBeVisible();
-  await expect(readingRow(page, "502")).toBeVisible();
+  await expect(readingRow(page, "51")).toBeVisible();
+  await expect(readingRow(page, afterId)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Load next 100 readings", exact: true }),
   ).toHaveCount(0);
@@ -388,15 +391,18 @@ test("fresh history loads refresh type metadata and suppress stale labels after 
     pages: [historyPage(rows), historyPage(rows), historyPage(rows)],
   });
   await loadHistory(page);
-  const row = readingRow(page, "601");
+  const row = readingRow(page, "61");
   await expect(
     row.getByRole("link", { name: "RECORDED-TEMPERATURE-TYPE", exact: true }),
   ).toBeVisible();
+  await expect(readingValue(page, "61")).toHaveText("601");
   mock.updateTypeTag(largeTypeId, "UPDATED-RECORDED-TYPE");
+  mock.updateValueType(largeTypeId, "4");
   await page.getByRole("button", { name: /Load history$/ }).click();
   await expect(
     row.getByRole("link", { name: "UPDATED-RECORDED-TYPE", exact: true }),
   ).toBeVisible();
+  await expect(readingValue(page, "61")).toHaveText("0.125");
   await expect(
     row.getByText("RECORDED-TEMPERATURE-TYPE", { exact: true }),
   ).toHaveCount(0);
@@ -412,6 +418,7 @@ test("fresh history loads refresh type metadata and suppress stale labels after 
   await expect(
     row.getByText("Recorded temperature label", { exact: true }),
   ).toHaveCount(0);
+  await expect(readingValue(page, "61")).toHaveText("—");
   expect(mock.typeReads).toEqual([
     `/api/resources/sensortypes/${largeTypeId}`,
     `/api/resources/sensortypes/${largeTypeId}`,
@@ -419,4 +426,210 @@ test("fresh history loads refresh type metadata and suppress stale labels after 
   ]);
   expect(mock.sensorReads).toEqual([]);
   await expect(page.getByText("1 loaded", { exact: true })).toBeVisible();
+});
+
+test("history Value follows each recorded type and preserves false, zero, null and numeric precision", async ({
+  page,
+}) => {
+  const preciseReal = "1234567890.12345678901234567890";
+  const values = [
+    {
+      id: "71",
+      type: "1",
+      boolean: true,
+      integer: "999",
+      real: "888",
+      expected: "True",
+    },
+    {
+      id: "72",
+      type: "1",
+      boolean: false,
+      integer: "999",
+      real: "888",
+      expected: "False",
+    },
+    {
+      id: "73",
+      type: "1",
+      boolean: null,
+      integer: "999",
+      real: "888",
+      expected: "—",
+    },
+    {
+      id: "74",
+      type: "2",
+      boolean: true,
+      integer: largeSensorId,
+      real: "888",
+      expected: largeSensorId,
+    },
+    {
+      id: "75",
+      type: "2",
+      boolean: true,
+      integer: "0",
+      real: "888",
+      expected: "0",
+    },
+    {
+      id: "76",
+      type: "2",
+      boolean: true,
+      integer: null,
+      real: "888",
+      expected: "—",
+    },
+    {
+      id: "77",
+      type: "4",
+      boolean: true,
+      integer: "999",
+      real: preciseReal,
+      expected: preciseReal,
+    },
+    {
+      id: "78",
+      type: "4",
+      boolean: true,
+      integer: "999",
+      real: "0",
+      expected: "0",
+    },
+    {
+      id: "79",
+      type: "4",
+      boolean: true,
+      integer: "999",
+      real: null,
+      expected: "—",
+    },
+    {
+      id: "80",
+      type: "3",
+      boolean: true,
+      integer: "90",
+      real: "888",
+      expected: "On · 90 s",
+    },
+    {
+      id: "81",
+      type: "3",
+      boolean: false,
+      integer: "0",
+      real: "888",
+      expected: "Off · 0 s",
+    },
+    {
+      id: "82",
+      type: "3",
+      boolean: null,
+      integer: null,
+      real: "888",
+      expected: "— · —",
+    },
+  ];
+  const types = Object.fromEntries(
+    ["1", "2", "3", "4"].map((id) => [
+      id,
+      {
+        data: {
+          id,
+          m_nIDSensorType: id,
+          m_nValueType: id,
+          m_sTag: `RECORDED-TYPE-${id}`,
+          m_sLabel: `Recorded type ${id} label`,
+        },
+      },
+    ]),
+  );
+  const mock = await syntheticHistory(page, {
+    pages: [
+      historyPage(
+        values.map(({ id, type, boolean, integer, real }) => ({
+          ...reading(id, largeSensorId, type, integer),
+          m_bValueBool: boolean,
+          m_rValueReal: real,
+        })),
+      ),
+    ],
+    types,
+  });
+  await loadHistory(page);
+  await expect(
+    page.getByRole("columnheader", { name: "Value", exact: true }),
+  ).toBeVisible();
+  for (const name of ["Boolean", "Integer", "Real"])
+    await expect(
+      page.getByRole("columnheader", { name, exact: true }),
+    ).toHaveCount(0);
+  for (const { id, type, expected } of values) {
+    await expect(readingValue(page, id)).toHaveText(expected);
+    await expect(
+      readingRow(page, id).getByRole("link", {
+        name: `RECORDED-TYPE-${type}`,
+        exact: true,
+      }),
+    ).toHaveAttribute("href", `/sensors/${largeSensorId}`);
+  }
+  expect(mock.typeReads.sort()).toEqual([
+    "/api/resources/sensortypes/1",
+    "/api/resources/sensortypes/2",
+    "/api/resources/sensortypes/3",
+    "/api/resources/sensortypes/4",
+  ]);
+  expect(mock.sensorReads).toEqual([]);
+  await expect(page.getByText("12 loaded", { exact: true })).toBeVisible();
+});
+
+test("unknown or absent value types show a missing value instead of guessing from stored slots", async ({
+  page,
+}) => {
+  const mock = await syntheticHistory(page, {
+    pages: [
+      historyPage([
+        { ...reading("91", largeSensorId, "5", "999"), m_bValueBool: true },
+        { ...reading("92", "41", "6", "999"), m_bValueBool: true },
+      ]),
+    ],
+    types: {
+      "5": {
+        data: {
+          id: "5",
+          m_nIDSensorType: "5",
+          m_nValueType: "99",
+          m_sTag: "UNSUPPORTED-TYPE",
+          m_sLabel: "Unsupported value type",
+        },
+      },
+      "6": {
+        data: {
+          id: "6",
+          m_nIDSensorType: "6",
+          m_sTag: "TYPE-WITHOUT-VALUE-KIND",
+          m_sLabel: "Missing value type",
+        },
+      },
+    },
+  });
+  await loadHistory(page);
+  await expect(
+    readingRow(page, "91").getByRole("link", {
+      name: "UNSUPPORTED-TYPE",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    readingRow(page, "92").getByRole("link", {
+      name: "TYPE-WITHOUT-VALUE-KIND",
+      exact: true,
+    }),
+  ).toBeVisible();
+  for (const id of ["91", "92"])
+    await expect(readingValue(page, id)).toHaveText("—");
+  expect(mock.typeReads.sort()).toEqual([
+    "/api/resources/sensortypes/5",
+    "/api/resources/sensortypes/6",
+  ]);
 });

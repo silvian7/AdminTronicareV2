@@ -524,6 +524,18 @@ export function TypeTag({
   );
 }
 export function SensorCurrentValue({ row }: { row: RecordData }) {
+  return <SensorReadingValue row={row} />;
+}
+export function SensorHistoryValue({ row }: { row: RecordData }) {
+  return <SensorReadingValue row={row} history />;
+}
+function SensorReadingValue({
+  row,
+  history = false,
+}: {
+  row: RecordData;
+  history?: boolean;
+}) {
   const { record: sensorType } = useReferenceRecord(
     "sensortypes",
     valueOf(row, "IDSensorType"),
@@ -534,12 +546,17 @@ export function SensorCurrentValue({ row }: { row: RecordData }) {
   const real = valueOf(row, "ValueReal");
   const present = (value: unknown) =>
     value !== null && value !== undefined && value !== "";
-  const renderValue = (name: string, value: unknown) => (
-    <FieldValue
-      field={resourceMap.sensors.fields.find((f) => canonical(f.key) === name)!}
-      value={value}
-    />
-  );
+  const renderValue = (name: string, value: unknown) =>
+    history && name === "ValueBool" && typeof value === "boolean" ? (
+      <Tag color={value ? "cyan" : "default"}>{value ? "True" : "False"}</Tag>
+    ) : (
+      <FieldValue
+        field={resourceMap.sensors.fields.find(
+          (f) => canonical(f.key) === name,
+        )!}
+        value={value}
+      />
+    );
   if (valueType === "1") return renderValue("ValueBool", boolean);
   if (valueType === "2") return renderValue("ValueInt", integer);
   if (valueType === "3")
@@ -552,6 +569,19 @@ export function SensorCurrentValue({ row }: { row: RecordData }) {
       </span>
     );
   if (valueType === "4") return renderValue("ValueReal", real);
+  if (history)
+    return (
+      <span
+        className="muted"
+        title={
+          sensorType
+            ? "Unsupported sensor value type"
+            : "Sensor type unavailable"
+        }
+      >
+        —
+      </span>
+    );
   const values = [
     { name: "ValueBool", label: "Boolean", value: boolean },
     { name: "ValueInt", label: "Integer", value: integer },
