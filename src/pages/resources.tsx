@@ -75,6 +75,7 @@ import {
   OrganizationIdentity,
   ReferenceSelect,
   SensorCurrentValue,
+  SensorLastReading,
   TypeTag,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
@@ -549,10 +550,18 @@ function RelatedList({
           ...(resource === "sensors"
             ? [
                 {
-                  title: "Current value",
+                  title: "Last reported value",
                   key: "currentValue",
                   render: (_: unknown, row: RecordData) => (
                     <SensorCurrentValue row={row} />
+                  ),
+                },
+                {
+                  title: "Last reading (UTC)",
+                  key: "lastReading",
+                  width: 220,
+                  render: (_: unknown, row: RecordData) => (
+                    <SensorLastReading row={row} />
                   ),
                 },
               ]
@@ -573,7 +582,7 @@ function RelatedList({
               ]
             : []),
         ]}
-        scroll={{ x: 600 }}
+        scroll={{ x: resource === "sensors" ? 1000 : 600 }}
       />
     </>
   );
@@ -935,14 +944,24 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
             .filter((f) => !hiddenField(f.key))
             .map((f) => ({
               key: f.key,
-              label: f.key === resource.primaryKey ? "ID" : fieldLabel(f.key),
-              children: (
-                <FieldValue
-                  field={f}
-                  value={record?.[f.key]}
-                  primary={f.key === resource.primaryKey}
-                />
-              ),
+              label:
+                f.key === resource.primaryKey
+                  ? "ID"
+                  : resource.name === "sensors" &&
+                      canonical(f.key) === "DhLastEvent"
+                    ? "Last reading (UTC)"
+                    : fieldLabel(f.key),
+              children:
+                resource.name === "sensors" &&
+                canonical(f.key) === "DhLastEvent" ? (
+                  <SensorLastReading row={record ?? {}} />
+                ) : (
+                  <FieldValue
+                    field={f}
+                    value={record?.[f.key]}
+                    primary={f.key === resource.primaryKey}
+                  />
+                ),
             }))}
         />
       ),

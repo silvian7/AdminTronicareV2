@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { type Identity, type RecordData } from "../../shared/resources";
 
+test.use({ timezoneId: "Europe/Brussels" });
+
 const organizationId = "7";
 const hubId = "1407374883553285";
 const deviceId = "9223372036854775806";
@@ -11,6 +13,8 @@ const hubLabel = "Synthetic MStronic hub";
 const deviceLabel = "Synthetic realtime device";
 const sensorLabel = "Synthetic associated sensor";
 const realValue = "21.37500000000000000009";
+const lastReading = "2025-01-06T08:30:45Z";
+const lastReadingUtc = "2025-01-06 08:30:45 UTC";
 
 async function syntheticHierarchy(
   page: Page,
@@ -66,6 +70,7 @@ async function syntheticHierarchy(
     m_bValueBool: false,
     m_nValueInt: "0",
     m_rValueReal: realValue,
+    m_dhDhLastEvent: lastReading,
   };
   const deviceType = {
     id: deviceTypeId,
@@ -154,9 +159,15 @@ async function expectAssociatedSensors(page: Page) {
     row.getByRole("link", { name: sensorLabel, exact: true }),
   ).toHaveAttribute("href", `/sensors/${sensorId}`);
   const valueColumn = await page
-    .getByRole("columnheader", { name: "Current value", exact: true })
+    .getByRole("columnheader", { name: "Last reported value", exact: true })
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
   await expect(row.getByRole("cell").nth(valueColumn)).toHaveText(realValue);
+  const timeColumn = await page
+    .getByRole("columnheader", { name: "Last reading (UTC)", exact: true })
+    .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
+  await expect(row.getByRole("cell").nth(timeColumn)).toHaveText(
+    lastReadingUtc,
+  );
   return row;
 }
 
@@ -211,6 +222,11 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
   await expect(
     page.getByRole("heading", { name: sensorLabel, exact: true }),
   ).toBeVisible();
+  const readingTime = page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Last reading \(UTC\)$/ })
+    .locator("xpath=following-sibling::*[1]");
+  await expect(readingTime).toHaveText(lastReadingUtc);
   expect(mock.mutations).toEqual([]);
 });
 
@@ -278,7 +294,10 @@ test("a direct device sensor URL retains the selected tab and displays an empty 
     page.getByRole("tab", { name: "Sensors", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await expect(
-    page.getByRole("columnheader", { name: "Current value", exact: true }),
+    page.getByRole("columnheader", {
+      name: "Last reported value",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(page.locator(".ant-empty-description")).toHaveText("No data");
   expect(
