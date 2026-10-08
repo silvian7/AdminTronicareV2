@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useInvalidate } from "@refinedev/core";
 import {
   Alert,
   Button,
@@ -14,8 +15,13 @@ import {
 import { useSearchParams } from "react-router";
 import { SearchOutlined } from "@ant-design/icons";
 import { request } from "../api";
-import { ReferenceSelect, ErrorNotice } from "../components/fields";
-import { type RecordData } from "../../shared/resources";
+import {
+  ReferenceSelect,
+  ErrorNotice,
+  SensorHistoryIdentity,
+} from "../components/fields";
+import { resourceMap, type RecordData } from "../../shared/resources";
+import { useAdmin } from "../context";
 
 interface HistoryResponse {
   data: RecordData[];
@@ -24,6 +30,8 @@ interface HistoryResponse {
   hasMore: boolean;
 }
 export function SensorHistory() {
+  const { organization, can } = useAdmin();
+  const invalidate = useInvalidate();
   const [params, setParams] = useSearchParams();
   const [target, setTarget] = useState(
     params.has("idasset") ? "asset" : "sensor",
@@ -42,6 +50,16 @@ export function SensorHistory() {
       const result = await request<HistoryResponse>(
         `/api/history?${new URLSearchParams(query)}`,
       );
+      if (!append && can(resourceMap.sensortypes, "show"))
+        await invalidate({
+          resource: "sensortypes",
+          invalidates: ["resourceAll"],
+          invalidationFilters: {
+            predicate: ({ meta }) =>
+              meta?.equipmentTypeReference === true &&
+              meta?.organization === organization,
+          },
+        });
       setPages((previous) => (append ? [...previous, result] : [result]));
     } catch (e) {
       setError(e as Error);
@@ -83,7 +101,14 @@ export function SensorHistory() {
           )
           .replace("T", " "),
     },
-    { title: "Sensor ID", dataIndex: "m_nIDSensor" },
+    {
+      title: "Sensor",
+      dataIndex: "m_nIDSensor",
+      width: 240,
+      render: (_: unknown, row: RecordData) => (
+        <SensorHistoryIdentity row={row} />
+      ),
+    },
     {
       title: "Boolean",
       dataIndex: "m_bValueBool",

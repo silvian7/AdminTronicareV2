@@ -384,19 +384,21 @@ const equipmentTypeReferences: Partial<Record<string, TypeResource>> = {
   IDDeviceType: "devicetypes",
   IDSensorType: "sensortypes",
 };
+const referenceId = (value: unknown) =>
+  typeof value === "string"
+    ? value
+    : typeof value === "number" && Number.isSafeInteger(value)
+      ? String(value)
+      : "";
+const validReferenceId = (id: string) =>
+  /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
 function useReferenceRecord(
   resource: TypeResource | "organizations" | "assets",
   value: unknown,
 ) {
   const { organization, can } = useAdmin();
-  const id =
-    typeof value === "string"
-      ? value
-      : typeof value === "number" && Number.isSafeInteger(value)
-        ? String(value)
-        : "";
-  const validId =
-    /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
+  const id = referenceId(value);
+  const validId = validReferenceId(id);
   const allowed = can(resourceMap[resource], "show");
   const { result, query } = useOne<RecordData>({
     resource,
@@ -455,6 +457,46 @@ export function OrganizationIdentity({ value }: { value: unknown }) {
 }
 export function AssetIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="assets" value={value} />;
+}
+export function SensorHistoryIdentity({ row }: { row: RecordData }) {
+  const { can } = useAdmin();
+  const { record: sensorType } = useReferenceRecord(
+    "sensortypes",
+    valueOf(row, "IDSensorType"),
+  );
+  const rawSensorId = valueOf(row, "IDSensor");
+  const sensorId = referenceId(rawSensorId);
+  const canOpen =
+    validReferenceId(sensorId) && can(resourceMap.sensors, "show");
+  const names = sensorType
+    ? ["Tag", "Label"].map(
+        (name) => translated(valueOf(sensorType, name)) || "—",
+      )
+    : [];
+  return (
+    <div className="record-identity">
+      {names.map((name, index) =>
+        canOpen ? (
+          <Link
+            key={index}
+            to={`/sensors/${sensorId}`}
+            title={`Sensor #${sensorId}`}
+          >
+            {name}
+          </Link>
+        ) : (
+          <div key={index} className="record-name">
+            {name}
+          </div>
+        ),
+      )}
+      <span>
+        {rawSensorId === null || rawSensorId === undefined || rawSensorId === ""
+          ? "—"
+          : `#${String(rawSensorId)}`}
+      </span>
+    </div>
+  );
 }
 export function TypeTag({
   resource,

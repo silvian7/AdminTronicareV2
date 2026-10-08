@@ -248,7 +248,8 @@ a {
   gap: 4px;
   max-width: 320px;
 }
-.record-identity a {
+.record-identity a,
+.record-identity .record-name {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
