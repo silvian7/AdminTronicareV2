@@ -70,6 +70,7 @@ import { useAdmin } from "../context";
 import {
   ErrorNotice,
   AssetIdentity,
+  AssetTag,
   FieldInput,
   FieldValue,
   OrganizationIdentity,
@@ -985,6 +986,9 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 resource.name === "sensors" &&
                 canonical(f.key) === "DhLastEvent" ? (
                   <SensorLastReading row={record ?? {}} />
+                ) : resource.name === "actions" &&
+                  canonical(f.key) === "AssetTag" ? (
+                  <AssetTag value={valueOf(record ?? {}, "IDAsset")} />
                 ) : (
                   <FieldValue
                     field={f}

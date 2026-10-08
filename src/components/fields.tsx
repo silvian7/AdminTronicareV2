@@ -467,6 +467,15 @@ export function OrganizationIdentity({ value }: { value: unknown }) {
 export function AssetIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="assets" value={value} />;
 }
+export function AssetTag({ value }: { value: unknown }) {
+  const { id, record } = useReferenceRecord("assets", value);
+  const tag = record ? translated(valueOf(record, "Tag")) : "";
+  return typeof tag === "string" && tag.trim() ? (
+    <Link to={`/assets/${id}`}>{tag}</Link>
+  ) : (
+    <span className="muted">—</span>
+  );
+}
 export function SensorHistoryIdentity({ row }: { row: RecordData }) {
   const { can } = useAdmin();
   const { record: sensorType } = useReferenceRecord(
