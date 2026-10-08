@@ -69,6 +69,7 @@ import {
 import { useAdmin } from "../context";
 import {
   ErrorNotice,
+  AssetIdentity,
   FieldInput,
   FieldValue,
   OrganizationIdentity,
@@ -189,6 +190,8 @@ function useRefreshRecordReferences(resource: string) {
         resource: "organizationstypes",
         marker: "organizationTypeReference",
       });
+    if (resource === "sensors")
+      references.push({ resource: "assets", marker: "assetReference" });
     const equipmentTypeResource = equipmentTypeResources[resource];
     if (equipmentTypeResource)
       references.push({
@@ -276,13 +279,18 @@ export function ResourceList({ resource }: { resource: Resource }) {
           dataIndex: f.key,
           key: f.key,
           sorter: true,
-          ellipsis:
-            !organizationIdentityResources.has(resource.name) ||
-            canonical(f.key) !== "IDOrganization",
+          ellipsis: !(
+            (organizationIdentityResources.has(resource.name) &&
+              canonical(f.key) === "IDOrganization") ||
+            (resource.name === "sensors" && canonical(f.key) === "IDAsset")
+          ),
           render: (value: unknown) =>
             organizationIdentityResources.has(resource.name) &&
             canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
+            ) : resource.name === "sensors" &&
+              canonical(f.key) === "IDAsset" ? (
+              <AssetIdentity value={value} />
             ) : resource.name === "organizations" &&
               canonical(f.key) === "IDOrganizationType" ? (
               <TypeTag resource="organizationstypes" value={value} />

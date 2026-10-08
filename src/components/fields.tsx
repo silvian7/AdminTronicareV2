@@ -385,7 +385,7 @@ const equipmentTypeReferences: Partial<Record<string, TypeResource>> = {
   IDSensorType: "sensortypes",
 };
 function useReferenceRecord(
-  resource: TypeResource | "organizations",
+  resource: TypeResource | "organizations" | "assets",
   value: unknown,
 ) {
   const { organization, can } = useAdmin();
@@ -405,10 +405,14 @@ function useReferenceRecord(
     queryOptions: {
       enabled: allowed && validId,
       meta: {
-        equipmentTypeReference:
-          resource !== "organizations" && resource !== "organizationstypes",
+        equipmentTypeReference: [
+          "hubtypes",
+          "devicetypes",
+          "sensortypes",
+        ].includes(resource),
         organizationReference: resource === "organizations",
         organizationTypeReference: resource === "organizationstypes",
+        assetReference: resource === "assets",
         organization,
       },
     },
@@ -420,18 +424,24 @@ function useReferenceRecord(
       : undefined;
   return { id, allowed, validId, record };
 }
-export function OrganizationIdentity({ value }: { value: unknown }) {
-  const { id, record } = useReferenceRecord("organizations", value);
+function ReferenceIdentity({
+  resource,
+  value,
+}: {
+  resource: "organizations" | "assets";
+  value: unknown;
+}) {
+  const { id, record } = useReferenceRecord(resource, value);
   if (value === null || value === undefined || value === "")
     return <span className="muted">—</span>;
   return (
     <div className="record-identity">
       {record && (
         <>
-          <Link to={`/organizations/${id}`}>
+          <Link to={`/${resource}/${id}`}>
             {translated(valueOf(record, "Tag")) || "—"}
           </Link>
-          <Link to={`/organizations/${id}`}>
+          <Link to={`/${resource}/${id}`}>
             {translated(valueOf(record, "Label")) || "—"}
           </Link>
         </>
@@ -439,6 +449,12 @@ export function OrganizationIdentity({ value }: { value: unknown }) {
       <span>#{String(value)}</span>
     </div>
   );
+}
+export function OrganizationIdentity({ value }: { value: unknown }) {
+  return <ReferenceIdentity resource="organizations" value={value} />;
+}
+export function AssetIdentity({ value }: { value: unknown }) {
+  return <ReferenceIdentity resource="assets" value={value} />;
 }
 export function TypeTag({
   resource,
