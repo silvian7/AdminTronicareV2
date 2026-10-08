@@ -172,6 +172,7 @@ const equipmentTypeResources: Partial<Record<string, string>> = {
 const organizationIdentityResources = new Set([
   "assets",
   "users",
+  "usergroups",
   "hubs",
   "devices",
 ]);
