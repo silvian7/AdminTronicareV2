@@ -147,6 +147,7 @@ function selectedColumns(resource: Resource) {
     "Enabled",
     "PauseRules",
     "Level",
+    ...(resource.name === "rules" ? ["Output"] : []),
     "IsRead",
     "IsAck",
     "ResultSuccess",
@@ -177,7 +178,12 @@ const organizationIdentityResources = new Set([
   "hubs",
   "devices",
 ]);
-const assetIdentityResources = new Set(["sensors", "devices", "rules"]);
+const assetIdentityResources = new Set([
+  "sensors",
+  "devices",
+  "rules",
+  "actions",
+]);
 function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
@@ -541,7 +547,7 @@ function RelatedList({
           { title: "ID", dataIndex: "id" },
           ...selectedColumns(r)
             .filter((f) => !["Tag", "Label"].includes(canonical(f.key)))
-            .slice(0, 3)
+            .slice(0, resource === "rules" ? 4 : 3)
             .map((f) => ({
               title: fieldLabel(f.key),
               dataIndex: f.key,
