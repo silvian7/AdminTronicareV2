@@ -545,10 +545,13 @@ export function SensorLastReading({ row }: { row: RecordData }) {
     !Number.isFinite(date.getTime())
   )
     return <span className="muted">—</span>;
-  const utc = date.toISOString();
   return (
-    <time className="numeric-value" dateTime={utc} title={value}>
-      {utc.replace("T", " ").replace(/(?:\.000)?Z$/, " UTC")}
+    <time
+      className="numeric-value"
+      dateTime={date.toISOString()}
+      title={Intl.DateTimeFormat().resolvedOptions().timeZone}
+    >
+      {date.toLocaleString()}
     </time>
   );
 }

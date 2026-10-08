@@ -1,6 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { type Identity, type RecordData } from "../../shared/resources";
 
+test.use({ locale: "en-GB", timezoneId: "Europe/Brussels" });
+
 const exactInteger = "9223372036854775807";
 const exactReal = "1234567890.12345678901234567890";
 const hubLabel = "Synthetic current-value hub";
@@ -164,7 +166,7 @@ async function valueCell(page: Page, label: string) {
 
 async function lastReadingCell(page: Page, label: string) {
   const column = await page
-    .getByRole("columnheader", { name: "Last reading (UTC)", exact: true })
+    .getByRole("columnheader", { name: "Last reading", exact: true })
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
   return sensorRow(page, label).getByRole("cell").nth(column);
 }
@@ -391,7 +393,7 @@ test("sensor list refresh reloads values and types and removes a cached interpre
   );
   await expect(
     await lastReadingCell(page, "Synthetic refreshing sensor"),
-  ).toHaveText("2026-10-08 06:00:00 UTC");
+  ).toHaveText("08/10/2026, 08:00:00");
   type.m_nValueType = "4";
   type.m_sTag = "UPDATED-SYNTHETIC-SENSOR-TYPE";
   const changedReal = "2.50000000000000000009";
@@ -405,7 +407,7 @@ test("sensor list refresh reloads values and types and removes a cached interpre
   );
   await expect(
     await lastReadingCell(page, "Synthetic refreshing sensor"),
-  ).toHaveText("2026-10-08 06:05:00 UTC");
+  ).toHaveText("08/10/2026, 08:05:00");
   await expect(
     sensorRow(page, "Synthetic refreshing sensor").getByRole("link", {
       name: "UPDATED-SYNTHETIC-SENSOR-TYPE",
@@ -425,7 +427,7 @@ test("sensor list refresh reloads values and types and removes a cached interpre
   );
   await expect(
     await lastReadingCell(page, "Synthetic refreshing sensor"),
-  ).toHaveText("2026-10-08 06:10:00 UTC");
+  ).toHaveText("08/10/2026, 08:10:00");
   await expect(
     sensorRow(page, "Synthetic refreshing sensor").getByRole("link", {
       name: "#71",
@@ -476,8 +478,12 @@ test("old sensor readings remain reported values with their event time on the li
   ]) {
     await expect(await valueCell(page, label)).toHaveText(value);
     const eventCell = await lastReadingCell(page, label);
-    await expect(eventCell).toHaveText("2020-01-02 03:04:05 UTC");
+    await expect(eventCell).toHaveText("02/01/2020, 04:04:05");
     await expect(eventCell.locator("time")).toHaveCount(1);
+    await expect(eventCell.locator("time")).toHaveAttribute(
+      "title",
+      /Europe\/Brussels/,
+    );
   }
   await page
     .getByRole("link", {
@@ -491,16 +497,14 @@ test("old sensor readings remain reported values with their event time on the li
       exact: true,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Last reading (UTC)", { exact: true }),
-  ).toBeVisible();
-  await expect(page.locator("time")).toHaveText("2020-01-02 03:04:05 UTC");
+  await expect(page.getByText("Last reading", { exact: true })).toBeVisible();
+  await expect(page.locator("time")).toHaveText("02/01/2020, 04:04:05");
 });
 
-test.describe("sensor event time remains UTC in a different browser timezone", () => {
+test.describe("sensor event time follows a different browser timezone", () => {
   test.use({ timezoneId: "America/New_York" });
 
-  test("offset, compact and genuine epoch timestamps display their absolute UTC time", async ({
+  test("offset, compact and genuine epoch timestamps display local time and preserve the absolute event time", async ({
     page,
   }) => {
     await syntheticHierarchy(page, {
@@ -529,22 +533,26 @@ test.describe("sensor event time remains UTC in a different browser timezone", (
     for (const [label, display, iso] of [
       [
         "Synthetic offset reading",
-        "2026-10-08 06:10:11 UTC",
+        "08/10/2026, 02:10:11",
         "2026-10-08T06:10:11.000Z",
       ],
       [
         "Synthetic compact reading",
-        "2026-10-08 06:10:12 UTC",
+        "08/10/2026, 02:10:12",
         "2026-10-08T06:10:12.000Z",
       ],
       [
         "Synthetic epoch reading",
-        "1970-01-01 00:00:00 UTC",
+        "31/12/1969, 19:00:00",
         "1970-01-01T00:00:00.000Z",
       ],
     ]) {
       const cell = await lastReadingCell(page, label);
       await expect(cell).toHaveText(display);
+      await expect(cell.locator("time")).toHaveAttribute(
+        "title",
+        /America\/New_York/,
+      );
       const dateTime = await cell.locator("time").getAttribute("datetime");
       expect(new Date(dateTime!).toISOString()).toBe(iso);
     }
@@ -552,6 +560,33 @@ test.describe("sensor event time remains UTC in a different browser timezone", (
       "0",
     );
   });
+});
+
+test("local sensor reading times use the event date's winter or summer timezone offset", async ({
+  page,
+}) => {
+  await syntheticHierarchy(page, {
+    sensors: [
+      sensor("61", "72", "Synthetic winter reading", {
+        m_nValueInt: "1",
+        m_dhDhLastEvent: "2026-01-15T12:34:56Z",
+      }),
+      sensor("62", "72", "Synthetic summer reading", {
+        m_nValueInt: "2",
+        m_dhDhLastEvent: "2026-07-15T12:34:56Z",
+      }),
+    ],
+    types: { "72": { data: sensorType("72", "2") } },
+  });
+  await descendToSensors(page);
+  expect(
+    await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
+  ).toBe("Europe/Brussels");
+  for (const [label, display] of [
+    ["Synthetic winter reading", "15/01/2026, 13:34:56"],
+    ["Synthetic summer reading", "15/07/2026, 14:34:56"],
+  ])
+    await expect(await lastReadingCell(page, label)).toHaveText(display);
 });
 
 test("missing, invalid and unzoned event times do not imply a live reading or alter its value", async ({

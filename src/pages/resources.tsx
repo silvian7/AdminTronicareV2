@@ -557,7 +557,7 @@ function RelatedList({
                   ),
                 },
                 {
-                  title: "Last reading (UTC)",
+                  title: "Last reading",
                   key: "lastReading",
                   width: 220,
                   render: (_: unknown, row: RecordData) => (
@@ -949,7 +949,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   ? "ID"
                   : resource.name === "sensors" &&
                       canonical(f.key) === "DhLastEvent"
-                    ? "Last reading (UTC)"
+                    ? "Last reading"
                     : fieldLabel(f.key),
               children:
                 resource.name === "sensors" &&

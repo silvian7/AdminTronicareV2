@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { type Identity, type RecordData } from "../../shared/resources";
 
-test.use({ timezoneId: "Europe/Brussels" });
+test.use({ timezoneId: "Europe/Brussels", locale: "en-GB" });
 
 const organizationId = "7";
 const hubId = "1407374883553285";
@@ -14,7 +14,8 @@ const deviceLabel = "Synthetic realtime device";
 const sensorLabel = "Synthetic associated sensor";
 const realValue = "21.37500000000000000009";
 const lastReading = "2025-01-06T08:30:45Z";
-const lastReadingUtc = "2025-01-06 08:30:45 UTC";
+const lastReadingLocal = "06/01/2025, 09:30:45";
+const lastReadingInstant = "2025-01-06T08:30:45.000Z";
 
 async function syntheticHierarchy(
   page: Page,
@@ -163,11 +164,14 @@ async function expectAssociatedSensors(page: Page) {
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
   await expect(row.getByRole("cell").nth(valueColumn)).toHaveText(realValue);
   const timeColumn = await page
-    .getByRole("columnheader", { name: "Last reading (UTC)", exact: true })
+    .getByRole("columnheader", { name: "Last reading", exact: true })
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
   await expect(row.getByRole("cell").nth(timeColumn)).toHaveText(
-    lastReadingUtc,
+    lastReadingLocal,
   );
+  await expect(
+    row.getByRole("cell").nth(timeColumn).locator("time"),
+  ).toHaveAttribute("datetime", lastReadingInstant);
   return row;
 }
 
@@ -224,9 +228,13 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
   ).toBeVisible();
   const readingTime = page
     .locator(".ant-descriptions-item-label")
-    .filter({ hasText: /^Last reading \(UTC\)$/ })
+    .filter({ hasText: /^Last reading$/ })
     .locator("xpath=following-sibling::*[1]");
-  await expect(readingTime).toHaveText(lastReadingUtc);
+  await expect(readingTime).toHaveText(lastReadingLocal);
+  await expect(readingTime.locator("time")).toHaveAttribute(
+    "datetime",
+    lastReadingInstant,
+  );
   expect(mock.mutations).toEqual([]);
 });
 
