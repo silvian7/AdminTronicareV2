@@ -219,6 +219,10 @@ function useRefreshRecordReferences(resource: string) {
 }
 export function ResourceList({ resource }: { resource: Resource }) {
   const { organization, can } = useAdmin();
+  const canViewDeviceSensors =
+    resource.name === "devices" &&
+    can(resource, "show") &&
+    can(resourceMap.sensors, "list");
   const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
   const [showFilters, setShowFilters] = useState(false);
@@ -304,18 +308,23 @@ export function ResourceList({ resource }: { resource: Resource }) {
       {
         title: "",
         key: "open",
-        width: 80,
+        width: canViewDeviceSensors ? 180 : 80,
         render: (_: unknown, row: RecordData) => (
-          <Button
-            type="link"
-            onClick={() => navigate(`/${resource.name}/${row.id}`)}
-          >
-            View
-          </Button>
+          <Space>
+            <Button
+              type="link"
+              onClick={() => navigate(`/${resource.name}/${row.id}`)}
+            >
+              View
+            </Button>
+            {canViewDeviceSensors && (
+              <Link to={`/devices/${row.id}?tab=sensors`}>View sensors</Link>
+            )}
+          </Space>
         ),
       },
     ],
-    [resource, navigate],
+    [resource, navigate, canViewDeviceSensors],
   );
   if (!can(resource, "list"))
     return <Result status="403" title="Access unavailable" />;
@@ -544,6 +553,21 @@ function RelatedList({
                   key: "currentValue",
                   render: (_: unknown, row: RecordData) => (
                     <SensorCurrentValue row={row} />
+                  ),
+                },
+              ]
+            : []),
+          ...(resource === "devices" &&
+          can(r, "show") &&
+          can(resourceMap.sensors, "list")
+            ? [
+                {
+                  title: "",
+                  key: "sensors",
+                  render: (_: unknown, row: RecordData) => (
+                    <Link to={`/devices/${row.id}?tab=sensors`}>
+                      View sensors
+                    </Link>
                   ),
                 },
               ]
@@ -878,6 +902,7 @@ function Memberships({ userId }: { userId: string }) {
 }
 export function ResourceDetail({ resource }: { resource: Resource }) {
   const { id } = useParams();
+  const [params, setParams] = useSearchParams();
   const { organization, can } = useAdmin();
   const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
@@ -890,6 +915,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     errorNotification: false,
     queryOptions: { enabled: can(resource, "show") },
   });
+  function selectDeviceTab(tab: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (tab === "sensors") next.set("tab", "sensors");
+      else next.delete("tab");
+      return next;
+    });
+  }
   const tabs = [
     {
       key: "details",
@@ -1118,6 +1151,12 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 View history
               </Button>
             )}
+            {resource.name === "devices" &&
+              can(resourceMap.sensors, "list") && (
+                <Button onClick={() => selectDeviceTab("sensors")}>
+                  View sensors
+                </Button>
+              )}
             {can(resource, "edit") && (
               <Button
                 type="primary"
@@ -1160,7 +1199,18 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         {query.isLoading ? (
           <Skeleton active />
         ) : record ? (
-          <Tabs items={tabs} destroyOnHidden />
+          <Tabs
+            items={tabs}
+            activeKey={
+              resource.name === "devices"
+                ? params.get("tab") === "sensors"
+                  ? "sensors"
+                  : "details"
+                : undefined
+            }
+            onChange={resource.name === "devices" ? selectDeviceTab : undefined}
+            destroyOnHidden
+          />
         ) : (
           <Empty description="Record unavailable" />
         )}
