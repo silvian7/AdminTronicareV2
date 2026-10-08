@@ -9,6 +9,7 @@ import {
   ErrorNotice,
   SensorHistoryIdentity,
   SensorHistoryValue,
+  SensorLastReading,
 } from "../components/fields";
 import { resourceMap, type RecordData } from "../../shared/resources";
 import { useAdmin } from "../context";
@@ -81,17 +82,6 @@ export function SensorHistory() {
   }
   const columns = [
     {
-      title: "Event time (UTC)",
-      dataIndex: "m_dhDhLastEvent",
-      render: (v: string) =>
-        v
-          ?.replace(
-            /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/,
-            "$1-$2-$3 $4:$5:$6",
-          )
-          .replace("T", " "),
-    },
-    {
       title: "Sensor",
       dataIndex: "m_nIDSensor",
       width: 240,
@@ -103,6 +93,11 @@ export function SensorHistory() {
       title: "Value",
       key: "value",
       render: (_: unknown, row: RecordData) => <SensorHistoryValue row={row} />,
+    },
+    {
+      title: "Event time",
+      dataIndex: "m_dhDhLastEvent",
+      render: (_: unknown, row: RecordData) => <SensorLastReading row={row} />,
     },
   ];
   return (

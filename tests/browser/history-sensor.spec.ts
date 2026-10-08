@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Identity, RecordData } from "../../shared/resources";
 
+test.use({ locale: "en-GB", timezoneId: "Europe/Brussels" });
+
 const largeSensorId = "9223372036854775807";
 const largeTypeId = "9223372036854775806";
 const snapshot = "20261008123045123456";
@@ -18,7 +20,7 @@ function reading(
   sensorId: string,
   typeId: unknown,
   integer: unknown,
-  event = "20261008101010",
+  event: unknown = "20261008101010",
 ): RecordData {
   return {
     m_nIDSensorHistory: historyId,
@@ -176,6 +178,10 @@ function readingRow(page: Page, historyId: string) {
 }
 
 function readingValue(page: Page, historyId: string) {
+  return readingRow(page, historyId).getByRole("cell").nth(1);
+}
+
+function readingEventTime(page: Page, historyId: string) {
   return readingRow(page, historyId).getByRole("cell").nth(2);
 }
 
@@ -193,6 +199,11 @@ test("history Sensor column shows recorded type tag, translated label and exact 
     ],
   });
   await loadHistory(page);
+  await expect(page.getByRole("columnheader")).toHaveText([
+    "Sensor",
+    "Value",
+    "Event time",
+  ]);
   await expect(
     page.getByRole("columnheader", { name: "Sensor", exact: true }),
   ).toBeVisible();
@@ -363,6 +374,8 @@ test("enriched Sensor cells preserve exact history continuation cursors and shar
   await expect(page.getByText("3 loaded", { exact: true })).toBeVisible();
   await expect(readingRow(page, "51")).toBeVisible();
   await expect(readingRow(page, afterId)).toBeVisible();
+  await expect(readingEventTime(page, afterId)).toHaveText("—");
+  await expect(readingValue(page, afterId)).toHaveText("502");
   await expect(
     page.getByRole("button", { name: "Load next 100 readings", exact: true }),
   ).toHaveCount(0);
@@ -632,4 +645,146 @@ test("unknown or absent value types show a missing value instead of guessing fro
     "/api/resources/sensortypes/5",
     "/api/resources/sensortypes/6",
   ]);
+});
+
+test("history event time uses the browser timezone and event date's winter or summer offset", async ({
+  page,
+}) => {
+  const cases = [
+    {
+      id: "101",
+      raw: "20260108123045",
+      display: "08/01/2026, 13:30:45",
+      iso: "2026-01-08T12:30:45.000Z",
+    },
+    {
+      id: "102",
+      raw: "20260708123045",
+      display: "08/07/2026, 14:30:45",
+      iso: "2026-07-08T12:30:45.000Z",
+    },
+    {
+      id: "103",
+      raw: "2026-01-08T12:30:45Z",
+      display: "08/01/2026, 13:30:45",
+      iso: "2026-01-08T12:30:45.000Z",
+    },
+    {
+      id: "104",
+      raw: "2026-07-08T14:30:45+02:00",
+      display: "08/07/2026, 14:30:45",
+      iso: "2026-07-08T12:30:45.000Z",
+    },
+    {
+      id: "105",
+      raw: "2026-01-01T00:30:45+09:00",
+      display: "31/12/2025, 16:30:45",
+      iso: "2025-12-31T15:30:45.000Z",
+    },
+  ];
+  const mock = await syntheticHistory(page, {
+    pages: [
+      historyPage(
+        cases.map(({ id, raw }) =>
+          reading(id, largeSensorId, largeTypeId, "0", raw),
+        ),
+      ),
+    ],
+  });
+  await loadHistory(page);
+  expect(
+    await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
+  ).toBe("Europe/Brussels");
+  for (const { id, display, iso } of cases) {
+    const cell = readingEventTime(page, id);
+    await expect(cell).toHaveText(display);
+    await expect(cell.locator("time")).toHaveAttribute("datetime", iso);
+    await expect(cell.locator("time")).toHaveAttribute(
+      "title",
+      "Europe/Brussels",
+    );
+    await expect(readingValue(page, id)).toHaveText("0");
+  }
+  expect(mock.typeReads).toEqual([`/api/resources/sensortypes/${largeTypeId}`]);
+});
+
+test("invalid, absent or unzoned history event times preserve the reading without inventing a date", async ({
+  page,
+}) => {
+  const timestamps: unknown[] = [
+    undefined,
+    null,
+    "",
+    "not-a-timestamp",
+    "20260230123045",
+    "2026-02-30T12:30:45Z",
+    "2026-07-08T12:30:45",
+    "2026-07-08 12:30:45",
+    "20261008112233456789",
+  ];
+  await syntheticHistory(page, {
+    pages: [
+      historyPage(
+        timestamps.map((timestamp, index) => ({
+          ...reading(String(index + 111), largeSensorId, largeTypeId, "0"),
+          m_dhDhLastEvent: timestamp,
+        })),
+      ),
+    ],
+  });
+  await loadHistory(page);
+  for (let index = 0; index < timestamps.length; index++) {
+    const id = String(index + 111);
+    const cell = readingEventTime(page, id);
+    await expect(cell).toHaveText("—");
+    await expect(cell.locator("time")).toHaveCount(0);
+    await expect(readingValue(page, id)).toHaveText("0");
+  }
+});
+
+test.describe("history event time follows a different browser timezone", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("UTC instants display local time including a previous local calendar day", async ({
+    page,
+  }) => {
+    const cases = [
+      {
+        id: "121",
+        raw: "2026-01-01T01:30:45Z",
+        display: "31/12/2025, 20:30:45",
+        iso: "2026-01-01T01:30:45.000Z",
+      },
+      {
+        id: "122",
+        raw: "20260708123045",
+        display: "08/07/2026, 08:30:45",
+        iso: "2026-07-08T12:30:45.000Z",
+      },
+    ];
+    await syntheticHistory(page, {
+      pages: [
+        historyPage(
+          cases.map(({ id, raw }) =>
+            reading(id, largeSensorId, largeTypeId, "0", raw),
+          ),
+        ),
+      ],
+    });
+    await loadHistory(page);
+    expect(
+      await page.evaluate(
+        () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ),
+    ).toBe("America/New_York");
+    for (const { id, display, iso } of cases) {
+      const cell = readingEventTime(page, id);
+      await expect(cell).toHaveText(display);
+      await expect(cell.locator("time")).toHaveAttribute("datetime", iso);
+      await expect(cell.locator("time")).toHaveAttribute(
+        "title",
+        "America/New_York",
+      );
+    }
+  });
 });
