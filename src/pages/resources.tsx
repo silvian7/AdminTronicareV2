@@ -506,6 +506,8 @@ function RelatedList({
 }) {
   const { organization, can } = useAdmin();
   const r = resourceMap[resource];
+  const { modal, message } = App.useApp();
+  const deletion = useDelete();
   const refreshRecordReferences = useRefreshRecordReferences(resource);
   const { result, query } = useList<RecordData>({
     resource,
@@ -593,6 +595,46 @@ function RelatedList({
                   width: 220,
                   render: (_: unknown, row: RecordData) => (
                     <SensorLastReading row={row} />
+                  ),
+                },
+                {
+                  title: "Actions",
+                  key: "actions",
+                  render: (_: unknown, row: RecordData) => (
+                    <Space wrap>
+                      {can(r, "show") && (
+                        <Link to={`/sensors/${row.id}`}>View</Link>
+                      )}
+                      {can(r, "edit") && (
+                        <Link to={`/sensors/${row.id}/edit`}>Edit</Link>
+                      )}
+                      {can(r, "delete") && (
+                        <Button
+                          danger
+                          size="small"
+                          disabled={deletion.mutation.isPending}
+                          onClick={() =>
+                            modal.confirm({
+                              title: "Delete this sensor?",
+                              content: `${recordTitle(row)} (#${row.id}). The service will check dependencies. This operation cannot be undone from this screen.`,
+                              okText: "Delete",
+                              okButtonProps: { danger: true },
+                              onOk: async () => {
+                                await deletion.mutateAsync({
+                                  resource: "sensors",
+                                  id: row.id!,
+                                  successNotification: false,
+                                });
+                                message.success("Sensor deleted.");
+                                await query.refetch();
+                              },
+                            })
+                          }
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </Space>
                   ),
                 },
               ]
@@ -943,6 +985,8 @@ function Memberships({ userId }: { userId: string }) {
 export function ResourceDetail({ resource }: { resource: Resource }) {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
+  const viewingDeviceSensors =
+    resource.name === "devices" && params.get("tab") === "sensors";
   const { organization, can } = useAdmin();
   const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
@@ -1187,64 +1231,66 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         title={record ? recordTitle(record) : resource.singular}
         subtitle={`Record #${id}`}
         extra={
-          <>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={async () => {
-                await query.refetch();
-                await refreshRecordReferences();
-              }}
-            >
-              Refresh
-            </Button>
-            {resource.name === "sensors" && (
+          !viewingDeviceSensors && (
+            <>
               <Button
-                onClick={() => navigate(`/sensor-history?idsensor=${id}`)}
+                icon={<ReloadOutlined />}
+                onClick={async () => {
+                  await query.refetch();
+                  await refreshRecordReferences();
+                }}
               >
-                View history
+                Refresh
               </Button>
-            )}
-            {resource.name === "devices" &&
-              can(resourceMap.sensors, "list") && (
-                <Button onClick={() => selectDeviceTab("sensors")}>
-                  View sensors
+              {resource.name === "sensors" && (
+                <Button
+                  onClick={() => navigate(`/sensor-history?idsensor=${id}`)}
+                >
+                  View history
                 </Button>
               )}
-            {can(resource, "edit") && (
-              <Button
-                type="primary"
-                icon={<EditOutlined />}
-                onClick={() => navigate(`/${resource.name}/${id}/edit`)}
-              >
-                Edit
-              </Button>
-            )}
-            {can(resource, "delete") && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() =>
-                  modal.confirm({
-                    title: `Delete this ${resource.singular.toLowerCase()}?`,
-                    content: `${record ? recordTitle(record) : id}. The service will check dependencies. This operation cannot be undone from this screen.`,
-                    okText: "Delete",
-                    okButtonProps: { danger: true },
-                    onOk: async () => {
-                      await deletion.mutateAsync({
-                        resource: resource.name,
-                        id: id!,
-                        successNotification: false,
-                      });
-                      message.success("Record deleted.");
-                      navigate(`/${resource.name}`);
-                    },
-                  })
-                }
-              >
-                Delete
-              </Button>
-            )}
-          </>
+              {resource.name === "devices" &&
+                can(resourceMap.sensors, "list") && (
+                  <Button onClick={() => selectDeviceTab("sensors")}>
+                    View sensors
+                  </Button>
+                )}
+              {can(resource, "edit") && (
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/${resource.name}/${id}/edit`)}
+                >
+                  Edit
+                </Button>
+              )}
+              {can(resource, "delete") && (
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() =>
+                    modal.confirm({
+                      title: `Delete this ${resource.singular.toLowerCase()}?`,
+                      content: `${record ? recordTitle(record) : id}. The service will check dependencies. This operation cannot be undone from this screen.`,
+                      okText: "Delete",
+                      okButtonProps: { danger: true },
+                      onOk: async () => {
+                        await deletion.mutateAsync({
+                          resource: resource.name,
+                          id: id!,
+                          successNotification: false,
+                        });
+                        message.success("Record deleted.");
+                        navigate(`/${resource.name}`);
+                      },
+                    })
+                  }
+                >
+                  Delete
+                </Button>
+              )}
+            </>
+          )
         }
       />
       <ErrorNotice error={query.error} retry={() => query.refetch()} />
@@ -1256,7 +1302,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
             items={tabs}
             activeKey={
               resource.name === "devices"
-                ? params.get("tab") === "sensors"
+                ? viewingDeviceSensors
                   ? "sensors"
                   : "details"
                 : undefined

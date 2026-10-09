@@ -7,12 +7,14 @@ const organizationId = "7";
 const hubId = "1407374883553285";
 const deviceId = "9223372036854775806";
 const sensorId = "9223372036854775805";
+const secondSensorId = "9223372036854775803";
 const assetId = "9223372036854775804";
 const deviceTypeId = "81";
 const sensorTypeId = "71";
 const hubLabel = "Synthetic MStronic hub";
 const deviceLabel = "Synthetic realtime device";
 const sensorLabel = "Synthetic associated sensor";
+const secondSensorLabel = "Synthetic second associated sensor";
 const assetTag = "SYNTHETIC-ASSOCIATED-ASSET";
 const assetLabel = "Synthetic associated asset";
 const realValue = "21.37500000000000000009";
@@ -22,7 +24,14 @@ const lastReadingInstant = "2025-01-06T08:30:45.000Z";
 
 async function syntheticHierarchy(
   page: Page,
-  options: { canReadSensors?: boolean; emptySensors?: boolean } = {},
+  options: {
+    canReadSensors?: boolean;
+    emptySensors?: boolean;
+    secondSensor?: boolean;
+    sensorRights?: string;
+    deviceRights?: string;
+    coreWritable?: boolean;
+  } = {},
 ) {
   const identity: Identity = {
     id: "100",
@@ -35,12 +44,12 @@ async function syntheticHierarchy(
       { entity: "organizations", rights: "r" },
       { entity: "assets", rights: "r" },
       { entity: "hubs", rights: "r" },
-      { entity: "devices", rights: "r" },
+      { entity: "devices", rights: options.deviceRights ?? "r" },
       { entity: "devicetypes", rights: "r" },
       { entity: "sensortypes", rights: "r" },
       ...(options.canReadSensors === false
         ? []
-        : [{ entity: "sensors", rights: "r" }]),
+        : [{ entity: "sensors", rights: options.sensorRights ?? "r" }]),
     ],
   };
   const organization = {
@@ -78,6 +87,18 @@ async function syntheticHierarchy(
     m_rValueReal: realValue,
     m_dhDhLastEvent: lastReading,
   };
+  const secondSensor: RecordData = {
+    ...sensor,
+    id: secondSensorId,
+    m_nIDSensor: secondSensorId,
+    m_sTag: "SYNTHETIC-SECOND-ASSOCIATED-SENSOR",
+    m_sLabel: secondSensorLabel,
+  };
+  let sensors = options.emptySensors
+    ? []
+    : options.secondSensor
+      ? [sensor, secondSensor]
+      : [sensor];
   const deviceType = {
     id: deviceTypeId,
     IDDeviceType: deviceTypeId,
@@ -109,7 +130,6 @@ async function syntheticHierarchy(
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
-    reads.push(url);
     const reply = (body: unknown, status = 200) =>
       route.fulfill({
         status,
@@ -118,13 +138,29 @@ async function syntheticHierarchy(
       });
     if (request.method() !== "GET") {
       mutations.push(`${request.method()} ${path}`);
+      const target = sensors.find(
+        (row) => path === `/api/resources/sensors/${row.id}`,
+      );
+      if (
+        request.method() === "DELETE" &&
+        target &&
+        options.sensorRights?.includes("d") &&
+        options.coreWritable !== false
+      ) {
+        sensors = sensors.filter((row) => row.id !== target.id);
+        return reply({ data: target });
+      }
       return reply({ message: "Synthetic read-only fixture." }, 405);
     }
+    reads.push(url);
     if (path === "/api/session")
       return reply({
         identity,
         csrf: "synthetic-device-sensors-csrf",
         expiresAt: Date.now() + 60000,
+        services: {
+          core: { configured: true, writable: options.coreWritable ?? true },
+        },
       });
     if (path === "/api/resources/organizations")
       return reply({ data: [organization], total: 1 });
@@ -140,11 +176,13 @@ async function syntheticHierarchy(
       return reply({ data: deviceType });
     if (path === "/api/resources/sensors")
       return reply({
-        data: options.emptySensors ? [] : [sensor],
-        total: options.emptySensors ? 0 : 1,
+        data: sensors,
+        total: sensors.length,
       });
     if (path === `/api/resources/sensors/${sensorId}`)
       return reply({ data: sensor });
+    if (path === `/api/resources/sensors/${secondSensorId}`)
+      return reply({ data: secondSensor });
     if (path === `/api/resources/sensortypes/${sensorTypeId}`)
       return reply({ data: sensorType });
     if (path === `/api/resources/assets/${assetId}`)
@@ -391,3 +429,197 @@ test("sensor permissions hide navigation actions and prevent reads even for a di
   ).toHaveLength(0);
   expect(mock.mutations).toEqual([]);
 });
+
+test("device sensor actions stay on sensor rows and refresh only the filtered sensor list", async ({
+  page,
+}, testInfo) => {
+  const mock = await syntheticHierarchy(page, {
+    deviceRights: "rud",
+    sensorRights: "rud",
+    secondSensor: true,
+  });
+  const device = await openHubDevices(page);
+  await device.getByRole("link", { name: "View sensors", exact: true }).click();
+  await expectAssociatedSensors(page);
+  await expect(
+    page.getByRole("columnheader", { name: "Actions", exact: true }),
+  ).toBeVisible();
+  for (const action of ["Refresh", "View sensors", "Edit", "Delete"])
+    await expect(
+      page.locator(".page-heading").getByRole("button", {
+        name: new RegExp(`${action}$`),
+      }),
+    ).toHaveCount(0);
+  for (const [id, label] of [
+    [sensorId, sensorLabel],
+    [secondSensorId, secondSensorLabel],
+  ]) {
+    const row = recordRow(page, label);
+    await expect(
+      row.getByRole("link", { name: "View", exact: true }),
+    ).toHaveAttribute("href", `/sensors/${id}`);
+    await expect(
+      row.getByRole("link", { name: "Edit", exact: true }),
+    ).toHaveAttribute("href", `/sensors/${id}/edit`);
+    await expect(
+      row.getByRole("button", { name: "Delete", exact: true }),
+    ).toBeVisible();
+  }
+
+  const readsBeforeRefresh = mock.reads.length;
+  await page.getByRole("button", { name: /Refresh$/ }).click();
+  await expect
+    .poll(
+      () =>
+        mock.reads
+          .slice(readsBeforeRefresh)
+          .filter((url) => url.pathname === "/api/resources/sensors").length,
+    )
+    .toBeGreaterThan(0);
+  const refreshedSensors = mock.reads
+    .slice(readsBeforeRefresh)
+    .filter((url) => url.pathname === "/api/resources/sensors");
+  expect(
+    refreshedSensors.every(
+      (url) =>
+        url.searchParams.get("iddevice") === deviceId &&
+        url.searchParams.get("_organization") === organizationId,
+    ),
+  ).toBe(true);
+  expect(
+    mock.reads
+      .slice(readsBeforeRefresh)
+      .filter((url) => url.pathname === `/api/resources/devices/${deviceId}`),
+  ).toHaveLength(0);
+  await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
+  await page.screenshot({
+    path: testInfo.outputPath("sensor-row-actions.png"),
+    fullPage: true,
+  });
+
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  for (const action of ["Refresh", "View sensors", "Edit", "Delete"])
+    await expect(
+      page.locator(".page-heading").getByRole("button", {
+        name: new RegExp(`${action}$`),
+      }),
+    ).toBeVisible();
+  expect(mock.mutations).toEqual([]);
+});
+
+test("sensor row View and Edit navigate to the selected sensor with read-only device permission", async ({
+  page,
+}) => {
+  const mock = await syntheticHierarchy(page, {
+    deviceRights: "r",
+    sensorRights: "rud",
+    secondSensor: true,
+  });
+  await page.goto(`/devices/${deviceId}?tab=sensors`);
+  const row = recordRow(page, secondSensorLabel);
+  await row.getByRole("link", { name: "View", exact: true }).click();
+  await expect(page).toHaveURL(`/sensors/${secondSensorId}`);
+  await expect(
+    page.getByRole("heading", { name: secondSensorLabel, exact: true }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
+  await row.getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(`/sensors/${secondSensorId}/edit`);
+  expect(mock.mutations).toEqual([]);
+});
+
+test("sensor row deletion confirms the selected sensor and retains the device sensor tab", async ({
+  page,
+}) => {
+  const mock = await syntheticHierarchy(page, {
+    deviceRights: "rud",
+    sensorRights: "rud",
+    secondSensor: true,
+  });
+  await page.goto(`/devices/${deviceId}?tab=sensors`);
+  const first = recordRow(page, sensorLabel);
+  const second = recordRow(page, secondSensorLabel);
+  await expect(first).toBeVisible();
+  await second.getByRole("button", { name: "Delete", exact: true }).click();
+  const confirmation = page.getByRole("dialog");
+  await expect(confirmation).toContainText("Delete this sensor?");
+  await expect(confirmation).toContainText(secondSensorLabel);
+  await expect(confirmation).not.toContainText(deviceLabel);
+  await confirmation
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(second).toBeVisible();
+  expect(mock.mutations).toEqual([]);
+
+  const readsBeforeDelete = mock.reads.length;
+  await second.getByRole("button", { name: "Delete", exact: true }).click();
+  await confirmation
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  await expect(second).toHaveCount(0);
+  await expect(first).toBeVisible();
+  await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
+  expect(mock.mutations).toEqual([
+    `DELETE /api/resources/sensors/${secondSensorId}`,
+  ]);
+  const refreshedSensors = mock.reads
+    .slice(readsBeforeDelete)
+    .filter((url) => url.pathname === "/api/resources/sensors");
+  expect(refreshedSensors.length).toBeGreaterThan(0);
+  expect(
+    refreshedSensors.every(
+      (url) =>
+        url.searchParams.get("iddevice") === deviceId &&
+        url.searchParams.get("_organization") === organizationId,
+    ),
+  ).toBe(true);
+});
+
+for (const permissions of [
+  {
+    name: "read-only sensors with writable devices",
+    sensorRights: "r",
+    deviceRights: "rud",
+    edit: false,
+    remove: false,
+  },
+  {
+    name: "sensor edit permission with read-only devices",
+    sensorRights: "ru",
+    deviceRights: "r",
+    edit: true,
+    remove: false,
+  },
+  {
+    name: "sensor delete permission with read-only devices",
+    sensorRights: "rd",
+    deviceRights: "r",
+    edit: false,
+    remove: true,
+  },
+  {
+    name: "disabled core service writes",
+    sensorRights: "rud",
+    deviceRights: "rud",
+    coreWritable: false,
+    edit: false,
+    remove: false,
+  },
+])
+  test(`sensor row actions respect ${permissions.name}`, async ({ page }) => {
+    const mock = await syntheticHierarchy(page, permissions);
+    await page.goto(`/devices/${deviceId}?tab=sensors`);
+    const row = await expectAssociatedSensors(page);
+    await expect(
+      row.getByRole("link", { name: "View", exact: true }),
+    ).toHaveAttribute("href", `/sensors/${sensorId}`);
+    await expect(
+      row.getByRole("link", { name: "Edit", exact: true }),
+    ).toHaveCount(permissions.edit ? 1 : 0);
+    await expect(
+      row.getByRole("button", { name: "Delete", exact: true }),
+    ).toHaveCount(permissions.remove ? 1 : 0);
+    expect(mock.mutations).toEqual([]);
+  });
