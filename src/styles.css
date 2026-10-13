@@ -262,6 +262,26 @@ a {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+.hub-status-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
+}
+.hub-status-dot[data-status="green"] {
+  background-color: #52c41a;
+}
+.hub-status-dot[data-status="yellow"] {
+  background-color: #fadb14;
+}
+.hub-status-dot[data-status="red"] {
+  background-color: #f5222d;
+}
+.hub-status-dot[data-status="black"] {
+  background-color: #141414;
+}
 .muted {
   color: #80939f;
 }

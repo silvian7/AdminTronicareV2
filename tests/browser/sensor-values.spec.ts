@@ -151,24 +151,24 @@ async function descendToSensors(page: Page) {
   ).toBeVisible();
 }
 
-function sensorRow(page: Page, label: string) {
+function sensorRow(page: Page, id: string) {
   return page
-    .getByRole("link", { name: label, exact: true })
+    .getByRole("cell", { name: id, exact: true })
     .locator("xpath=ancestor::tr");
 }
 
-async function valueCell(page: Page, label: string) {
+async function valueCell(page: Page, id: string) {
   const column = await page
     .getByRole("columnheader", { name: "Last reported value", exact: true })
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
-  return sensorRow(page, label).getByRole("cell").nth(column);
+  return sensorRow(page, id).getByRole("cell").nth(column);
 }
 
-async function lastReadingCell(page: Page, label: string) {
+async function lastReadingCell(page: Page, id: string) {
   const column = await page
     .getByRole("columnheader", { name: "Last reading", exact: true })
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
-  return sensorRow(page, label).getByRole("cell").nth(column);
+  return sensorRow(page, id).getByRole("cell").nth(column);
 }
 
 function sensorsPanel(page: Page) {
@@ -220,33 +220,25 @@ test("hub-to-device navigation shows sensor values selected by their type withou
     ),
   });
   await descendToSensors(page);
-  await expect(await valueCell(page, "Synthetic boolean reading")).toHaveText(
-    "No",
-  );
-  await expect(await valueCell(page, "Synthetic integer reading")).toHaveText(
-    exactInteger,
-  );
-  await expect(await valueCell(page, "Synthetic time-on reading")).toHaveText(
-    "On · 90 s",
-  );
-  await expect(await valueCell(page, "Synthetic real reading")).toHaveText(
-    exactReal,
-  );
+  await expect(await valueCell(page, "61")).toHaveText("No");
+  await expect(await valueCell(page, "62")).toHaveText(exactInteger);
+  await expect(await valueCell(page, "63")).toHaveText("On · 90 s");
+  await expect(await valueCell(page, "64")).toHaveText(exactReal);
   await expect(
     page.getByRole("columnheader", { name: "Sensor type", exact: true }),
   ).toBeVisible();
-  for (const [id, label] of [
-    ["71", "Synthetic boolean reading"],
-    ["72", "Synthetic integer reading"],
-    ["73", "Synthetic time-on reading"],
-    ["74", "Synthetic real reading"],
+  for (const [id, typeId] of [
+    ["61", "71"],
+    ["62", "72"],
+    ["63", "73"],
+    ["64", "74"],
   ])
     await expect(
-      sensorRow(page, label).getByRole("link", {
-        name: `SYNTHETIC-SENSOR-TYPE-${id}`,
+      sensorRow(page, id).getByRole("link", {
+        name: `SYNTHETIC-SENSOR-TYPE-${typeId}`,
         exact: true,
       }),
-    ).toHaveAttribute("href", `/sensortypes/${id}`);
+    ).toHaveAttribute("href", `/sensortypes/${typeId}`);
   expect(
     mock.reads.some(
       (url) =>
@@ -295,15 +287,15 @@ test("sensor reported values retain false and zero and do not substitute an unre
     ),
   });
   await descendToSensors(page);
-  for (const [label, value] of [
-    ["Synthetic false value", "No"],
-    ["Synthetic zero integer", "0"],
-    ["Synthetic stopped timer", "Off · 0 s"],
-    ["Synthetic zero real", "0.00000000000000000000"],
-    ["Synthetic null integer", "\u2014"],
-    ["Synthetic missing real", "\u2014"],
+  for (const [id, value] of [
+    ["61", "No"],
+    ["62", "0"],
+    ["63", "Off · 0 s"],
+    ["64", "0.00000000000000000000"],
+    ["65", "\u2014"],
+    ["66", "\u2014"],
   ])
-    await expect(await valueCell(page, label)).toHaveText(value);
+    await expect(await valueCell(page, id)).toHaveText(value);
 });
 
 test("unavailable and unknown sensor types show every available raw value with its label", async ({
@@ -341,11 +333,9 @@ test("unavailable and unknown sensor types show every available raw value with i
     },
   });
   await descendToSensors(page);
-  for (const [, , label] of definitions)
-    await expectRawValues(await valueCell(page, label!));
-  await expect(await valueCell(page, "Synthetic empty raw values")).toHaveText(
-    "\u2014",
-  );
+  for (const [id] of definitions)
+    await expectRawValues(await valueCell(page, id!));
+  await expect(await valueCell(page, "67")).toHaveText("\u2014");
   expect(mock.typeReads).not.toContain("undefined");
 });
 
@@ -364,10 +354,8 @@ test("sensor values fall back to labeled raw slots without fetching unreadable s
     types: { "71": { data: sensorType("71", "1") } },
   });
   await descendToSensors(page);
-  await expectRawValues(
-    await valueCell(page, "Synthetic unreadable sensor type"),
-  );
-  const row = sensorRow(page, "Synthetic unreadable sensor type");
+  await expectRawValues(await valueCell(page, "61"));
+  const row = sensorRow(page, "61");
   await expect(row.getByText("#71", { exact: true })).toBeVisible();
   await expect(row.locator('a[href^="/sensortypes/"]')).toHaveCount(0);
   expect(mock.typeReads).toEqual([]);
@@ -388,12 +376,10 @@ test("sensor list refresh reloads values and types and removes a cached interpre
     types: { "71": { data: type } },
   });
   await descendToSensors(page);
-  await expect(await valueCell(page, "Synthetic refreshing sensor")).toHaveText(
-    "No",
+  await expect(await valueCell(page, "61")).toHaveText("No");
+  await expect(await lastReadingCell(page, "61")).toHaveText(
+    "08/10/2026, 08:00:00",
   );
-  await expect(
-    await lastReadingCell(page, "Synthetic refreshing sensor"),
-  ).toHaveText("08/10/2026, 08:00:00");
   type.m_nValueType = "4";
   type.m_sTag = "UPDATED-SYNTHETIC-SENSOR-TYPE";
   const changedReal = "2.50000000000000000009";
@@ -402,14 +388,12 @@ test("sensor list refresh reloads values and types and removes a cached interpre
   await sensorsPanel(page)
     .getByRole("button", { name: /Refresh$/ })
     .click();
-  await expect(await valueCell(page, "Synthetic refreshing sensor")).toHaveText(
-    changedReal,
+  await expect(await valueCell(page, "61")).toHaveText(changedReal);
+  await expect(await lastReadingCell(page, "61")).toHaveText(
+    "08/10/2026, 08:05:00",
   );
   await expect(
-    await lastReadingCell(page, "Synthetic refreshing sensor"),
-  ).toHaveText("08/10/2026, 08:05:00");
-  await expect(
-    sensorRow(page, "Synthetic refreshing sensor").getByRole("link", {
+    sensorRow(page, "61").getByRole("link", {
       name: "UPDATED-SYNTHETIC-SENSOR-TYPE",
       exact: true,
     }),
@@ -421,15 +405,12 @@ test("sensor list refresh reloads values and types and removes a cached interpre
   await sensorsPanel(page)
     .getByRole("button", { name: /Refresh$/ })
     .click();
-  await expectRawValues(
-    await valueCell(page, "Synthetic refreshing sensor"),
-    latestReal,
+  await expectRawValues(await valueCell(page, "61"), latestReal);
+  await expect(await lastReadingCell(page, "61")).toHaveText(
+    "08/10/2026, 08:10:00",
   );
   await expect(
-    await lastReadingCell(page, "Synthetic refreshing sensor"),
-  ).toHaveText("08/10/2026, 08:10:00");
-  await expect(
-    sensorRow(page, "Synthetic refreshing sensor").getByRole("link", {
+    sensorRow(page, "61").getByRole("link", {
       name: "#71",
       exact: true,
     }),
@@ -471,13 +452,13 @@ test("old sensor readings remain reported values with their event time on the li
   await expect(
     page.getByRole("columnheader", { name: "Current value", exact: true }),
   ).toHaveCount(0);
-  for (const [label, value] of [
-    ["Synthetic old false reading", "No"],
-    ["Synthetic old zero reading", "0"],
-    ["Synthetic old heart rate reading", "68.00000000000000000001"],
+  for (const [id, value] of [
+    ["61", "No"],
+    ["62", "0"],
+    ["63", "68.00000000000000000001"],
   ]) {
-    await expect(await valueCell(page, label)).toHaveText(value);
-    const eventCell = await lastReadingCell(page, label);
+    await expect(await valueCell(page, id)).toHaveText(value);
+    const eventCell = await lastReadingCell(page, id);
     await expect(eventCell).toHaveText("02/01/2020, 04:04:05");
     await expect(eventCell.locator("time")).toHaveCount(1);
     await expect(eventCell.locator("time")).toHaveAttribute(
@@ -485,9 +466,9 @@ test("old sensor readings remain reported values with their event time on the li
       /Europe\/Brussels/,
     );
   }
-  await page
+  await sensorRow(page, "63")
     .getByRole("link", {
-      name: "Synthetic old heart rate reading",
+      name: "View",
       exact: true,
     })
     .click();
@@ -530,24 +511,12 @@ test.describe("sensor event time follows a different browser timezone", () => {
         () => Intl.DateTimeFormat().resolvedOptions().timeZone,
       ),
     ).toBe("America/New_York");
-    for (const [label, display, iso] of [
-      [
-        "Synthetic offset reading",
-        "08/10/2026, 02:10:11",
-        "2026-10-08T06:10:11.000Z",
-      ],
-      [
-        "Synthetic compact reading",
-        "08/10/2026, 02:10:12",
-        "2026-10-08T06:10:12.000Z",
-      ],
-      [
-        "Synthetic epoch reading",
-        "31/12/1969, 19:00:00",
-        "1970-01-01T00:00:00.000Z",
-      ],
+    for (const [id, display, iso] of [
+      ["61", "08/10/2026, 02:10:11", "2026-10-08T06:10:11.000Z"],
+      ["62", "08/10/2026, 02:10:12", "2026-10-08T06:10:12.000Z"],
+      ["63", "31/12/1969, 19:00:00", "1970-01-01T00:00:00.000Z"],
     ]) {
-      const cell = await lastReadingCell(page, label);
+      const cell = await lastReadingCell(page, id);
       await expect(cell).toHaveText(display);
       await expect(cell.locator("time")).toHaveAttribute(
         "title",
@@ -556,9 +525,7 @@ test.describe("sensor event time follows a different browser timezone", () => {
       const dateTime = await cell.locator("time").getAttribute("datetime");
       expect(new Date(dateTime!).toISOString()).toBe(iso);
     }
-    await expect(await valueCell(page, "Synthetic epoch reading")).toHaveText(
-      "0",
-    );
+    await expect(await valueCell(page, "63")).toHaveText("0");
   });
 });
 
@@ -582,11 +549,11 @@ test("local sensor reading times use the event date's winter or summer timezone 
   expect(
     await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
   ).toBe("Europe/Brussels");
-  for (const [label, display] of [
-    ["Synthetic winter reading", "15/01/2026, 13:34:56"],
-    ["Synthetic summer reading", "15/07/2026, 14:34:56"],
+  for (const [id, display] of [
+    ["61", "15/01/2026, 13:34:56"],
+    ["62", "15/07/2026, 14:34:56"],
   ])
-    await expect(await lastReadingCell(page, label)).toHaveText(display);
+    await expect(await lastReadingCell(page, id)).toHaveText(display);
 });
 
 test.describe("local times use a 24-hour clock even in a 12-hour browser locale", () => {
@@ -620,12 +587,12 @@ test.describe("local times use a 24-hour clock even in a 12-hour browser locale"
       types: { "72": { data: sensorType("72", "2") } },
     });
     await descendToSensors(page);
-    for (const [label, display, instant] of [
-      [winterLabel, "1/15/2026, 13:34:56", "2026-01-15T12:34:56.000Z"],
-      [summerLabel, "7/15/2026, 14:34:56", "2026-07-15T12:34:56.000Z"],
-      [midnightLabel, "1/16/2026, 00:04:05", "2026-01-15T23:04:05.000Z"],
+    for (const [id, display, instant] of [
+      ["61", "1/15/2026, 13:34:56", "2026-01-15T12:34:56.000Z"],
+      ["62", "7/15/2026, 14:34:56", "2026-07-15T12:34:56.000Z"],
+      ["63", "1/16/2026, 00:04:05", "2026-01-15T23:04:05.000Z"],
     ]) {
-      const cell = await lastReadingCell(page, label);
+      const cell = await lastReadingCell(page, id);
       await expect(cell).toHaveText(display);
       await expect(cell.locator("time")).toHaveAttribute("datetime", instant);
       await expect(cell.locator("time")).toHaveAttribute(
@@ -633,8 +600,8 @@ test.describe("local times use a 24-hour clock even in a 12-hour browser locale"
         "Europe/Brussels",
       );
     }
-    await sensorRow(page, winterLabel)
-      .getByRole("link", { name: winterLabel, exact: true })
+    await sensorRow(page, "61")
+      .getByRole("link", { name: "View", exact: true })
       .click();
     await expect(page).toHaveURL("/sensors/61");
     for (const [label, display, raw] of [
@@ -684,11 +651,11 @@ test("missing, invalid and unzoned event times do not imply a live reading or al
     types: { "72": { data: sensorType("72", "2") } },
   });
   await descendToSensors(page);
-  for (const [name] of cases) {
-    const label = `Synthetic ${name} time`;
-    const cell = await lastReadingCell(page, label);
+  for (const [index] of cases.entries()) {
+    const id = String(index + 61);
+    const cell = await lastReadingCell(page, id);
     await expect(cell).toHaveText("\u2014");
     await expect(cell.locator("time")).toHaveCount(0);
-    await expect(await valueCell(page, label)).toHaveText("0");
+    await expect(await valueCell(page, id)).toHaveText("0");
   }
 });

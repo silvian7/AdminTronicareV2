@@ -28,7 +28,8 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import {
   resources,
   resourceMap,
-  recordTitle,
+  translated,
+  valueOf,
   type RecordData,
 } from "../shared/resources";
 import { useAdmin } from "./context";
@@ -163,7 +164,9 @@ export function Shell() {
                   : []),
                 ...(organizations.result.data ?? []).map((r) => ({
                   value: r.id!,
-                  label: recordTitle(r),
+                  label:
+                    translated(valueOf(r, "Tag")).trim() ||
+                    `Organization ${r.id}`,
                 })),
                 ...(!organizations.result.data?.some(
                   (r) => r.id === identity.organizationId,

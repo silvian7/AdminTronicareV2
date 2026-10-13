@@ -12,6 +12,7 @@ import {
   resourceMap,
   resources,
   editableFields,
+  responseKey,
   type Identity,
 } from "../shared/resources";
 
@@ -143,6 +144,83 @@ describe("contract routing", () => {
     expect(call.url.searchParams.get("limit")).toBe("10000");
     expect(call.url.searchParams.has("offset")).toBe(false);
   });
+  it.each(
+    ["hubs", "devices"].flatMap((resourceName) =>
+      ["asc", "desc"].map((order) => [resourceName, order]),
+    ),
+  )(
+    "sorts %s status %s by last event before paginating and preserves exact IDs",
+    async (resourceName, order) => {
+      const { api, fixture } = await setup({ ...testIdentity, level: 90 });
+      const resource = resourceMap[resourceName];
+      const lastEventKey = responseKey(resource, "DhLastEvent");
+      const labelKey = responseKey(resource, "Label");
+      const newestId = "9223372036854775807";
+      const nextId = "9223372036854775806";
+      const compactSecondsId = "9223372036854775805";
+      const compactMillisecondsId = "9223372036854775804";
+      const invalidId = "9223372036854775803";
+      const missingId = "9223372036854775802";
+      fixture.records.set(resourceName, [
+        fixtureRecord(resource, compactSecondsId, {
+          [labelKey]: `Synthetic compact-seconds ${resource.singular.toLowerCase()}`,
+          [lastEventKey]: "20261013115400",
+        }),
+        fixtureRecord(resource, invalidId, {
+          [labelKey]: `Synthetic invalid-event ${resource.singular.toLowerCase()}`,
+          [lastEventKey]: "not-a-timestamp",
+        }),
+        fixtureRecord(resource, newestId, {
+          [labelKey]: `Synthetic recent offset ${resource.singular.toLowerCase()}`,
+          [lastEventKey]: "2026-10-13T13:59:00+02:00",
+        }),
+        fixtureRecord(resource, missingId, {
+          [labelKey]: `Synthetic missing-event ${resource.singular.toLowerCase()}`,
+          [lastEventKey]: undefined,
+        }),
+        fixtureRecord(resource, nextId, {
+          [labelKey]: `Synthetic recent timezone-less UTC ${resource.singular.toLowerCase()}`,
+          [lastEventKey]: "2026-10-13T11:58:00.000",
+        }),
+        fixtureRecord(resource, compactMillisecondsId, {
+          [labelKey]: `Synthetic compact-milliseconds ${resource.singular.toLowerCase()}`,
+          [lastEventKey]: "20261013040000123",
+        }),
+      ]);
+      const expectedPages =
+        order === "asc"
+          ? [
+              [newestId, nextId],
+              [compactSecondsId, compactMillisecondsId],
+              [invalidId, missingId],
+            ]
+          : [
+              [invalidId, missingId],
+              [compactMillisecondsId, compactSecondsId],
+              [nextId, newestId],
+            ];
+      for (const [index, expectedIds] of expectedPages.entries()) {
+        const response = await api.get(
+          `/api/resources/${resourceName}?_sort=status&_order=${order}&_pageSize=2&_page=${index + 1}`,
+        );
+        expect(response.status).toBe(200);
+        expect(response.body.total).toBe(6);
+        const actualIds = response.body.data.map(
+          (row: { id: string }) => row.id,
+        );
+        if (expectedIds.includes(invalidId))
+          expect([...actualIds].sort()).toEqual([...expectedIds].sort());
+        else expect(actualIds).toEqual(expectedIds);
+      }
+      const ordinarySort = await api.get(
+        `/api/resources/${resourceName}?_sort=${resource.primaryKey}&_order=${order}&_pageSize=2&_page=1`,
+      );
+      expect(ordinarySort.status).toBe(200);
+      expect(
+        ordinarySort.body.data.map((row: { id: string }) => row.id),
+      ).toEqual(order === "asc" ? [missingId, invalidId] : [newestId, nextId]);
+    },
+  );
   it.each([
     "idhub=1",
     "idhub=-1",

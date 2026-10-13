@@ -30,6 +30,11 @@ async function syntheticHierarchy(
     secondSensor?: boolean;
     sensorRights?: string;
     deviceRights?: string;
+    canReadDeviceTypes?: boolean;
+    deviceStatus?: number;
+    deviceTypeStatus?: number;
+    deviceTypeTag?: string;
+    missingDeviceType?: boolean;
     coreWritable?: boolean;
   } = {},
 ) {
@@ -45,7 +50,9 @@ async function syntheticHierarchy(
       { entity: "assets", rights: "r" },
       { entity: "hubs", rights: "r" },
       { entity: "devices", rights: options.deviceRights ?? "r" },
-      { entity: "devicetypes", rights: "r" },
+      ...(options.canReadDeviceTypes === false
+        ? []
+        : [{ entity: "devicetypes", rights: "r" }]),
       { entity: "sensortypes", rights: "r" },
       ...(options.canReadSensors === false
         ? []
@@ -68,7 +75,7 @@ async function syntheticHierarchy(
   const device = {
     id: deviceId,
     IDDevice: deviceId,
-    IDDeviceType: deviceTypeId,
+    IDDeviceType: options.missingDeviceType ? undefined : deviceTypeId,
     IDHub: hubId,
     IDOrganization: organizationId,
     Tag: "SYNTHETIC-REALTIME-DEVICE",
@@ -102,9 +109,13 @@ async function syntheticHierarchy(
   const deviceType = {
     id: deviceTypeId,
     IDDeviceType: deviceTypeId,
-    Tag: "realtime",
+    Tag: options.deviceTypeTag ?? "realtime",
     Label: "Synthetic realtime device type",
   };
+  const deviceTypes: Record<string, RecordData> = {
+    [deviceTypeId]: deviceType,
+  };
+  let deviceStatus = options.deviceStatus ?? 200;
   const sensorType = {
     id: sensorTypeId,
     m_nIDSensorType: sensorTypeId,
@@ -171,9 +182,23 @@ async function syntheticHierarchy(
     if (path === "/api/resources/devices")
       return reply({ data: [device], total: 1 });
     if (path === `/api/resources/devices/${deviceId}`)
-      return reply({ data: device });
-    if (path === `/api/resources/devicetypes/${deviceTypeId}`)
-      return reply({ data: deviceType });
+      return deviceStatus === 200
+        ? reply({ data: device })
+        : reply(
+            { message: "Synthetic device reference unavailable." },
+            deviceStatus,
+          );
+    if (path.startsWith("/api/resources/devicetypes/")) {
+      const id = path.split("/").at(-1)!;
+      const type = deviceTypes[id];
+      const status = options.deviceTypeStatus ?? (type ? 200 : 404);
+      return status === 200
+        ? reply({ data: type })
+        : reply(
+            { message: "Synthetic device type reference unavailable." },
+            status,
+          );
+    }
     if (path === "/api/resources/sensors")
       return reply({
         data: sensors,
@@ -190,7 +215,20 @@ async function syntheticHierarchy(
     // Every API call is intercepted, including unrelated mounted detail tabs.
     return reply({ data: [], total: 0 });
   });
-  return { reads, mutations };
+  return {
+    reads,
+    mutations,
+    reassignDeviceType: (id: string, tag: string) => {
+      device.IDDeviceType = id;
+      deviceTypes[id] = { ...deviceType, id, IDDeviceType: id, Tag: tag };
+    },
+    updateDeviceTypeTag: (id: string, tag: string) => {
+      if (deviceTypes[id]) deviceTypes[id].Tag = tag;
+    },
+    denyDeviceReferences: () => {
+      deviceStatus = 403;
+    },
+  };
 }
 
 function recordRow(page: Page, label: string) {
@@ -199,9 +237,213 @@ function recordRow(page: Page, label: string) {
     .locator("xpath=ancestor::tr");
 }
 
+function sensorRow(page: Page, id: string) {
+  return page
+    .getByRole("cell", { name: id, exact: true })
+    .locator("xpath=ancestor::tr");
+}
+
+async function sensorDeviceCell(page: Page) {
+  const column = await page
+    .getByRole("columnheader", { name: "Device", exact: true })
+    .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
+  return sensorRow(page, sensorId).getByRole("cell").nth(column);
+}
+
+test("global and nested sensor lists identify devices by their type tag and exact device ID", async ({
+  page,
+}) => {
+  const mock = await syntheticHierarchy(page);
+  for (const path of ["/sensors", `/devices/${deviceId}?tab=sensors`]) {
+    await page.goto(path);
+    await expect(sensorRow(page, sensorId)).toBeVisible();
+    await expect(
+      page.getByRole("columnheader", { name: "Sensor", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: sensorLabel, exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByText(sensorLabel, { exact: true })).toHaveCount(0);
+    const cell = await sensorDeviceCell(page);
+    await expect(
+      cell.getByRole("link", { name: "realtime", exact: true }),
+    ).toHaveAttribute("href", `/devices/${deviceId}`);
+    await expect(cell.getByRole("link")).toHaveCount(1);
+    await expect(cell.getByText(`#${deviceId}`, { exact: true })).toHaveCSS(
+      "font-size",
+      "12px",
+    );
+    await expect(cell).not.toContainText(deviceLabel);
+    await expect(cell).not.toContainText("SYNTHETIC-REALTIME-DEVICE");
+    const row = sensorRow(page, sensorId);
+    await expect(
+      row.getByRole("link", { name: "SYNTHETIC-REAL-TYPE", exact: true }),
+    ).toHaveAttribute("href", `/sensortypes/${sensorTypeId}`);
+    if (path === "/sensors")
+      await expect(row.getByText("No", { exact: true })).toBeVisible();
+    else {
+      await expect(row.getByText(realValue, { exact: true })).toBeVisible();
+      await expect(
+        row.getByText(lastReadingLocal, { exact: true }),
+      ).toBeVisible();
+    }
+  }
+  expect(mock.mutations).toEqual([]);
+});
+
+test("sensor list Refresh follows device type reassignment and tag changes and clears denied references", async ({
+  page,
+}) => {
+  const mock = await syntheticHierarchy(page);
+  await page.goto(`/devices/${deviceId}?tab=sensors`);
+  const cell = await sensorDeviceCell(page);
+  await expect(
+    cell.getByRole("link", { name: "realtime", exact: true }),
+  ).toBeVisible();
+  const reassignedTypeId = "9223372036854775799";
+  mock.reassignDeviceType(reassignedTypeId, "SYNTHETIC-REASSIGNED-TYPE");
+  await page.getByRole("button", { name: /Refresh$/ }).click();
+  await expect(
+    cell.getByRole("link", { name: "SYNTHETIC-REASSIGNED-TYPE", exact: true }),
+  ).toHaveAttribute("href", `/devices/${deviceId}`);
+  expect(
+    mock.reads.some(
+      (url) =>
+        url.pathname === `/api/resources/devicetypes/${reassignedTypeId}`,
+    ),
+  ).toBe(true);
+  const renamedTag = "SYNTHETIC-RENAMED-DEVICE-TYPE";
+  mock.updateDeviceTypeTag(
+    reassignedTypeId,
+    JSON.stringify({
+      messages: [
+        { lang: "fr", text: "SYNTHETIC-FRENCH-DEVICE-TYPE" },
+        { lang: "en", text: renamedTag },
+      ],
+    }),
+  );
+  await page.getByRole("button", { name: /Refresh$/ }).click();
+  await expect(
+    cell.getByRole("link", { name: renamedTag, exact: true }),
+  ).toHaveAttribute("href", `/devices/${deviceId}`);
+  await expect(cell).not.toContainText("SYNTHETIC-REASSIGNED-TYPE");
+  await expect(cell).not.toContainText("SYNTHETIC-FRENCH-DEVICE-TYPE");
+  mock.denyDeviceReferences();
+  await page.getByRole("button", { name: /Refresh$/ }).click();
+  await expect(
+    cell.getByRole("link", { name: renamedTag, exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    cell.getByRole("link", { name: `#${deviceId}`, exact: true }),
+  ).toHaveAttribute("href", `/devices/${deviceId}`);
+  await expect(cell.getByText(`#${deviceId}`, { exact: true })).toBeVisible();
+  await expect(cell).not.toContainText(renamedTag);
+  await expect(
+    sensorRow(page, sensorId).getByText(realValue, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    sensorRow(page, sensorId).getByRole("link", {
+      name: "SYNTHETIC-REAL-TYPE",
+      exact: true,
+    }),
+  ).toHaveAttribute("href", `/sensortypes/${sensorTypeId}`);
+  await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
+  expect(mock.mutations).toEqual([]);
+});
+
+test("sensor device cells retain the exact ID without fetching or exposing unavailable references", async ({
+  page,
+}) => {
+  const cases = [
+    {
+      name: "device permission denied",
+      options: { deviceRights: "" },
+      readDevice: false,
+      readType: false,
+    },
+    {
+      name: "device type permission denied",
+      options: { canReadDeviceTypes: false },
+      readDevice: true,
+      readType: false,
+    },
+    {
+      name: "device reference missing",
+      options: { deviceStatus: 404 },
+      readDevice: true,
+      readType: false,
+    },
+    {
+      name: "device type reference denied",
+      options: { deviceTypeStatus: 403 },
+      readDevice: true,
+      readType: true,
+    },
+    {
+      name: "device type unassigned",
+      options: { missingDeviceType: true },
+      readDevice: true,
+      readType: false,
+    },
+    {
+      name: "device type tag empty",
+      options: { deviceTypeTag: "" },
+      readDevice: true,
+      readType: true,
+    },
+  ];
+  for (const scenario of cases) {
+    await test.step(scenario.name, async () => {
+      const casePage = await page.context().newPage();
+      try {
+        const mock = await syntheticHierarchy(casePage, scenario.options);
+        await casePage.goto("/sensors");
+        const cell = await sensorDeviceCell(casePage);
+        await expect(
+          cell.getByText(`#${deviceId}`, { exact: true }),
+        ).toBeVisible();
+        await casePage.waitForLoadState("networkidle");
+        if (scenario.readDevice) {
+          await expect(cell.getByRole("link")).toHaveCount(1);
+          await expect(
+            cell.getByRole("link", { name: `#${deviceId}`, exact: true }),
+          ).toHaveAttribute("href", `/devices/${deviceId}`);
+        } else await expect(cell.getByRole("link")).toHaveCount(0);
+        for (const text of [
+          "realtime",
+          "Synthetic realtime device type",
+          deviceLabel,
+          "SYNTHETIC-REALTIME-DEVICE",
+        ])
+          await expect(cell).not.toContainText(text);
+        const deviceReads = mock.reads.filter(
+          (url) => url.pathname === `/api/resources/devices/${deviceId}`,
+        );
+        const typeReads = mock.reads.filter((url) =>
+          url.pathname.startsWith("/api/resources/devicetypes/"),
+        );
+        if (scenario.readDevice) expect(deviceReads.length).toBeGreaterThan(0);
+        else expect(deviceReads).toHaveLength(0);
+        if (scenario.readType) expect(typeReads.length).toBeGreaterThan(0);
+        else expect(typeReads).toHaveLength(0);
+        await expect(
+          sensorRow(casePage, sensorId).getByText("No", {
+            exact: true,
+          }),
+        ).toBeVisible();
+        expect(mock.mutations).toEqual([]);
+      } finally {
+        await casePage.close();
+      }
+    });
+  }
+});
+
 async function openHubDevices(page: Page) {
   await page.goto("/hubs");
-  await expect(page.locator(".organization-picker")).toContainText("MStronic");
+  await expect(page.locator(".organization-picker")).toContainText(
+    "MSTRONIC-SYNTHETIC",
+  );
   await page.getByRole("link", { name: hubLabel, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/hubs/${hubId}$`));
   await page.getByRole("tab", { name: "Devices", exact: true }).click();
@@ -212,9 +454,9 @@ async function expectAssociatedSensors(page: Page) {
   await expect(
     page.getByRole("tab", { name: "Sensors", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
-  const row = recordRow(page, sensorLabel);
+  const row = sensorRow(page, sensorId);
   await expect(
-    row.getByRole("link", { name: sensorLabel, exact: true }),
+    row.getByRole("link", { name: "View", exact: true }),
   ).toHaveAttribute("href", `/sensors/${sensorId}`);
   const valueColumn = await page
     .getByRole("columnheader", { name: "Last reported value", exact: true })
@@ -292,7 +534,7 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
         url.searchParams.get("_organization") === organizationId,
     ),
   ).toBe(true);
-  await row.getByRole("link", { name: sensorLabel, exact: true }).click();
+  await row.getByRole("link", { name: "View", exact: true }).click();
   await expect(page).toHaveURL(`/sensors/${sensorId}`);
   await expect(
     page.getByRole("heading", { name: sensorLabel, exact: true }),
@@ -450,11 +692,8 @@ test("device sensor actions stay on sensor rows and refresh only the filtered se
         name: new RegExp(`${action}$`),
       }),
     ).toHaveCount(0);
-  for (const [id, label] of [
-    [sensorId, sensorLabel],
-    [secondSensorId, secondSensorLabel],
-  ]) {
-    const row = recordRow(page, label);
+  for (const id of [sensorId, secondSensorId]) {
+    const row = sensorRow(page, id);
     await expect(
       row.getByRole("link", { name: "View", exact: true }),
     ).toHaveAttribute("href", `/sensors/${id}`);
@@ -489,7 +728,7 @@ test("device sensor actions stay on sensor rows and refresh only the filtered se
   expect(
     mock.reads
       .slice(readsBeforeRefresh)
-      .filter((url) => url.pathname === `/api/resources/devices/${deviceId}`),
+      .filter((url) => url.pathname === "/api/resources/devices"),
   ).toHaveLength(0);
   await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
   await page.screenshot({
@@ -516,7 +755,7 @@ test("sensor row View and Edit navigate to the selected sensor with read-only de
     secondSensor: true,
   });
   await page.goto(`/devices/${deviceId}?tab=sensors`);
-  const row = recordRow(page, secondSensorLabel);
+  const row = sensorRow(page, secondSensorId);
   await row.getByRole("link", { name: "View", exact: true }).click();
   await expect(page).toHaveURL(`/sensors/${secondSensorId}`);
   await expect(
@@ -538,8 +777,8 @@ test("sensor row deletion confirms the selected sensor and retains the device se
     secondSensor: true,
   });
   await page.goto(`/devices/${deviceId}?tab=sensors`);
-  const first = recordRow(page, sensorLabel);
-  const second = recordRow(page, secondSensorLabel);
+  const first = sensorRow(page, sensorId);
+  const second = sensorRow(page, secondSensorId);
   await expect(first).toBeVisible();
   await second.getByRole("button", { name: "Delete", exact: true }).click();
   const confirmation = page.getByRole("dialog");

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTable } from "@refinedev/antd";
+import { getDefaultSortOrder, useTable } from "@refinedev/antd";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useList,
@@ -71,6 +71,7 @@ import {
   ErrorNotice,
   AssetIdentity,
   AssetTag,
+  DeviceIdentity,
   FieldInput,
   FieldValue,
   OrganizationIdentity,
@@ -80,6 +81,7 @@ import {
   TypeTag,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
+import { HubStatus } from "../components/hub-status";
 
 const queryLabels: Record<string, string> = {
   idasset: "Asset ID",
@@ -184,6 +186,7 @@ const organizationIdentityResources = new Set([
   "devices",
 ]);
 const assetIdentityResources = new Set([
+  "hubs",
   "sensors",
   "devices",
   "rules",
@@ -206,6 +209,11 @@ function useRefreshRecordReferences(resource: string) {
       });
     if (assetIdentityResources.has(resource))
       references.push({ resource: "assets", marker: "assetReference" });
+    if (resource === "sensors")
+      references.push(
+        { resource: "devices", marker: "deviceReference" },
+        { resource: "devicetypes", marker: "equipmentTypeReference" },
+      );
     const equipmentTypeResource = equipmentTypeResources[resource];
     if (equipmentTypeResource)
       references.push({
@@ -238,10 +246,18 @@ export function ResourceList({ resource }: { resource: Resource }) {
   const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
   const [showFilters, setShowFilters] = useState(false);
+  const [statusNow, setStatusNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!["hubs", "devices"].includes(resource.name)) return;
+    setStatusNow(Date.now());
+    const timer = window.setInterval(() => setStatusNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, [resource.name]);
   const {
     tableProps,
     tableQuery,
     filters,
+    sorters,
     setFilters,
     setCurrentPage,
     result,
@@ -265,31 +281,53 @@ export function ResourceList({ resource }: { resource: Resource }) {
   const [search, setSearch] = useState(String(active("_q") ?? ""));
   const columns = useMemo(
     () => [
-      {
-        title: resource.singular,
-        key: "record",
-        width: 240,
-        render: (_: unknown, row: RecordData) => {
-          const tag = ["assets", "organizations"].includes(resource.name)
-            ? translated(valueOf(row, "Tag"))
-            : "";
-          const label = translated(valueOf(row, "Label"));
-          const path = `/${resource.name}/${row.id}`;
-          return (
-            <div className="record-identity">
-              {tag ? (
-                <>
-                  <Link to={path}>{tag}</Link>
-                  {label && <Link to={path}>{label}</Link>}
-                </>
-              ) : (
-                <Link to={path}>{recordTitle(row)}</Link>
-              )}
-              <span>#{row.id}</span>
-            </div>
-          );
-        },
-      },
+      ...(resource.name === "sensors"
+        ? [{ title: "ID", key: "id", dataIndex: "id", width: 180 }]
+        : [
+            {
+              title: resource.singular,
+              key: "record",
+              width: 240,
+              render: (_: unknown, row: RecordData) => {
+                const tag = ["assets", "organizations"].includes(resource.name)
+                  ? translated(valueOf(row, "Tag"))
+                  : "";
+                const label = translated(valueOf(row, "Label"));
+                const path = `/${resource.name}/${row.id}`;
+                return (
+                  <div className="record-identity">
+                    {tag ? (
+                      <>
+                        <Link to={path}>{tag}</Link>
+                        {label && <Link to={path}>{label}</Link>}
+                      </>
+                    ) : (
+                      <Link to={path}>{recordTitle(row)}</Link>
+                    )}
+                    <span>#{row.id}</span>
+                  </div>
+                );
+              },
+            },
+          ]),
+      ...(["hubs", "devices"].includes(resource.name)
+        ? [
+            {
+              title: "Status",
+              key: "status",
+              dataIndex: "status",
+              width: 80,
+              sorter: true,
+              defaultSortOrder: getDefaultSortOrder("status", sorters),
+              render: (_: unknown, row: RecordData) => (
+                <HubStatus
+                  value={valueOf(row, "DhLastEvent")}
+                  now={statusNow}
+                />
+              ),
+            },
+          ]
+        : []),
       ...selectedColumns(resource)
         .filter((f) => !["Label", "Tag"].includes(canonical(f.key)))
         .map((f) => ({
@@ -307,6 +345,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
               canonical(f.key) === "IDOrganization") ||
             (assetIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDAsset") ||
+            (resource.name === "sensors" && canonical(f.key) === "IDDevice") ||
             (resource.name === "actions" &&
               canonical(f.key) === "IDActionType") ||
             (resource.name === "rules" && canonical(f.key) === "IDRuleType")
@@ -318,6 +357,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
             ) : assetIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDAsset" ? (
               <AssetIdentity value={value} />
+            ) : resource.name === "sensors" &&
+              canonical(f.key) === "IDDevice" ? (
+              <DeviceIdentity value={value} />
             ) : resource.name === "organizations" &&
               canonical(f.key) === "IDOrganizationType" ? (
               <TypeTag resource="organizationstypes" value={value} />
@@ -344,7 +386,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
         ),
       },
     ],
-    [resource, navigate, canViewDeviceSensors],
+    [resource, navigate, canViewDeviceSensors, statusNow, sorters],
   );
   if (!can(resource, "list"))
     return <Result status="403" title="Access unavailable" />;
@@ -553,16 +595,29 @@ function RelatedList({
         dataSource={result.data}
         pagination={{ pageSize: 10 }}
         columns={[
-          {
-            title: r.singular,
-            render: (_, row) => (
-              <Link to={`/${resource}/${row.id}`}>{recordTitle(row)}</Link>
-            ),
-          },
+          ...(resource === "sensors"
+            ? []
+            : [
+                {
+                  title: r.singular,
+                  render: (_: unknown, row: RecordData) => (
+                    <Link to={`/${resource}/${row.id}`}>
+                      {recordTitle(row)}
+                    </Link>
+                  ),
+                },
+              ]),
           ...(resource === "rules" ? [] : [{ title: "ID", dataIndex: "id" }]),
           ...selectedColumns(r)
             .filter((f) => !["Tag", "Label"].includes(canonical(f.key)))
-            .slice(0, resource === "rules" ? 5 : resource === "actions" ? 4 : 3)
+            .slice(
+              0,
+              resource === "rules"
+                ? 5
+                : ["actions", "sensors"].includes(resource)
+                  ? 4
+                  : 3,
+            )
             .map((f) => ({
               title:
                 (resource === "actions" &&
@@ -575,6 +630,9 @@ function RelatedList({
                 assetIdentityResources.has(resource) &&
                 canonical(f.key) === "IDAsset" ? (
                   <AssetIdentity value={v} />
+                ) : resource === "sensors" &&
+                  canonical(f.key) === "IDDevice" ? (
+                  <DeviceIdentity value={v} />
                 ) : (
                   <FieldValue field={f} value={v} />
                 ),

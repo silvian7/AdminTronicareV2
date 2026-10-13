@@ -400,7 +400,7 @@ const referenceId = (value: unknown) =>
 const validReferenceId = (id: string) =>
   /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
 function useReferenceRecord(
-  resource: TypeResource | "organizations" | "assets",
+  resource: TypeResource | "organizations" | "assets" | "devices",
   value: unknown,
 ) {
   const { organization, can } = useAdmin();
@@ -410,7 +410,10 @@ function useReferenceRecord(
   const { result, query } = useOne<RecordData>({
     resource,
     id: validId ? id : "0",
-    meta: { organization },
+    meta: {
+      organization,
+      ...(resource === "devices" ? { deviceReference: true } : {}),
+    },
     queryOptions: {
       enabled: allowed && validId,
       meta: {
@@ -424,6 +427,7 @@ function useReferenceRecord(
         organizationReference: resource === "organizations",
         organizationTypeReference: resource === "organizationstypes",
         assetReference: resource === "assets",
+        deviceReference: resource === "devices",
         organization,
       },
     },
@@ -466,6 +470,38 @@ export function OrganizationIdentity({ value }: { value: unknown }) {
 }
 export function AssetIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="assets" value={value} />;
+}
+export function DeviceIdentity({ value }: { value: unknown }) {
+  const {
+    id,
+    allowed,
+    validId,
+    record: device,
+  } = useReferenceRecord("devices", value);
+  const { record: deviceType } = useReferenceRecord(
+    "devicetypes",
+    device ? valueOf(device, "IDDeviceType") : undefined,
+  );
+  if (value === null || value === undefined || value === "")
+    return <span className="muted">—</span>;
+  if (String(value) === "0") return <span className="numeric-value">0</span>;
+  const tag = deviceType ? translated(valueOf(deviceType, "Tag")) : "";
+  const hasTag = typeof tag === "string" && !!tag.trim();
+  const deviceLink = `/devices/${id}`;
+  return (
+    <div className="record-identity">
+      {hasTag && (
+        <Link to={deviceLink} title={`Device #${id}`}>
+          {tag}
+        </Link>
+      )}
+      {allowed && validId && !hasTag ? (
+        <Link to={deviceLink}>#{String(value)}</Link>
+      ) : (
+        <span>#{String(value)}</span>
+      )}
+    </div>
+  );
 }
 export function AssetTag({ value }: { value: unknown }) {
   const { id, record } = useReferenceRecord("assets", value);

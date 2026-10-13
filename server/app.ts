@@ -21,6 +21,7 @@ import {
   type RecordData,
 } from "../shared/resources";
 import type { Config } from "./config";
+import { hubLastEventTime } from "../shared/hub-status";
 import { createUpstream, type Transport } from "./upstream";
 import { createAuthorization, parseRoleLevel } from "./authorization";
 import {
@@ -373,7 +374,20 @@ export function createApp(
       typeof req.query._sort === "string"
         ? req.query._sort
         : resource.primaryKey;
-    if (resource.fields.some((f) => f.key === sort))
+    if (["hubs", "devices"].includes(resource.name) && sort === "status") {
+      const events = new Map(
+        records.map((row) => [
+          row,
+          hubLastEventTime(valueOf(row, "DhLastEvent")) ?? -Infinity,
+        ]),
+      );
+      records.sort((a, b) => {
+        const av = events.get(a)!,
+          bv = events.get(b)!;
+        const n = av === bv ? 0 : av > bv ? -1 : 1;
+        return n * (req.query._order === "desc" ? -1 : 1);
+      });
+    } else if (resource.fields.some((f) => f.key === sort))
       records.sort((a, b) => {
         const av = String(a[sort] ?? ""),
           bv = String(b[sort] ?? "");
