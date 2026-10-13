@@ -589,6 +589,78 @@ test("local sensor reading times use the event date's winter or summer timezone 
     await expect(await lastReadingCell(page, label)).toHaveText(display);
 });
 
+test.describe("local times use a 24-hour clock even in a 12-hour browser locale", () => {
+  test.use({ locale: "en-US", timezoneId: "Europe/Brussels" });
+
+  test("sensor list and detail times retain local dates and instants at afternoon and midnight", async ({
+    page,
+  }) => {
+    const winterLabel = "Synthetic US-locale winter reading";
+    const summerLabel = "Synthetic US-locale summer reading";
+    const midnightLabel = "Synthetic US-locale midnight reading";
+    const created = "2026-01-15T12:45:56Z";
+    const modified = "2026-01-15T23:04:05Z";
+    await syntheticHierarchy(page, {
+      sensors: [
+        sensor("61", "72", winterLabel, {
+          m_nValueInt: "1",
+          m_dhDhLastEvent: "2026-01-15T12:34:56Z",
+          m_dhDhCreated: created,
+          m_dhDhModified: modified,
+        }),
+        sensor("62", "72", summerLabel, {
+          m_nValueInt: "2",
+          m_dhDhLastEvent: "2026-07-15T12:34:56Z",
+        }),
+        sensor("63", "72", midnightLabel, {
+          m_nValueInt: "3",
+          m_dhDhLastEvent: modified,
+        }),
+      ],
+      types: { "72": { data: sensorType("72", "2") } },
+    });
+    await descendToSensors(page);
+    for (const [label, display, instant] of [
+      [winterLabel, "1/15/2026, 13:34:56", "2026-01-15T12:34:56.000Z"],
+      [summerLabel, "7/15/2026, 14:34:56", "2026-07-15T12:34:56.000Z"],
+      [midnightLabel, "1/16/2026, 00:04:05", "2026-01-15T23:04:05.000Z"],
+    ]) {
+      const cell = await lastReadingCell(page, label);
+      await expect(cell).toHaveText(display);
+      await expect(cell.locator("time")).toHaveAttribute("datetime", instant);
+      await expect(cell.locator("time")).toHaveAttribute(
+        "title",
+        "Europe/Brussels",
+      );
+    }
+    await sensorRow(page, winterLabel)
+      .getByRole("link", { name: winterLabel, exact: true })
+      .click();
+    await expect(page).toHaveURL("/sensors/61");
+    for (const [label, display, raw] of [
+      ["Created", "1/15/2026, 13:45:56", created],
+      ["Modified", "1/16/2026, 00:04:05", modified],
+      ["Last reading", "1/15/2026, 13:34:56", "2026-01-15T12:34:56Z"],
+    ]) {
+      const content = page
+        .locator(".ant-descriptions-item-label")
+        .filter({ hasText: new RegExp(`^${label}$`) })
+        .locator("xpath=following-sibling::*[1]");
+      await expect(content).toHaveText(display);
+      if (label === "Last reading")
+        await expect(content.locator("time")).toHaveAttribute(
+          "datetime",
+          "2026-01-15T12:34:56.000Z",
+        );
+      else
+        await expect(content.locator("span[title]")).toHaveAttribute(
+          "title",
+          raw,
+        );
+    }
+  });
+});
+
 test("missing, invalid and unzoned event times do not imply a live reading or alter its value", async ({
   page,
 }) => {

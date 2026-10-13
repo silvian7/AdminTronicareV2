@@ -143,6 +143,61 @@ describe("contract routing", () => {
     expect(call.url.searchParams.get("limit")).toBe("10000");
     expect(call.url.searchParams.has("offset")).toBe(false);
   });
+  it.each([
+    "idhub=1",
+    "idhub=-1",
+    "idhub=",
+    "idhub",
+    "idhub=1&idhub=2",
+    "idhub=&idhub=",
+  ])(
+    "rejects retired asset hub filter %s without an upstream read",
+    async (query) => {
+      for (const level of [30, 90]) {
+        const { api, fixture } = await setup({ ...testIdentity, level });
+        const callsBefore = fixture.calls.length;
+        const result = await api.get(`/api/resources/assets?${query}`);
+        expect(result.status).toBe(400);
+        expect(result.body.message).toContain("no longer supported");
+        expect(fixture.calls).toHaveLength(callsBefore);
+      }
+    },
+  );
+  it.each(["idhub=1", "idhub=", "idhub=1&idhub=2"])(
+    "rejects retired hub filter %s on asset item and entity_id reads",
+    async (query) => {
+      for (const level of [30, 90]) {
+        const { api, fixture } = await setup({ ...testIdentity, level });
+        const callsBefore = fixture.calls.length;
+        for (const path of [
+          `/api/resources/assets/1?${query}`,
+          `/api/resources/assets?entity_id=1&${query}`,
+        ]) {
+          const result = await api.get(path);
+          expect(result.status).toBe(400);
+          expect(result.body.message).toContain("no longer supported");
+          expect(fixture.calls).toHaveLength(callsBefore);
+        }
+      }
+    },
+  );
+  it("removes the asset hub filter while preserving Core device filtering", async () => {
+    expect(resourceMap.assets.query.map((field) => field.key)).not.toContain(
+      "idhub",
+    );
+    expect(resourceMap.devices.query.map((field) => field.key)).toContain(
+      "idhub",
+    );
+    const { api, fixture } = await setup();
+    const hubId = "9223372036854775807";
+    const result = await api.get(`/api/resources/devices?idhub=${hubId}`);
+    expect(result.status).toBe(200);
+    const call = fixture.calls.find(
+      (call) => call.url.pathname === "/v1/devices",
+    )!;
+    expect(call.url.origin).toBe(testConfig.origins.core);
+    expect(call.url.searchParams.get("idhub")).toBe(hubId);
+  });
   it("handles empty successful delete bodies", async () => {
     const { api, csrf } = await setup();
     const result = await api

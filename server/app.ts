@@ -284,6 +284,8 @@ export function createApp(
   app.get("/api/resources/:resource", async (req, res) => {
     const resource = getResource(req);
     const r = requirePermission(req, resource, "list");
+    if (resource.name === "assets" && req.query.idhub !== undefined)
+      throw new ApiError(400, "The asset hub filter is no longer supported.");
     const query: Record<string, string> = {};
     for (const field of resource.query) {
       const value = req.query[field.key];
@@ -399,6 +401,8 @@ export function createApp(
   app.get("/api/resources/:resource/:id", async (req, res) => {
     const resource = getResource(req);
     const r = requirePermission(req, resource, "show");
+    if (resource.name === "assets" && req.query.idhub !== undefined)
+      throw new ApiError(400, "The asset hub filter is no longer supported.");
     const { data } = await upstream(
       resource.service,
       route(resource, "show", String(req.params.id)),

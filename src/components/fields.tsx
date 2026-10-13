@@ -370,7 +370,7 @@ export function FieldValue({
     return (
       <span title={raw}>
         {date && !isNaN(date.getTime())
-          ? date.toLocaleString()
+          ? date.toLocaleString(undefined, { hourCycle: "h23" })
           : raw.replace("T", " ")}
       </span>
     );
@@ -569,7 +569,7 @@ export function SensorLastReading({ row }: { row: RecordData }) {
       dateTime={date.toISOString()}
       title={Intl.DateTimeFormat().resolvedOptions().timeZone}
     >
-      {date.toLocaleString()}
+      {date.toLocaleString(undefined, { hourCycle: "h23" })}
     </time>
   );
 }

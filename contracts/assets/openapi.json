@@ -158,17 +158,6 @@
             "description": "Optional signed-64-bit filter, applied only to internal or usertypelevel >= 90 callers."
           },
           {
-            "name": "idhub",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": -9223372036854775808,
-              "maximum": 9223372036854775807
-            },
-            "description": "Optional signed-64-bit filter, applied only to internal or usertypelevel >= 90 callers."
-          },
-          {
             "name": "includeusergroups",
             "in": "query",
             "schema": {

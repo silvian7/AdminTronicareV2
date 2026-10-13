@@ -2334,14 +2334,6 @@
           "format": "int64"
         },
         {
-          "key": "idhub",
-          "type": "integer",
-          "nullable": false,
-          "minimum": "-9223372036854775808",
-          "maximum": "9223372036854775807",
-          "format": "int64"
-        },
-        {
           "key": "includeusergroups",
           "type": "string",
           "nullable": false,
@@ -6462,7 +6454,7 @@
     },
     "assets": {
       "file": "assets/openapi.json",
-      "sha256": "373cf2529731a56386d0aa003eb4a91079a3992b7082bd275e1ee039885370b4"
+      "sha256": "e98116c3faef896f5c98132920daa28ed7bd3a53493fd5fd3c949e663d6384de"
     },
     "rules": {
       "file": "rules/openapi.json",
