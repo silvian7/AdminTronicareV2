@@ -138,7 +138,13 @@ async function descendToSensors(page: Page) {
     page.getByRole("heading", { name: hubLabel, exact: true }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Devices", exact: true }).click();
-  await page.getByRole("link", { name: deviceLabel, exact: true }).click();
+  await expect(page.getByRole("columnheader").first()).toHaveText("ID");
+  const deviceLink = page.getByRole("link", { name: "51", exact: true });
+  await expect(deviceLink).toHaveAttribute("href", "/devices/51");
+  await expect(
+    deviceLink.locator("xpath=ancestor::tr").getByRole("cell").first(),
+  ).toHaveText("51");
+  await deviceLink.click();
   await expect(
     page.getByRole("heading", { name: deviceLabel, exact: true }),
   ).toBeVisible();

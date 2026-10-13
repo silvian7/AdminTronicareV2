@@ -281,8 +281,21 @@ export function ResourceList({ resource }: { resource: Resource }) {
   const [search, setSearch] = useState(String(active("_q") ?? ""));
   const columns = useMemo(
     () => [
-      ...(resource.name === "sensors"
-        ? [{ title: "ID", key: "id", dataIndex: "id", width: 180 }]
+      ...(["sensors", "devices"].includes(resource.name)
+        ? [
+            {
+              title: "ID",
+              key: "id",
+              dataIndex: "id",
+              width: 180,
+              render: (id: string) =>
+                resource.name === "devices" ? (
+                  <Link to={`/devices/${id}`}>{id}</Link>
+                ) : (
+                  id
+                ),
+            },
+          ]
         : [
             {
               title: resource.singular,
@@ -599,15 +612,17 @@ function RelatedList({
             ? []
             : [
                 {
-                  title: r.singular,
+                  title: resource === "devices" ? "ID" : r.singular,
                   render: (_: unknown, row: RecordData) => (
                     <Link to={`/${resource}/${row.id}`}>
-                      {recordTitle(row)}
+                      {resource === "devices" ? row.id : recordTitle(row)}
                     </Link>
                   ),
                 },
               ]),
-          ...(resource === "rules" ? [] : [{ title: "ID", dataIndex: "id" }]),
+          ...(["rules", "devices"].includes(resource)
+            ? []
+            : [{ title: "ID", dataIndex: "id" }]),
           ...selectedColumns(r)
             .filter((f) => !["Tag", "Label"].includes(canonical(f.key)))
             .slice(

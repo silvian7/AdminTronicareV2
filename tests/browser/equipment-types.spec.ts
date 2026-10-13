@@ -196,34 +196,31 @@ test.describe("device status discs", () => {
       })),
     });
     await page.goto("/devices");
-    await expect(listRow(page, "Synthetic Aging green device")).toBeVisible();
+    await expect(listRow(page, "51")).toBeVisible();
     await page.clock.pauseAt(now);
-    for (const [label, , status] of cases) {
-      const disc = listRow(page, `Synthetic ${label} device`).locator(
-        ".hub-status-dot",
-      );
+    for (const [index, [, , status]] of cases.entries()) {
+      const disc = listRow(page, String(index + 51)).locator(".hub-status-dot");
       await expect(disc).toBeVisible();
       await expect(disc).toHaveAttribute("role", "img");
       await expect(disc).toHaveAttribute("data-status", status!);
     }
-    for (const [label, color] of [
-      ["Aging green", "rgb(82, 196, 26)"],
-      ["Exactly five minutes", "rgb(250, 219, 20)"],
-      ["Beyond one hour", "rgb(245, 34, 45)"],
-      ["Beyond eight hours", "rgb(20, 20, 20)"],
+    for (const [id, color] of [
+      ["51", "rgb(82, 196, 26)"],
+      ["52", "rgb(250, 219, 20)"],
+      ["54", "rgb(245, 34, 45)"],
+      ["56", "rgb(20, 20, 20)"],
     ])
-      await expect(
-        listRow(page, `Synthetic ${label} device`).locator(".hub-status-dot"),
-      ).toHaveCSS("background-color", color);
+      await expect(listRow(page, id).locator(".hub-status-dot")).toHaveCSS(
+        "background-color",
+        color,
+      );
     await expect(
-      listRow(page, "Synthetic Missing event device").getByRole("img", {
+      listRow(page, "57").getByRole("img", {
         name: "Last event unavailable",
         exact: true,
       }),
     ).toBeVisible();
-    const aging = listRow(page, "Synthetic Aging green device").locator(
-      ".hub-status-dot",
-    );
+    const aging = listRow(page, "51").locator(".hub-status-dot");
     await expect(aging).toHaveAttribute(
       "aria-label",
       "Last event: less than 5 minutes ago",
@@ -247,6 +244,9 @@ test.describe("device status discs", () => {
       name: "Status",
       exact: true,
     });
+    const ids = page
+      .locator(".ant-table-tbody > tr.ant-table-row")
+      .locator("td:first-child");
     async function expectStatusSort(order: string) {
       await expect
         .poll(() => {
@@ -258,14 +258,17 @@ test.describe("device status discs", () => {
     await status.click();
     await expectStatusSort("asc");
     await expect(status).toHaveAttribute("aria-sort", "ascending");
+    await expect(ids).toHaveText(["41", "42", "43"]);
     await status.click();
     await expectStatusSort("desc");
     await expect(status).toHaveAttribute("aria-sort", "descending");
+    await expect(ids).toHaveText(["41", "42", "43"]);
     await page.reload();
     await expectStatusSort("desc");
     await expect(status).toHaveAttribute("aria-sort", "descending");
+    await expect(ids).toHaveText(["41", "42", "43"]);
     await expect(
-      listRow(page, itemLabel(devices, "first")).getByRole("link", {
+      listRow(page, "41").getByRole("link", {
         name: typeTag(devices),
         exact: true,
       }),
@@ -273,38 +276,29 @@ test.describe("device status discs", () => {
   });
 });
 
-function listRow(page: Page, label: string) {
+function listRow(page: Page, id: string) {
   return page
-    .getByRole("link", { name: label, exact: true })
+    .getByRole("link", { name: id, exact: true })
     .locator("xpath=ancestor::tr");
 }
 
-function equipmentListRow(
-  page: Page,
-  kind: EquipmentKind,
-  id: string,
-  suffix: string,
-) {
+function equipmentListRow(page: Page, kind: EquipmentKind, id: string) {
   return kind.resource === "sensors"
     ? page
         .getByRole("cell", { name: id, exact: true })
         .locator("xpath=ancestor::tr")
-    : listRow(page, itemLabel(kind, suffix));
+    : listRow(page, id);
 }
 
 async function openEquipmentDetail(
   page: Page,
   kind: EquipmentKind,
   id: string,
-  suffix: string,
 ) {
-  const row = equipmentListRow(page, kind, id, suffix);
+  const row = equipmentListRow(page, kind, id);
   if (kind.resource === "sensors")
     await row.getByRole("button", { name: "View", exact: true }).click();
-  else
-    await row
-      .getByRole("link", { name: itemLabel(kind, suffix), exact: true })
-      .click();
+  else await row.getByRole("link", { name: id, exact: true }).click();
 }
 
 for (const kind of equipmentKinds) {
@@ -319,15 +313,21 @@ for (const kind of equipmentKinds) {
         exact: true,
       }),
     ).toBeVisible();
-    if (kind.resource === "devices")
+    if (kind.resource === "devices") {
+      await expect(page.getByRole("columnheader").first()).toHaveText("ID");
+      const identity = equipmentListRow(page, kind, "41")
+        .getByRole("cell")
+        .first();
+      await expect(identity).toHaveText("41");
+      await expect(
+        identity.getByRole("link", { name: "41", exact: true }),
+      ).toHaveAttribute("href", "/devices/41");
       await expect(
         page.getByRole("columnheader", { name: /Last event/i }),
       ).toBeVisible();
-    for (const [id, suffix] of [
-      ["41", "first"],
-      ["42", "second"],
-    ]) {
-      const link = equipmentListRow(page, kind, id, suffix).getByRole("link", {
+    }
+    for (const id of ["41", "42"]) {
+      const link = equipmentListRow(page, kind, id).getByRole("link", {
         name: typeTag(kind),
         exact: true,
       });
@@ -338,7 +338,7 @@ for (const kind of equipmentKinds) {
       );
     }
     await expect(
-      equipmentListRow(page, kind, "43", "third").getByRole("link", {
+      equipmentListRow(page, kind, "43").getByRole("link", {
         name: "TRANSLATED-TYPE-TAG",
         exact: true,
       }),
@@ -356,7 +356,7 @@ for (const kind of equipmentKinds) {
       ].sort(),
     );
 
-    await openEquipmentDetail(page, kind, "41", "first");
+    await openEquipmentDetail(page, kind, "41");
     await expect(
       page.getByRole("heading", {
         name: itemLabel(kind, "first"),
@@ -407,23 +407,19 @@ for (const kind of equipmentKinds) {
     const typeColumn = await page
       .getByRole("columnheader", { name: `${kind.singular} type`, exact: true })
       .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
-    for (const { id, typeId, suffix } of fallbackRows.slice(0, 4)) {
+    for (const { id, typeId } of fallbackRows.slice(0, 4)) {
       await expect(
-        equipmentListRow(page, kind, id, suffix).getByRole("link", {
+        equipmentListRow(page, kind, id).getByRole("link", {
           name: `#${typeId}`,
           exact: true,
         }),
       ).toHaveAttribute("href", `/${kind.types}/${typeId}`);
     }
     await expect(
-      equipmentListRow(page, kind, "55", "unassigned type")
-        .getByRole("cell")
-        .nth(typeColumn),
+      equipmentListRow(page, kind, "55").getByRole("cell").nth(typeColumn),
     ).toHaveText("0");
     await expect(
-      equipmentListRow(page, kind, "56", "no type field")
-        .getByRole("cell")
-        .nth(typeColumn),
+      equipmentListRow(page, kind, "56").getByRole("cell").nth(typeColumn),
     ).toHaveText("\u2014");
     await expect(
       page.getByText("Do not substitute this label for an empty tag", {
@@ -460,12 +456,12 @@ for (const kind of equipmentKinds) {
   }) => {
     const mock = await syntheticEquipment(page, kind, { canReadTypes: false });
     await page.goto(`/${kind.resource}`);
-    const row = equipmentListRow(page, kind, "41", "first");
+    const row = equipmentListRow(page, kind, "41");
     await expect(
       row.getByText(`#${largeTypeId}`, { exact: true }),
     ).toBeVisible();
     await expect(row.locator(`a[href^="/${kind.types}/"]`)).toHaveCount(0);
-    await openEquipmentDetail(page, kind, "41", "first");
+    await openEquipmentDetail(page, kind, "41");
     const detail = page.locator(".ant-descriptions");
     await expect(
       detail.getByText(`#${largeTypeId}`, { exact: true }),
@@ -481,7 +477,7 @@ for (const kind of equipmentKinds) {
     const mock = await syntheticEquipment(page, kind);
     await page.goto(`/${kind.resource}`);
     await expect(
-      equipmentListRow(page, kind, "41", "first").getByRole("link", {
+      equipmentListRow(page, kind, "41").getByRole("link", {
         name: typeTag(kind),
         exact: true,
       }),
@@ -489,19 +485,16 @@ for (const kind of equipmentKinds) {
     const changedTag = `UPDATED-${kind.singular.toUpperCase()}-TYPE-TAG`;
     mock.updateTypeTag(largeTypeId, changedTag);
     await page.getByRole("button", { name: /Refresh$/ }).click();
-    for (const [id, suffix] of [
-      ["41", "first"],
-      ["42", "second"],
-    ]) {
+    for (const id of ["41", "42"]) {
       await expect(
-        equipmentListRow(page, kind, id, suffix).getByRole("link", {
+        equipmentListRow(page, kind, id).getByRole("link", {
           name: changedTag,
           exact: true,
         }),
       ).toBeVisible();
     }
     await expect(page.getByText(typeTag(kind), { exact: true })).toHaveCount(0);
-    await openEquipmentDetail(page, kind, "41", "first");
+    await openEquipmentDetail(page, kind, "41");
     await expect(
       page.locator(".ant-descriptions").getByRole("link", {
         name: changedTag,

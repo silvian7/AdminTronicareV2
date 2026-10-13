@@ -231,10 +231,20 @@ async function syntheticHierarchy(
   };
 }
 
-function recordRow(page: Page, label: string) {
+function deviceRow(page: Page) {
   return page
-    .getByRole("link", { name: label, exact: true })
+    .getByRole("link", { name: deviceId, exact: true })
     .locator("xpath=ancestor::tr");
+}
+
+async function expectDeviceListIdentity(page: Page) {
+  await expect(page.getByRole("columnheader").first()).toHaveText("ID");
+  const row = deviceRow(page);
+  await expect(row.getByRole("cell").first()).toHaveText(deviceId);
+  await expect(
+    row.getByRole("link", { name: deviceId, exact: true }),
+  ).toHaveAttribute("href", `/devices/${deviceId}`);
+  return row;
 }
 
 function sensorRow(page: Page, id: string) {
@@ -447,7 +457,7 @@ async function openHubDevices(page: Page) {
   await page.getByRole("link", { name: hubLabel, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/hubs/${hubId}$`));
   await page.getByRole("tab", { name: "Devices", exact: true }).click();
-  return recordRow(page, deviceLabel);
+  return expectDeviceListIdentity(page);
 }
 
 async function expectAssociatedSensors(page: Page) {
@@ -584,7 +594,7 @@ test("the global Devices list opens the individual device sensor tab", async ({
 }) => {
   const mock = await syntheticHierarchy(page);
   await page.goto("/devices");
-  const row = recordRow(page, deviceLabel);
+  const row = await expectDeviceListIdentity(page);
   const action = row.getByRole("link", { name: "View sensors", exact: true });
   await expect(action).toHaveAttribute(
     "href",
@@ -639,7 +649,7 @@ test("sensor permissions hide navigation actions and prevent reads even for a di
   await expect(
     hubDevice.getByRole("link", { name: "View sensors", exact: true }),
   ).toHaveCount(0);
-  await hubDevice.getByRole("link", { name: deviceLabel, exact: true }).click();
+  await hubDevice.getByRole("link", { name: deviceId, exact: true }).click();
   await expect(
     page.getByRole("heading", { name: deviceLabel, exact: true }),
   ).toBeVisible();
@@ -659,7 +669,7 @@ test("sensor permissions hide navigation actions and prevent reads even for a di
   ).toHaveCount(0);
   await page.goto("/devices");
   await expect(
-    recordRow(page, deviceLabel).getByRole("link", {
+    deviceRow(page).getByRole("link", {
       name: "View sensors",
       exact: true,
     }),
