@@ -27,6 +27,7 @@ Login uses your Tronicare account. Select **One-time code** for recovery credent
 - Asset details support assigning and removing users and groups through the Assets assignment APIs. Changes require Asset update permission and enabled Assets writes. Removing an assignment refreshes asset and equipment visibility. User/group memberships use the separate Users link commands.
 - Equipment hierarchy, current readings in related sensor lists, rule/action editing, multilingual message fields, explicit UTC rule times, sensor history with fenced keyset continuation, password recovery/change, and service availability.
 - Platform administrators see global Core outbox sizes and oldest queued-message latency on the overview dashboard, refreshed every 30 seconds from `/v1/coreadmin/info`. Missing or unavailable metrics show an error; empty queues report zero.
+- The dashboard also shows outbox availability, queue sizes and latency for Rules, Actions, Push, Email, SMS, MQTT and MQTT bridge, using each configured service's `/v1/{service}admin/info` endpoint. It refreshes every 30 seconds and keeps other services visible when one is unavailable. Latency follows each service's queue-age definition; Actions uses the current forwarding/retry wait.
 - User activity and permission-resource definitions are intentionally read-only. Forwarded history supports administrative read/acknowledge/archive flags, rather than editing engine-produced fields. Ingest/worker/outbox listeners are backend process interfaces, not administration screens; they are not exposed by the gateway.
 
 ## Security boundaries
@@ -46,6 +47,8 @@ Security regressions use synthetic records and responses. Run `npm test` and the
 Snapshots in `contracts/` come from the companion Tronicare Python workspace's `tronicare_py/docs/openapi` directory.
 
 Only each service's business/admin API is copied; Core uses `compat.openapi.json`. `shared/contracts.generated.json` records SHA-256 hashes and the derived field/route metadata for each source. No live API or credential is needed to generate it.
+
+Email, SMS and MQTT's supplied JSON snapshots omit their newer outbox fields. Their dashboard mappings follow the current service `store.py` implementations, OpenAPI YAML descriptions and outbox-monitoring tests in the companion workspace.
 
 ```powershell
 python scripts/sync-contracts.py --source 'C:/path/to/tronicare_py/docs/openapi'
@@ -88,7 +91,7 @@ Runtime settings:
 | `PORT`                   | Server port, default 8080.                                                                                                                      |
 | `ALLOW_HTTP`             | Isolated local production-container testing only; never enable for public ingress.                                                              |
 
-No internal service credential is embedded in the frontend. MqttBridge's documented admin authentication may require a service credential rather than a user session; its status will show unavailable when the service declines the current user's token.
+No internal service credential is embedded in the frontend. Administration information uses the signed-in platform administrator's token; a service that declines it is shown as unavailable.
 
 ## Validation and deployment boundaries
 

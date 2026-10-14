@@ -8,7 +8,12 @@
   "x-service": "push",
   "x-process": "api",
   "x-source-files": [
-    "services/push/src/tronicare_push/api.py"
+    "services/push/src/tronicare_push/api.py",
+    "services/push/src/tronicare_push/store.py",
+    "services/push/src/tronicare_push/runtime.py",
+    "services/push/src/tronicare_push/settings.py",
+    "packages/foundation/src/tronicare_foundation/admin_authorization.py",
+    "packages/foundation/src/tronicare_foundation/outbox_status.py"
   ],
   "paths": {
     "/_health/live": {
@@ -115,6 +120,15 @@
                   "$ref": "#/components/schemas/ServiceInfo"
                 }
               }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
             }
           },
           "503": {
@@ -125,10 +139,38 @@
                   "$ref": "#/components/schemas/ServiceInfo"
                 }
               }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated caller lacks current platform authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
             }
           }
         },
-        "description": "Missing or invalid Token returns HTTP 200 with Status=false. Successful metadata fields depend on the worker state."
+        "description": "Missing or invalid Token returns HTTP 200 with Status=false. Normal callers need a valid shared Redis Users session and fresh Users /v1/usersadmin/context authority with platform level 90 or above on every request; ordinary valid sessions receive 403. The optional configured PUSH_ADMIN_INTERNAL_TOKEN authenticates trusted internal callers without Redis or HTTP. Missing, malformed or unavailable authorization dependencies fail closed with 503 before queue reads. Successful responses always include Outboxes.delivery and Outboxes.results with Size and Latency_Seconds. Delivery includes pending/sending provider jobs; results includes completed jobs awaiting reply publication, including uncertain outcomes. Queue aggregates use one read-only repeatable-read PostgreSQL snapshot, a five-second statement limit, a one-second lock limit and a four-second snapshot timeout. Redis and Users authorization stages are independently bounded. All info responses use Cache-Control: no-store. Public metrics do not read the queues."
       }
     },
     "/v1/pushadmin/metrics": {
@@ -364,6 +406,23 @@
           },
           "Engine_Lastheartbeat": {
             "type": "integer"
+          },
+          "Outboxes": {
+            "type": "object",
+            "properties": {
+              "delivery": {
+                "$ref": "#/components/schemas/OutboxStatus"
+              },
+              "results": {
+                "$ref": "#/components/schemas/OutboxStatus"
+              }
+            },
+            "required": [
+              "delivery",
+              "results"
+            ],
+            "additionalProperties": false,
+            "description": "Present on every successful info response, including empty queues. A bounded read-only repeatable-read snapshot supplies aggregates only; unavailable evidence returns 503."
           }
         },
         "additionalProperties": true,
@@ -427,6 +486,26 @@
           "Status",
           "Error"
         ]
+      },
+      "OutboxStatus": {
+        "type": "object",
+        "properties": {
+          "Size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Delivery includes pending/sending jobs; results includes completed jobs awaiting reply publication, including uncertain outcomes."
+          },
+          "Latency_Seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Age of the oldest queued item using PostgreSQL time; zero for an empty queue or a future timestamp."
+          }
+        },
+        "required": [
+          "Size",
+          "Latency_Seconds"
+        ],
+        "additionalProperties": false
       }
     },
     "securitySchemes": {

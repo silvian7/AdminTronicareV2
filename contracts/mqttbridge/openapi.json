@@ -47,8 +47,8 @@
         "tags": [
           "Admin compatibility"
         ],
-        "summary": "Read the current worker identity and heartbeat age",
-        "description": "Authenticates the Token header before reading the latest unstopped persisted worker and its metrics. Missing, empty or rejected credentials, and an unavailable authentication backend, all return HTTP 200 with Status=false and Error='bad authentication'. A successful read without a current worker returns empty Engine_Type, Engine_Uuid and Engine_Version and omits Engine_Lastheartbeat. The current production entrypoint composes a fail-closed legacy Redis transport; a configured internal compatibility token can authenticate. The OIDC adapter is a fail-closed placeholder, not a working OAuth flow.",
+        "summary": "Read worker identity and operational outbox backlogs",
+        "description": "Requires exactly one bounded Token header. Normal callers are checked against current Users SQL context and must have platform role level 90 or above; an explicitly configured trusted internal token also grants access. Rejected credentials use HTTP 200 with Status=false and Error=bad authentication. Valid ordinary callers receive 403; unavailable authorization or invalid, unavailable, or timed-out state data returns 503. Outboxes always reports mqtt, core_primary and core_mirror from one read-only repeatable-read database snapshot. Size counts queued and in-flight work, excluding succeeded, suppressed, discarded and permanent-failure records. Latency_Seconds is the age of the oldest queued record, with zero for an empty queue. A missing worker does not suppress queue reads. Responses use Cache-Control: no-store. Public metrics keep their existing queue-free behavior.",
         "security": [
           {
             "TokenAuth": []
@@ -78,7 +78,21 @@
                       "Engine_Type": "MqttBridge",
                       "Engine_Uuid": "00000000-0000-4000-8000-000000000001",
                       "Engine_Version": "0.1.0",
-                      "Engine_Lastheartbeat": 7
+                      "Engine_Lastheartbeat": 7,
+                      "Outboxes": {
+                        "mqtt": {
+                          "Size": 0,
+                          "Latency_Seconds": 0
+                        },
+                        "core_primary": {
+                          "Size": 0,
+                          "Latency_Seconds": 0
+                        },
+                        "core_mirror": {
+                          "Size": 0,
+                          "Latency_Seconds": 0
+                        }
+                      }
                     }
                   },
                   "noWorker": {
@@ -88,7 +102,21 @@
                       "Error": "",
                       "Engine_Type": "",
                       "Engine_Uuid": "",
-                      "Engine_Version": ""
+                      "Engine_Version": "",
+                      "Outboxes": {
+                        "mqtt": {
+                          "Size": 0,
+                          "Latency_Seconds": 0
+                        },
+                        "core_primary": {
+                          "Size": 0,
+                          "Latency_Seconds": 0
+                        },
+                        "core_mirror": {
+                          "Size": 0,
+                          "Latency_Seconds": 0
+                        }
+                      }
                     }
                   },
                   "authenticationFailure": {
@@ -101,18 +129,8 @@
               }
             }
           },
-          "422": {
-            "description": "FastAPI request validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "503": {
-            "description": "The authenticated state read failed, including an unavailable database or an incomplete current-worker metrics snapshot.",
+            "description": "Current Users authorization or read-only worker/outbox information is unavailable, invalid, or timed out; no zero-backlog fallback.",
             "content": {
               "application/json": {
                 "schema": {
@@ -125,6 +143,16 @@
                       "Error": "service unavailable"
                     }
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authenticated caller lacks platform authority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forbidden"
                 }
               }
             }
@@ -509,6 +537,9 @@
             "type": "integer",
             "minimum": 0,
             "description": "Whole seconds since the worker heartbeat, truncated to an integer and clamped to zero. Omitted when there is no worker snapshot."
+          },
+          "Outboxes": {
+            "$ref": "#/components/schemas/MqttBridgeOutboxes"
           }
         },
         "required": [
@@ -516,7 +547,8 @@
           "Error",
           "Engine_Type",
           "Engine_Uuid",
-          "Engine_Version"
+          "Engine_Version",
+          "Outboxes"
         ],
         "additionalProperties": false
       },
@@ -803,6 +835,61 @@
           "msg",
           "type"
         ]
+      },
+      "OutboxState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Size",
+          "Latency_Seconds"
+        ],
+        "properties": {
+          "Size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "Latency_Seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Oldest queued age in seconds; zero when empty."
+          }
+        }
+      },
+      "MqttBridgeOutboxes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mqtt",
+          "core_primary",
+          "core_mirror"
+        ],
+        "properties": {
+          "mqtt": {
+            "$ref": "#/components/schemas/OutboxState"
+          },
+          "core_primary": {
+            "$ref": "#/components/schemas/OutboxState"
+          },
+          "core_mirror": {
+            "$ref": "#/components/schemas/OutboxState"
+          }
+        }
+      },
+      "Forbidden": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "Status",
+          "Error"
+        ],
+        "properties": {
+          "Status": {
+            "const": false
+          },
+          "Error": {
+            "const": "forbidden"
+          }
+        }
       }
     }
   }

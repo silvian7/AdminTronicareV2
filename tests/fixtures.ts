@@ -11,6 +11,10 @@ import {
 import { parseWire } from "../server/wire";
 import type { Config } from "../server/config";
 import { services } from "../shared/resources";
+import {
+  outboxServices,
+  serviceOutboxLabels,
+} from "../shared/service-outboxes";
 import type { Transport } from "../server/upstream";
 
 // Entirely synthetic records. Never load application .env files in tests.
@@ -129,6 +133,21 @@ export function fixtureTransport(identity = testIdentity) {
           mqtt_information: { Size: 0, Latency_Seconds: 0 },
           external_history: { Size: 0, Latency_Seconds: 0 },
         },
+      });
+    const outboxService = outboxServices.find(
+      (service) => url.pathname === `/v1/${service}admin/info`,
+    );
+    if (outboxService)
+      return Response.json({
+        Status: true,
+        Engine_Version: "test",
+        Engine_Lastheartbeat: 0,
+        Outboxes: Object.fromEntries(
+          Object.keys(serviceOutboxLabels[outboxService]).map((name, index) => [
+            name,
+            { Size: index, Latency_Seconds: index * 3 },
+          ]),
+        ),
       });
     const assignment = url.pathname.match(
       /^\/v1\/assets\/(\d+)\/(users|usergroups)\/(\d+)$/,

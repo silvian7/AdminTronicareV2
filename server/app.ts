@@ -24,6 +24,11 @@ import type { Config } from "./config";
 import { hubLastEventTime } from "../shared/hub-status";
 import { createUpstream, type Transport } from "./upstream";
 import { coreOutboxes } from "./core-outboxes";
+import { serviceOutboxes } from "./service-outboxes";
+import {
+  outboxServices,
+  type ServiceOutboxStatus,
+} from "../shared/service-outboxes";
 import { createAuthorization, parseRoleLevel } from "./authorization";
 import {
   ApiError,
@@ -667,6 +672,48 @@ export function createApp(
       r.session.token,
     );
     res.json({ data: coreOutboxes(data) });
+  });
+  app.get("/api/outboxes", async (req, res) => {
+    const r = req as AuthRequest;
+    if (!(r.session.identity.level >= 90))
+      throw new ApiError(
+        403,
+        "Outbox metrics are available to platform administrators.",
+      );
+    const results = await Promise.all(
+      outboxServices.map(async (service): Promise<ServiceOutboxStatus> => {
+        if (!config.origins[service])
+          return {
+            service,
+            state: "unconfigured",
+            outboxes: [],
+            message: "Service is not configured.",
+          };
+        try {
+          const { data } = await upstream(
+            service,
+            `/v1/${service}admin/info`,
+            r.session.token,
+          );
+          return {
+            service,
+            state: "available",
+            outboxes: serviceOutboxes(service, data),
+          };
+        } catch (e) {
+          return {
+            service,
+            state: "unavailable",
+            outboxes: [],
+            message:
+              e instanceof ApiError
+                ? e.message
+                : "Outbox metrics are unavailable.",
+          };
+        }
+      }),
+    );
+    res.json({ data: results });
   });
   app.get("/api/services", async (req, res) => {
     const r = req as AuthRequest;

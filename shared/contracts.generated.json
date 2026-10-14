@@ -6458,11 +6458,11 @@
     },
     "rules": {
       "file": "rules/openapi.json",
-      "sha256": "699d3b2dfc82368669f8e460aa9ca8a2a82c40cb0a24704839bcfc50663e1aa1"
+      "sha256": "60553d0b380d10687fe5bb893e10df268b591bbf9213cbe7e6bcd8ce1a055d8a"
     },
     "actions": {
       "file": "actions/openapi.json",
-      "sha256": "ceda0202c350235d142f13b5f6a83997e79b472a78cc753d1c3df2f0d315e270"
+      "sha256": "515847d9ed3d3dce7a74afa15936248e0b02d87a21c51ce4ab06e39c571b10f7"
     },
     "email": {
       "file": "email/openapi.json",
@@ -6474,7 +6474,7 @@
     },
     "push": {
       "file": "push/openapi.json",
-      "sha256": "893aacd9b793ea349771d4ab333adc720f995d0868479fc79441c574f0c9de32"
+      "sha256": "5091b836aa4653a3dc1db0036639a05b1a4e5971e52158a87b69067d01223d39"
     },
     "mqtt": {
       "file": "mqtt/openapi.json",
@@ -6482,7 +6482,7 @@
     },
     "mqttbridge": {
       "file": "mqttbridge/openapi.json",
-      "sha256": "05317cdb7b18957714c81dc4d47e7c11690321c8077f33bfabcc3340081cdf5f"
+      "sha256": "4cad06d345360124080992b8654a157a1b243f0626fc519c4e9a80cd73b44d2d"
     },
     "core": {
       "file": "core/compat.openapi.json",

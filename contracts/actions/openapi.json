@@ -1348,7 +1348,7 @@
       "get": {
         "operationId": "actions_get_v1_actionsadmin_info",
         "summary": "Read engine information",
-        "description": "Requires authentication. Missing, invalid or unauthenticated Token is represented by HTTP 200 with Status=false. Other authorization and dependency errors use the fault response. Service information requires current platform level 90 or above, or the configured trusted internal credential. Ordinary authenticated callers receive 403. Public heartbeat metrics retain their existing authentication contract.",
+        "description": "Requires authentication. Missing, invalid or unauthenticated Token is represented by HTTP 200 with Status=false. Other authorization and dependency errors use the fault response. Service information requires current platform level 90 or above, or the configured trusted internal credential. Ordinary authenticated callers receive 403. Public heartbeat metrics retain their existing authentication contract. Successful responses include all operational queue keys under Outboxes with Size and Latency_Seconds. Queue aggregates use one read-only repeatable-read PostgreSQL snapshot, a five-second statement limit, a one-second lock limit and an overall request timeout. Public metrics do not read the queues.",
         "tags": [
           "actionsadmin"
         ],
@@ -2097,6 +2097,19 @@
           "Engine_Lastheartbeat": {
             "type": "integer",
             "description": "Seconds since the engine heartbeat; optional if unavailable."
+          },
+          "Outboxes": {
+            "type": "object",
+            "properties": {
+              "actions_forward": {
+                "$ref": "#/components/schemas/OutboxStatus"
+              }
+            },
+            "required": [
+              "actions_forward"
+            ],
+            "additionalProperties": false,
+            "description": "Present on every successful info response, including empty queues. A bounded read-only repeatable-read snapshot supplies aggregates only; unavailable evidence returns 503."
           }
         },
         "additionalProperties": true,
@@ -2137,6 +2150,26 @@
           ]
         },
         "description": "Six count buckets: levels 1, 2, 3, each with isread=true followed by false."
+      },
+      "OutboxStatus": {
+        "type": "object",
+        "properties": {
+          "Size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Operational queued work; completed and terminal delivery failures are excluded."
+          },
+          "Latency_Seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Age from the oldest current forward or retry timestamp, using PostgreSQL time and clamped to zero. Retries replace the forward timestamp; this is current wait age, not total enqueue age. An empty queue reports zero."
+          }
+        },
+        "required": [
+          "Size",
+          "Latency_Seconds"
+        ],
+        "additionalProperties": false
       }
     },
     "securitySchemes": {
