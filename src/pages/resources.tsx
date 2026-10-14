@@ -124,6 +124,15 @@ function PageHeading({
     </div>
   );
 }
+function displayedField(resource: Resource, field: Field) {
+  return (
+    !hiddenField(field.key) &&
+    !(
+      ["actions", "rules"].includes(resource.name) &&
+      canonical(field.key) === "Level"
+    )
+  );
+}
 function selectedColumns(resource: Resource) {
   const priority = [
     "Label",
@@ -165,7 +174,7 @@ function selectedColumns(resource: Resource) {
         (f) =>
           canonical(f.key) === name &&
           f.key !== resource.primaryKey &&
-          !hiddenField(f.key),
+          displayedField(resource, f),
       ),
     )
     .slice(0, resource.name === "devices" ? 8 : 7);
@@ -1090,7 +1099,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
           items={resource.fields
             .filter(
               (f) =>
-                !hiddenField(f.key) &&
+                displayedField(resource, f) &&
                 !(
                   resource.name === "actions" && canonical(f.key) === "AssetTag"
                 ),
@@ -1307,7 +1316,11 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       <PageHeading
         resource={resource}
         title={record ? recordTitle(record) : resource.singular}
-        subtitle={`Record #${id}`}
+        subtitle={
+          resource.name === "assets"
+            ? `Asset ID: ${record?.id ?? id}`
+            : `Record #${id}`
+        }
         extra={
           !viewingDeviceSensors && (
             <>

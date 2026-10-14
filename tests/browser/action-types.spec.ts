@@ -218,8 +218,11 @@ test("Actions shows type tags after Action with exact type links and shared look
     page.getByRole("heading", { name: "Actions", exact: true }),
   ).toBeVisible();
   expect(
-    (await page.getByRole("columnheader").allTextContents()).slice(0, 5),
-  ).toEqual(["Action", "Type", "Asset", "Enabled", "Level"]);
+    (await page.getByRole("columnheader").allTextContents()).slice(0, 4),
+  ).toEqual(["Action", "Type", "Asset", "Enabled"]);
+  await expect(
+    page.getByRole("columnheader", { name: "Level", exact: true }),
+  ).toHaveCount(0);
   for (const label of ["Synthetic first action", "Synthetic second action"]) {
     await expect(
       listRow(page, label).getByRole("link", { name: typeTag, exact: true }),
@@ -249,6 +252,9 @@ test("Actions shows type tags after Action with exact type links and shared look
     page
       .locator(".ant-descriptions-item-label")
       .filter({ hasText: /^Asset Tag$/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".ant-descriptions-item-label").filter({ hasText: /^Level$/ }),
   ).toHaveCount(0);
   for (const name of [assetTag, assetLabel])
     await expect(
@@ -481,7 +487,7 @@ test("Actions refresh updates type tags and suppresses cached metadata after den
   expect(mock.mutations).toEqual([]);
 });
 
-test("Rule Actions includes type tags while retaining Asset, Enabled and Level", async ({
+test("Rule Actions includes type tags while retaining Asset and Enabled", async ({
   page,
 }) => {
   const mock = await syntheticActions(page);
@@ -499,11 +505,9 @@ test("Rule Actions includes type tags while retaining Asset, Enabled and Level",
     "Type",
     "Asset",
     "Enabled",
-    "Level",
   ]);
   const assetColumn = await columnIndex(page, "Asset");
   const enabledColumn = await columnIndex(page, "Enabled");
-  const levelColumn = await columnIndex(page, "Level");
   for (const [label, enabled] of [
     ["Synthetic first action", "Yes"],
     ["Synthetic second action", "No"],
@@ -520,7 +524,6 @@ test("Rule Actions includes type tags while retaining Asset, Enabled and Level",
           .getByRole("link", { name, exact: true }),
       ).toHaveAttribute("href", `/assets/${assetId}`);
     await expect(row.getByRole("cell").nth(enabledColumn)).toHaveText(enabled!);
-    await expect(row.getByRole("cell").nth(levelColumn)).toHaveText("30");
   }
   expect(mock.typeReads).toEqual([largeTypeId]);
   const linkedReads = mock.reads.filter(

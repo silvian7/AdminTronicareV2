@@ -160,21 +160,31 @@ export function Shell() {
               }}
               options={[
                 ...(identity.level >= 90
-                  ? [{ value: "", label: "All accessible organizations" }]
+                  ? [
+                      { value: "", label: "All accessible organizations" },
+                      { value: "0", label: "Unassigned" },
+                    ]
                   : []),
-                ...(organizations.result.data ?? []).map((r) => ({
-                  value: r.id!,
-                  label:
-                    translated(valueOf(r, "Tag")).trim() ||
-                    `Organization ${r.id}`,
-                })),
+                ...(organizations.result.data ?? [])
+                  .filter((r) => r.id !== "0" || identity.level < 90)
+                  .map((r) => ({
+                    value: r.id!,
+                    label:
+                      r.id === "0"
+                        ? "Unassigned"
+                        : translated(valueOf(r, "Tag")).trim() ||
+                          `Organization ${r.id}`,
+                  })),
                 ...(!organizations.result.data?.some(
                   (r) => r.id === identity.organizationId,
                 ) && identity.level < 90
                   ? [
                       {
                         value: identity.organizationId,
-                        label: `Organization ${identity.organizationId}`,
+                        label:
+                          identity.organizationId === "0"
+                            ? "Unassigned"
+                            : `Organization ${identity.organizationId}`,
                       },
                     ]
                   : []),

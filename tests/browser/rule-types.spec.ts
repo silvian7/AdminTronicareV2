@@ -164,8 +164,11 @@ test("Rules shows type tags after Rule with exact type links and shared lookups"
     page.getByRole("heading", { name: "Rules", exact: true }),
   ).toBeVisible();
   expect(
-    (await page.getByRole("columnheader").allTextContents()).slice(0, 6),
-  ).toEqual(["Rule", "Type", "Asset", "Enabled", "Level", "Output"]);
+    (await page.getByRole("columnheader").allTextContents()).slice(0, 5),
+  ).toEqual(["Rule", "Type", "Asset", "Enabled", "Output"]);
+  await expect(
+    page.getByRole("columnheader", { name: "Level", exact: true }),
+  ).toHaveCount(0);
   for (const label of ["Synthetic first rule", "Synthetic second rule"]) {
     await expect(
       listRow(page, label).getByRole("link", { name: typeTag, exact: true }),
@@ -191,6 +194,9 @@ test("Rules shows type tags after Rule with exact type links and shared lookups"
       .locator(".ant-descriptions")
       .getByRole("link", { name: typeTag, exact: true }),
   ).toHaveAttribute("href", `/ruletypes/${largeTypeId}`);
+  await expect(
+    page.locator(".ant-descriptions-item-label").filter({ hasText: /^Level$/ }),
+  ).toHaveCount(0);
   expect(mock.typeReads).toEqual([largeTypeId]);
   expect(mock.mutations).toEqual([]);
 });
@@ -295,7 +301,7 @@ test("Rules refresh updates type tags and suppresses cached metadata after denie
   expect(mock.mutations).toEqual([]);
 });
 
-test("Asset Equipment Rules places Type second and retains Asset, Enabled, Level and Output", async ({
+test("Asset Equipment Rules places Type second and retains Asset, Enabled and Output", async ({
   page,
 }) => {
   const mock = await syntheticRules(page);
@@ -313,13 +319,11 @@ test("Asset Equipment Rules places Type second and retains Asset, Enabled, Level
     "Type",
     "Asset",
     "Enabled",
-    "Level",
     "Output",
     "ID",
   ]);
   const assetColumn = await columnIndex(page, "Asset");
   const enabledColumn = await columnIndex(page, "Enabled");
-  const levelColumn = await columnIndex(page, "Level");
   const outputColumn = await columnIndex(page, "Output");
   for (const [label, enabled, output] of [
     ["Synthetic first rule", "Yes", "No"],
@@ -337,7 +341,6 @@ test("Asset Equipment Rules places Type second and retains Asset, Enabled, Level
           .getByRole("link", { name, exact: true }),
       ).toHaveAttribute("href", `/assets/${assetId}`);
     await expect(row.getByRole("cell").nth(enabledColumn)).toHaveText(enabled!);
-    await expect(row.getByRole("cell").nth(levelColumn)).toHaveText("30");
     await expect(row.getByRole("cell").nth(outputColumn)).toHaveText(output!);
   }
   expect(mock.typeReads).toEqual([largeTypeId]);

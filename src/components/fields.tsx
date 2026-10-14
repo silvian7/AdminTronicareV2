@@ -47,7 +47,13 @@ export function ReferenceSelect({
   const { result, query } = useList<RecordData>({
     resource,
     pagination: { mode: "off" },
-    meta: { organization: organizationOverride ?? organization },
+    meta: {
+      organization:
+        organizationOverride ??
+        (resource === "organizations" && identity.level >= 90
+          ? ""
+          : organization),
+    },
     queryOptions: { enabled: can(resourceMap[resource], "list") },
     errorNotification: false,
   });
