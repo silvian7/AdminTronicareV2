@@ -70,7 +70,6 @@ import { useAdmin } from "../context";
 import {
   ErrorNotice,
   AssetIdentity,
-  AssetTag,
   DeviceIdentity,
   FieldInput,
   FieldValue,
@@ -1089,7 +1088,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
           bordered
           column={{ xs: 1, sm: 1, md: 2 }}
           items={resource.fields
-            .filter((f) => !hiddenField(f.key))
+            .filter(
+              (f) =>
+                !hiddenField(f.key) &&
+                !(
+                  resource.name === "actions" && canonical(f.key) === "AssetTag"
+                ),
+            )
             .map((f) => ({
               key: f.key,
               label:
@@ -1106,9 +1111,6 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ) : resource.name === "actions" &&
                   canonical(f.key) === "IDAsset" ? (
                   <AssetIdentity value={record?.[f.key]} />
-                ) : resource.name === "actions" &&
-                  canonical(f.key) === "AssetTag" ? (
-                  <AssetTag value={valueOf(record ?? {}, "IDAsset")} />
                 ) : (
                   <FieldValue
                     field={f}

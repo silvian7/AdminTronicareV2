@@ -503,15 +503,6 @@ export function DeviceIdentity({ value }: { value: unknown }) {
     </div>
   );
 }
-export function AssetTag({ value }: { value: unknown }) {
-  const { id, record } = useReferenceRecord("assets", value);
-  const tag = record ? translated(valueOf(record, "Tag")) : "";
-  return typeof tag === "string" && tag.trim() ? (
-    <Link to={`/assets/${id}`}>{tag}</Link>
-  ) : (
-    <span className="muted">—</span>
-  );
-}
 export function SensorHistoryIdentity({ row }: { row: RecordData }) {
   const { can } = useAdmin();
   const { record: sensorType } = useReferenceRecord(
