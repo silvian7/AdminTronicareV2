@@ -5218,11 +5218,11 @@
     "/v1/coreadmin/info": {
       "get": {
         "operationId": "core_admin_info",
-        "summary": "Read worker lease information",
+        "summary": "Read worker lease and outbox backlog information",
         "tags": [
           "Administration"
         ],
-        "description": "Authentication failure uses a legacy HTTP 200 Status=false envelope. Other authorization and authority failures use the normal fault envelope. All production profiles require current SQL platform level 90 or above, or the explicitly configured trusted internal credential, for admin information; public metrics remain unchanged.",
+        "description": "Authentication failure uses a legacy HTTP 200 Status=false envelope. Other authorization and authority failures use the normal fault envelope. All production profiles require current SQL platform level 90 or above, or the explicitly configured trusted internal credential, for admin information. Outboxes reports all four destinations, including empty queues, from one read-only database snapshot. Size counts only PENDING, RETRY_WAIT and LEASED intents; DELIVERED, CANCELLED, AMBIGUOUS and PERMANENT_FAILURE are excluded. Latency_Seconds is oldest queued age, not delivery duration. An unavailable, invalid or timed-out dependency returns 503 rather than zero backlog. Public metrics retain heartbeat-only behavior.",
         "parameters": [
           {
             "name": "IdSession",
@@ -5239,7 +5239,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Worker information, or bad authentication.",
+            "description": "Worker lease and outbox backlog information, or bad authentication.",
             "headers": {
               "Cache-Control": {
                 "description": "Responses are not cached.",
@@ -5276,6 +5276,9 @@
                         "Engine_Lastheartbeat": {
                           "type": "integer",
                           "minimum": 0
+                        },
+                        "Outboxes": {
+                          "$ref": "#/components/schemas/OutboxBacklogs"
                         }
                       },
                       "required": [
@@ -5284,7 +5287,8 @@
                         "Engine_Type",
                         "Engine_Uuid",
                         "Engine_Version",
-                        "Engine_Healthy"
+                        "Engine_Healthy",
+                        "Outboxes"
                       ],
                       "additionalProperties": false
                     },
@@ -10177,11 +10181,11 @@
             "DhLastEvent",
             "dh_last_event"
           ],
-          "legacy_created_local": [
+          "business_created_at": [
             "DhCreation",
             "dh_creation"
           ],
-          "legacy_modified_local": [
+          "business_modified_at": [
             "DhModification",
             "dh_modification"
           ],
@@ -10613,11 +10617,11 @@
             "DhLastEvent",
             "dh_last_event"
           ],
-          "legacy_created_local": [
+          "business_created_at": [
             "DhCreation",
             "dh_creation"
           ],
-          "legacy_modified_local": [
+          "business_modified_at": [
             "DhModification",
             "dh_modification"
           ],
@@ -11336,6 +11340,49 @@
             "valid_on_bed"
           ]
         }
+      },
+      "OutboxBacklog": {
+        "type": "object",
+        "properties": {
+          "Size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "Latency_Seconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Age in seconds of the oldest nonterminal intent, measured from created_at against PostgreSQL time. Empty queues and future creation times have zero age; this is queue age, not delivery duration."
+          }
+        },
+        "required": [
+          "Size",
+          "Latency_Seconds"
+        ],
+        "additionalProperties": false
+      },
+      "OutboxBacklogs": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "$ref": "#/components/schemas/OutboxBacklog"
+          },
+          "assets": {
+            "$ref": "#/components/schemas/OutboxBacklog"
+          },
+          "mqtt_information": {
+            "$ref": "#/components/schemas/OutboxBacklog"
+          },
+          "external_history": {
+            "$ref": "#/components/schemas/OutboxBacklog"
+          }
+        },
+        "required": [
+          "rules",
+          "assets",
+          "mqtt_information",
+          "external_history"
+        ],
+        "additionalProperties": false
       }
     },
     "securitySchemes": {
@@ -11352,6 +11399,8 @@
     "services/core/src/tronicare_core/compat_api/contracts.py",
     "services/core/src/tronicare_core/adapters/postgres/compat_api.py",
     "services/core/src/tronicare_core/adapters/postgres/admin.py",
+    "services/core/src/tronicare_core/adapters/postgres/worker_monitoring.py",
+    "services/core/src/tronicare_core/application/worker.py",
     "services/core/src/tronicare_core/core_api_composition.py",
     "services/core/src/tronicare_core/adapters/http/users_scope.py",
     "services/core/src/tronicare_core/adapters/http/legacy_scope.py"

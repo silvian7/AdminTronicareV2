@@ -6486,7 +6486,7 @@
     },
     "core": {
       "file": "core/compat.openapi.json",
-      "sha256": "203461c69caf97fdc2750632b276942378308562334f1035a21f26b788c0db1a"
+      "sha256": "073f791dfe8960afaa6d4a66624a02a177e899a21c36ea8feecab015ccc8ed32"
     }
   }
 }

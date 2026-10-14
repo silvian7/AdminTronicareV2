@@ -118,6 +118,18 @@ export function fixtureTransport(identity = testIdentity) {
       return Response.json([
         { m_nIDAsset: "1", m_nIDOrganization: identity.organizationId },
       ]);
+    if (url.pathname === "/v1/coreadmin/info")
+      return Response.json({
+        Status: true,
+        Engine_Version: "test",
+        Engine_Lastheartbeat: 0,
+        Outboxes: {
+          rules: { Size: 3, Latency_Seconds: 7.25 },
+          assets: { Size: 1, Latency_Seconds: 2.5 },
+          mqtt_information: { Size: 0, Latency_Seconds: 0 },
+          external_history: { Size: 0, Latency_Seconds: 0 },
+        },
+      });
     const assignment = url.pathname.match(
       /^\/v1\/assets\/(\d+)\/(users|usergroups)\/(\d+)$/,
     );

@@ -23,6 +23,7 @@ import {
 import type { Config } from "./config";
 import { hubLastEventTime } from "../shared/hub-status";
 import { createUpstream, type Transport } from "./upstream";
+import { coreOutboxes } from "./core-outboxes";
 import { createAuthorization, parseRoleLevel } from "./authorization";
 import {
   ApiError,
@@ -652,6 +653,20 @@ export function createApp(
       snapshot: headers.get("X-Tronicare-History-Snapshot"),
       hasMore: data.length === 100,
     });
+  });
+  app.get("/api/core/outboxes", async (req, res) => {
+    const r = req as AuthRequest;
+    if (!(r.session.identity.level >= 90))
+      throw new ApiError(
+        403,
+        "Core outbox metrics are available to platform administrators.",
+      );
+    const { data } = await upstream(
+      "core",
+      "/v1/coreadmin/info",
+      r.session.token,
+    );
+    res.json({ data: coreOutboxes(data) });
   });
   app.get("/api/services", async (req, res) => {
     const r = req as AuthRequest;

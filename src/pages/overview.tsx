@@ -30,6 +30,7 @@ import {
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { ErrorNotice } from "../components/fields";
+import { CoreOutboxes } from "../components/core-outboxes";
 import { request } from "../api";
 
 function Metric({
@@ -205,6 +206,7 @@ export function Overview() {
           )}
         </Card>
       </div>
+      {identity.level >= 90 && <CoreOutboxes />}
       <Typography.Paragraph type="secondary" className="overview-note">
         Counts reflect records available to your account and the selected
         workspace. Service limits are shown where applicable.
