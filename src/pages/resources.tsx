@@ -1104,6 +1104,9 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 canonical(f.key) === "DhLastEvent" ? (
                   <SensorLastReading row={record ?? {}} />
                 ) : resource.name === "actions" &&
+                  canonical(f.key) === "IDAsset" ? (
+                  <AssetIdentity value={record?.[f.key]} />
+                ) : resource.name === "actions" &&
                   canonical(f.key) === "AssetTag" ? (
                   <AssetTag value={valueOf(record ?? {}, "IDAsset")} />
                 ) : (

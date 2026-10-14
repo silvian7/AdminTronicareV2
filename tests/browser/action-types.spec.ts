@@ -181,6 +181,9 @@ async function syntheticActions(
     updateAssetTag: (id: string, tag: string) => {
       if (assets[id]?.data) assets[id].data!.m_sTag = tag;
     },
+    updateAssetLabel: (id: string, label: string) => {
+      if (assets[id]?.data) assets[id].data!.m_sLabel = label;
+    },
     denyAssetReads: () => {
       denyAssets = true;
     },
@@ -203,6 +206,13 @@ function detailAssetTag(page: Page) {
   return page
     .locator(".ant-descriptions-item-label")
     .filter({ hasText: /^Asset Tag$/ })
+    .locator("xpath=following-sibling::*[1]");
+}
+
+function detailAsset(page: Page) {
+  return page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Asset$/ })
     .locator("xpath=following-sibling::*[1]");
 }
 
@@ -245,12 +255,19 @@ test("Actions shows type tags after Action with exact type links and shared look
   await expect(
     detailAssetTag(page).getByRole("link", { name: assetTag, exact: true }),
   ).toHaveAttribute("href", `/assets/${assetId}`);
+  for (const name of [assetTag, assetLabel])
+    await expect(
+      detailAsset(page).getByRole("link", { name, exact: true }),
+    ).toHaveAttribute("href", `/assets/${assetId}`);
+  await expect(
+    detailAsset(page).getByText(`#${assetId}`, { exact: true }),
+  ).toBeVisible();
   expect(mock.assetReads).toEqual([assetId]);
   expect(mock.typeReads).toEqual([largeTypeId]);
   expect(mock.mutations).toEqual([]);
 });
 
-test("Action detail refresh resolves the current asset tag and removes cached metadata after denied reads", async ({
+test("Action detail refresh resolves the current asset identity and removes cached metadata after denied reads", async ({
   page,
 }) => {
   const mock = await syntheticActions(page);
@@ -266,6 +283,7 @@ test("Action detail refresh resolves the current asset tag and removes cached me
     page.getByText("STALE-SYNTHETIC-WIRE-ASSET-TAG", { exact: true }),
   ).toHaveCount(0);
   const changedTag = "RENAMED-SYNTHETIC-ASSET-TAG";
+  const changedLabel = "Renamed synthetic action asset";
   mock.updateAssetTag(
     assetId,
     JSON.stringify({
@@ -275,16 +293,25 @@ test("Action detail refresh resolves the current asset tag and removes cached me
       ],
     }),
   );
+  mock.updateAssetLabel(assetId, changedLabel);
   await page.getByRole("button", { name: /Refresh$/ }).click();
   await expect(
     tag.getByRole("link", { name: changedTag, exact: true }),
   ).toHaveAttribute("href", `/assets/${assetId}`);
+  for (const name of [changedTag, changedLabel])
+    await expect(
+      detailAsset(page).getByRole("link", { name, exact: true }),
+    ).toHaveAttribute("href", `/assets/${assetId}`);
   await expect(page.getByText(assetTag, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(assetLabel, { exact: true })).toHaveCount(0);
   mock.denyAssetReads();
   await page.getByRole("button", { name: /Refresh$/ }).click();
   await expect(tag).toHaveText("\u2014");
   await expect(tag.getByRole("link")).toHaveCount(0);
+  await expect(detailAsset(page)).toHaveText(`#${assetId}`);
+  await expect(detailAsset(page).getByRole("link")).toHaveCount(0);
   await expect(page.getByText(changedTag, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(changedLabel, { exact: true })).toHaveCount(0);
   await expect(
     page.getByText("STALE-SYNTHETIC-WIRE-ASSET-TAG", { exact: true }),
   ).toHaveCount(0);
@@ -307,6 +334,8 @@ test("Actions remain readable without Assets permission and do not fetch or disc
   ).toBeVisible();
   await expect(detailAssetTag(page)).toHaveText("\u2014");
   await expect(detailAssetTag(page).getByRole("link")).toHaveCount(0);
+  await expect(detailAsset(page)).toHaveText(`#${assetId}`);
+  await expect(detailAsset(page).getByRole("link")).toHaveCount(0);
   await expect(
     page.getByText("STALE-SYNTHETIC-WIRE-ASSET-TAG", { exact: true }),
   ).toHaveCount(0);
@@ -343,7 +372,7 @@ test("unassigned, missing and mismatched associated assets cannot supply an Acti
       },
     },
   });
-  for (const { id } of definitions) {
+  for (const { id, linkedId } of definitions) {
     await page.goto(`/actions/${id}`);
     await expect(
       page.getByRole("heading", {
@@ -353,6 +382,10 @@ test("unassigned, missing and mismatched associated assets cannot supply an Acti
     ).toBeVisible();
     await expect(detailAssetTag(page)).toHaveText("\u2014");
     await expect(detailAssetTag(page).getByRole("link")).toHaveCount(0);
+    await expect(detailAsset(page)).toHaveText(
+      linkedId == null ? "\u2014" : `#${linkedId}`,
+    );
+    await expect(detailAsset(page).getByRole("link")).toHaveCount(0);
     await expect(
       page.getByText("STALE-SYNTHETIC-WIRE-ASSET-TAG", { exact: true }),
     ).toHaveCount(0);
