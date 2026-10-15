@@ -217,6 +217,8 @@ function useRefreshRecordReferences(resource: string) {
         resource: "organizationstypes",
         marker: "organizationTypeReference",
       });
+    if (resource === "users")
+      references.push({ resource: "usertypes", marker: "userTypeReference" });
     if (assetIdentityResources.has(resource))
       references.push({ resource: "assets", marker: "assetReference" });
     if (resource === "sensors")
@@ -1105,6 +1107,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     errorNotification: false,
     queryOptions: { enabled: can(resource, "show") },
   });
+  const userName =
+    resource.name === "users" && record
+      ? ["First_name", "Last_name"]
+          .map((name) => String(valueOf(record, name) ?? "").trim())
+          .filter(Boolean)
+          .join(" ")
+      : "";
+  const title = record ? userName || recordTitle(record) : resource.singular;
   function selectDeviceTab(tab: string) {
     setParams((previous) => {
       const next = new URLSearchParams(previous);
@@ -1139,12 +1149,15 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     ? "Last reading"
                     : fieldLabel(f.key),
               children:
-                resource.name === "assets" &&
+                ["assets", "users"].includes(resource.name) &&
                 canonical(f.key) === "IDOrganization" ? (
                   <ReferenceTag
                     resource="organizations"
                     value={record?.[f.key]}
                   />
+                ) : resource.name === "users" &&
+                  canonical(f.key) === "IDUserType" ? (
+                  <ReferenceTag resource="usertypes" value={record?.[f.key]} />
                 ) : resource.name === "assets" &&
                   canonical(f.key) === "DhLastEvent" ? (
                   <AssetLastEvent value={record?.[f.key]} />
@@ -1344,12 +1357,12 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       <Breadcrumb
         items={[
           { title: <Link to={`/${resource.name}`}>{resource.label}</Link> },
-          { title: record ? recordTitle(record) : "Details" },
+          { title: record ? title : "Details" },
         ]}
       />
       <PageHeading
         resource={resource}
-        title={record ? recordTitle(record) : resource.singular}
+        title={title}
         subtitle={
           resource.name === "assets"
             ? `Asset ID: ${record?.id ?? id}`

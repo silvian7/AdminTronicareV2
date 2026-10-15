@@ -392,6 +392,7 @@ export function FieldValue({
 }
 type TypeResource =
   | "assettypes"
+  | "usertypes"
   | "hubtypes"
   | "devicetypes"
   | "sensortypes"
@@ -442,6 +443,7 @@ function useReferenceRecord(
         ].includes(resource),
         organizationReference: resource === "organizations",
         organizationTypeReference: resource === "organizationstypes",
+        userTypeReference: resource === "usertypes",
         assetReference: resource === "assets",
         deviceReference: resource === "devices",
         organization,
