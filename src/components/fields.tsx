@@ -606,6 +606,10 @@ export function AssetLastEvent({ value }: { value: unknown }) {
   // Current Assets event timestamps use UTC, including legacy values without a zone.
   return <LocalEventTime timestamp={hubLastEventTime(value)} />;
 }
+export function UserDateTime({ value }: { value: unknown }) {
+  // Users timestamps are UTC even when the wire value omits the timezone suffix.
+  return <LocalEventTime timestamp={hubLastEventTime(value)} />;
+}
 export function SensorLastReading({ row }: { row: RecordData }) {
   const value = valueOf(row, "DhLastEvent");
   if (typeof value !== "string") return <span className="muted">—</span>;

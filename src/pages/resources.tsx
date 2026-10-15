@@ -79,6 +79,7 @@ import {
   SensorCurrentValue,
   SensorLastReading,
   ReferenceTag,
+  UserDateTime,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 import { HubStatus } from "../components/hub-status";
@@ -593,6 +594,9 @@ function RelatedList({
 }) {
   const { organization, can } = useAdmin();
   const r = resourceMap[resource];
+  const identifyById =
+    resource === "devices" ||
+    (resource === "users" && filterName === "idorganization");
   const { modal, message } = App.useApp();
   const deletion = useDelete();
   const refreshRecordReferences = useRefreshRecordReferences(resource);
@@ -644,15 +648,15 @@ function RelatedList({
             ? []
             : [
                 {
-                  title: resource === "devices" ? "ID" : r.singular,
+                  title: identifyById ? "ID" : r.singular,
                   render: (_: unknown, row: RecordData) => (
                     <Link to={`/${resource}/${row.id}`}>
-                      {resource === "devices" ? row.id : recordTitle(row)}
+                      {identifyById ? row.id : recordTitle(row)}
                     </Link>
                   ),
                 },
               ]),
-          ...(["rules", "devices"].includes(resource)
+          ...(resource === "rules" || identifyById
             ? []
             : [{ title: "ID", dataIndex: "id" }]),
           ...selectedColumns(r)
@@ -674,8 +678,11 @@ function RelatedList({
                   : fieldLabel(f.key),
               dataIndex: f.key,
               render: (v: unknown) =>
-                assetIdentityResources.has(resource) &&
-                canonical(f.key) === "IDAsset" ? (
+                resource === "assets" &&
+                canonical(f.key) === "IDOrganization" ? (
+                  <ReferenceTag resource="organizations" value={v} />
+                ) : assetIdentityResources.has(resource) &&
+                  canonical(f.key) === "IDAsset" ? (
                   <AssetIdentity value={v} />
                 ) : resource === "assets" &&
                   canonical(f.key) === "DhLastEvent" ? (
@@ -1158,6 +1165,8 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ) : resource.name === "users" &&
                   canonical(f.key) === "IDUserType" ? (
                   <ReferenceTag resource="usertypes" value={record?.[f.key]} />
+                ) : resource.name === "users" && f.key.startsWith("m_dh") ? (
+                  <UserDateTime value={record?.[f.key]} />
                 ) : resource.name === "assets" &&
                   canonical(f.key) === "DhLastEvent" ? (
                   <AssetLastEvent value={record?.[f.key]} />

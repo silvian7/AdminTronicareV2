@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Identity } from "../../shared/resources";
 
+test.use({ locale: "en-GB", timezoneId: "Europe/Brussels" });
+
 const organizationId = "9223372036854775806";
 const typeId = "9223372036854775807";
 const organizationTag = "SYNTHETIC-USER-ORGANIZATION";
@@ -15,7 +17,11 @@ const translatedTag = (tag: string) =>
     ],
   });
 
-async function syntheticUserDetails(page: Page, canReadOrganizations = true) {
+async function syntheticUserDetails(
+  page: Page,
+  canReadOrganizations = true,
+  timestamps: Record<string, unknown> = {},
+) {
   const identity: Identity = {
     id: "100",
     name: "Synthetic user reader",
@@ -60,6 +66,7 @@ async function syntheticUserDetails(page: Page, canReadOrganizations = true) {
           m_sLast_name: " Person ",
           m_sLogin: "synthetic-login",
           m_sLabel: "Synthetic fallback user label",
+          ...timestamps,
         },
       });
     }
@@ -106,6 +113,22 @@ function detailField(page: Page, label: string) {
     .locator(".ant-descriptions-item-label")
     .filter({ hasText: new RegExp(`^${label}$`) })
     .locator("xpath=following-sibling::*[1]");
+}
+
+async function expectLocalTime(
+  page: Page,
+  label: string,
+  iso: string,
+  zone: string,
+) {
+  const expected = await page.evaluate(
+    (value) => new Date(value).toLocaleString(undefined, { hourCycle: "h23" }),
+    iso,
+  );
+  const field = detailField(page, label);
+  await expect(field).toHaveText(expected);
+  await expect(field.locator("time")).toHaveAttribute("datetime", iso);
+  await expect(field.locator("time")).toHaveAttribute("title", zone);
 }
 
 test("user details retain the full-name title and resolve exact organization and user type tags on refresh", async ({
@@ -216,4 +239,72 @@ test("user details respect organization permission while preserving ordinary use
   }
   expect(mock.reads.organizations).toEqual([]);
   expect(mock.reads.usertypes).toEqual([typeId]);
+});
+
+test("all user detail timestamps display local time using each event's winter or summer offset", async ({
+  page,
+}) => {
+  await syntheticUserDetails(page, false, {
+    m_dhLastLogin: "2026-01-15T12:34:56.123",
+    m_dhLastLogout: "2026-07-15 12:34:56",
+    m_dhCreated: "20260115233000",
+    m_dhModified: "2026-07-15T00:30:00+02:00",
+  });
+  await page.goto("/users/41");
+  for (const [label, iso, clock] of [
+    ["Last Login", "2026-01-15T12:34:56.123Z", "13:34:56"],
+    ["Last Logout", "2026-07-15T12:34:56.000Z", "14:34:56"],
+    ["Created", "2026-01-15T23:30:00.000Z", "00:30:00"],
+    ["Modified", "2026-07-14T22:30:00.000Z", "00:30:00"],
+  ]) {
+    await expectLocalTime(page, label, iso, "Europe/Brussels");
+    await expect(detailField(page, label)).toContainText(clock);
+  }
+});
+
+test.describe("user timestamps follow a different browser timezone", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("local dates can roll back while invalid, zero and empty timestamps remain unavailable", async ({
+    page,
+  }) => {
+    const timestamps: Record<string, unknown> = {
+      m_dhLastLogin: "2026-01-15T01:30:00",
+      m_dhLastLogout: "0000-00-00T00:00:00.000",
+      m_dhCreated: "not-a-timestamp",
+      m_dhModified: "",
+    };
+    await syntheticUserDetails(page, false, timestamps);
+    await page.goto("/users/41");
+    await expectLocalTime(
+      page,
+      "Last Login",
+      "2026-01-15T01:30:00.000Z",
+      "America/New_York",
+    );
+    await expect(detailField(page, "Last Login")).toHaveText(
+      "14/01/2026, 20:30:00",
+    );
+    for (const label of ["Last Logout", "Created", "Modified"]) {
+      await expect(detailField(page, label)).toHaveText("\u2014");
+      await expect(detailField(page, label).locator("time")).toHaveCount(0);
+    }
+    timestamps.m_dhLastLogin = undefined;
+    timestamps.m_dhLastLogout = "00000000000000";
+    timestamps.m_dhCreated = "2026-02-30T12:00:00Z";
+    timestamps.m_dhModified = null;
+    await page.getByRole("button", { name: /Refresh$/ }).click();
+    for (const label of ["Last Login", "Last Logout", "Created", "Modified"]) {
+      await expect(detailField(page, label)).toHaveText("\u2014");
+      await expect(detailField(page, label).locator("time")).toHaveCount(0);
+    }
+    timestamps.m_dhModified = "1970-01-01T00:00:00Z";
+    await page.getByRole("button", { name: /Refresh$/ }).click();
+    await expectLocalTime(
+      page,
+      "Modified",
+      "1970-01-01T00:00:00.000Z",
+      "America/New_York",
+    );
+  });
 });
