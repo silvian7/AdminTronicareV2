@@ -363,7 +363,7 @@ export function FieldValue({
   if (typeof value === "boolean")
     return <Tag color={value ? "cyan" : "default"}>{value ? "Yes" : "No"}</Tag>;
   if (!primary && equipmentType)
-    return <TypeTag resource={equipmentType} value={value} />;
+    return <ReferenceTag resource={equipmentType} value={value} />;
   if (!primary && referenceResource[name] && String(value) !== "0")
     return (
       <Link to={`/${referenceResource[name]}/${value}`}>#{String(value)}</Link>
@@ -391,6 +391,7 @@ export function FieldValue({
   return <span className="record-text">{translated(value)}</span>;
 }
 type TypeResource =
+  | "assettypes"
   | "hubtypes"
   | "devicetypes"
   | "sensortypes"
@@ -398,6 +399,7 @@ type TypeResource =
   | "actiontypes"
   | "ruletypes";
 const equipmentTypeReferences: Partial<Record<string, TypeResource>> = {
+  IDAssetType: "assettypes",
   IDHubType: "hubtypes",
   IDDeviceType: "devicetypes",
   IDSensorType: "sensortypes",
@@ -431,6 +433,7 @@ function useReferenceRecord(
       enabled: allowed && validId,
       meta: {
         equipmentTypeReference: [
+          "assettypes",
           "hubtypes",
           "devicetypes",
           "sensortypes",
@@ -556,11 +559,11 @@ export function SensorHistoryIdentity({ row }: { row: RecordData }) {
     </div>
   );
 }
-export function TypeTag({
+export function ReferenceTag({
   resource,
   value,
 }: {
-  resource: TypeResource;
+  resource: TypeResource | "organizations";
   value: unknown;
 }) {
   const { id, allowed, validId, record } = useReferenceRecord(resource, value);

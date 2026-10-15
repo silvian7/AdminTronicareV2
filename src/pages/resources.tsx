@@ -78,7 +78,7 @@ import {
   ReferenceSelect,
   SensorCurrentValue,
   SensorLastReading,
-  TypeTag,
+  ReferenceTag,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 import { HubStatus } from "../components/hub-status";
@@ -181,6 +181,7 @@ function selectedColumns(resource: Resource) {
     .slice(0, resource.name === "devices" ? 8 : 7);
 }
 const equipmentTypeResources: Partial<Record<string, string>> = {
+  assets: "assettypes",
   hubs: "hubtypes",
   devices: "devicetypes",
   sensors: "sensortypes",
@@ -395,7 +396,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
               <DeviceIdentity value={value} />
             ) : resource.name === "organizations" &&
               canonical(f.key) === "IDOrganizationType" ? (
-              <TypeTag resource="organizationstypes" value={value} />
+              <ReferenceTag resource="organizationstypes" value={value} />
             ) : (
               <FieldValue field={f} value={value} />
             ),
@@ -1139,7 +1140,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     : fieldLabel(f.key),
               children:
                 resource.name === "assets" &&
-                canonical(f.key) === "DhLastEvent" ? (
+                canonical(f.key) === "IDOrganization" ? (
+                  <ReferenceTag
+                    resource="organizations"
+                    value={record?.[f.key]}
+                  />
+                ) : resource.name === "assets" &&
+                  canonical(f.key) === "DhLastEvent" ? (
                   <AssetLastEvent value={record?.[f.key]} />
                 ) : resource.name === "sensors" &&
                   canonical(f.key) === "DhLastEvent" ? (
