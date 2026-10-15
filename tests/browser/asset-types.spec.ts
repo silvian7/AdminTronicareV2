@@ -2,25 +2,40 @@ import { expect, test, type Page } from "@playwright/test";
 import type { Identity } from "../../shared/resources";
 
 const typeId = "9223372036854775807";
+const organizationId = "9223372036854775806";
 const assetLabel = "Synthetic typed asset";
 const typeTag = "SYNTHETIC-ASSET-TYPE";
 const typeLabel = "Synthetic descriptive asset type label";
+const organizationTag = "SYNTHETIC-ORGANIZATION";
+const organizationLabel = "Synthetic descriptive organization label";
 
-async function syntheticAssetType(page: Page, canReadTypes = true) {
+async function syntheticAssetType(page: Page, canReadReferences = true) {
   const identity: Identity = {
     id: "100",
     name: "Synthetic asset type reader",
-    organizationId: "7",
+    organizationId,
     userTypeId: "30",
     level: 30,
     mustChangePassword: false,
     permissions: [
       { entity: "assets", rights: "r" },
-      ...(canReadTypes ? [{ entity: "assettypes", rights: "r" }] : []),
+      ...(canReadReferences
+        ? [
+            { entity: "assettypes", rights: "r" },
+            { entity: "organizations", rights: "r" },
+          ]
+        : []),
     ],
   };
   const typeReads: string[] = [];
+  const organizationReads: string[] = [];
   let denied = false;
+  let currentOrganizationTag = JSON.stringify({
+    messages: [
+      { lang: "fr", text: "SYNTHETIC-ORGANISATION-FRANCAISE" },
+      { lang: "en", text: organizationTag },
+    ],
+  });
   let tag = JSON.stringify({
     messages: [
       { lang: "fr", text: "SYNTHETIC-TYPE-FRANCAIS" },
@@ -41,16 +56,20 @@ async function syntheticAssetType(page: Page, canReadTypes = true) {
         csrf: "synthetic-asset-type-csrf",
         expiresAt: Date.now() + 60000,
       });
-    if (path === "/api/resources/assets/41")
+    if (
+      ["/api/resources/assets/41", "/api/resources/assets/42"].includes(path)
+    ) {
+      const id = path.split("/").at(-1)!;
       return reply({
         data: {
-          id: "41",
-          m_nIDAsset: "41",
-          m_nIDOrganization: "7",
-          m_nIDAssetType: typeId,
+          id,
+          m_nIDAsset: id,
+          m_nIDOrganization: id === "42" ? "0" : organizationId,
+          m_nIDAssetType: id === "42" ? "0" : typeId,
           m_sLabel: assetLabel,
         },
       });
+    }
     if (path.startsWith("/api/resources/assettypes/")) {
       typeReads.push(path.split("/").at(-1)!);
       return denied
@@ -64,13 +83,30 @@ async function syntheticAssetType(page: Page, canReadTypes = true) {
             },
           });
     }
+    if (path.startsWith("/api/resources/organizations/")) {
+      organizationReads.push(path.split("/").at(-1)!);
+      return denied
+        ? reply({ message: "Synthetic organization unavailable." }, 403)
+        : reply({
+            data: {
+              id: organizationId,
+              m_nIDOrganization: organizationId,
+              m_sTag: currentOrganizationTag,
+              m_sLabel: organizationLabel,
+            },
+          });
+    }
     // Every API call, including unrelated asset detail tabs, stays synthetic.
     return reply({ data: [], total: 0 });
   });
   return {
     typeReads,
+    organizationReads,
     rename: (value: string) => {
       tag = value;
+    },
+    renameOrganization: (value: string) => {
+      currentOrganizationTag = value;
     },
     deny: () => {
       denied = true;
@@ -78,14 +114,14 @@ async function syntheticAssetType(page: Page, canReadTypes = true) {
   };
 }
 
-function assetTypeField(page: Page) {
+function detailField(page: Page, label: string) {
   return page
     .locator(".ant-descriptions-item-label")
-    .filter({ hasText: /^Asset type$/ })
+    .filter({ hasText: new RegExp(`^${label}$`) })
     .locator("xpath=following-sibling::*[1]");
 }
 
-test("asset detail resolves the exact asset type tag and refreshes or removes cached metadata", async ({
+test("asset detail resolves exact type and organization tags and refreshes or removes cached metadata", async ({
   page,
 }) => {
   const mock = await syntheticAssetType(page);
@@ -93,18 +129,34 @@ test("asset detail resolves the exact asset type tag and refreshes or removes ca
   await expect(
     page.getByRole("heading", { name: assetLabel, exact: true }),
   ).toBeVisible();
-  const field = assetTypeField(page);
+  const field = detailField(page, "Asset type");
+  const organization = detailField(page, "Organization");
   await expect(
     field.getByRole("link", { name: typeTag, exact: true }),
   ).toHaveAttribute("href", `/assettypes/${typeId}`);
   await expect(page.getByText(typeLabel, { exact: true })).toHaveCount(0);
+  await expect(
+    organization.getByRole("link", { name: organizationTag, exact: true }),
+  ).toHaveAttribute("href", `/organizations/${organizationId}`);
+  await expect(page.getByText(organizationLabel, { exact: true })).toHaveCount(
+    0,
+  );
   const changedTag = "RENAMED-SYNTHETIC-ASSET-TYPE";
+  const changedOrganizationTag = "RENAMED-SYNTHETIC-ORGANIZATION";
   mock.rename(changedTag);
+  mock.renameOrganization(changedOrganizationTag);
   await page.getByRole("button", { name: /Refresh$/ }).click();
   await expect(
     field.getByRole("link", { name: changedTag, exact: true }),
   ).toHaveAttribute("href", `/assettypes/${typeId}`);
   await expect(page.getByText(typeTag, { exact: true })).toHaveCount(0);
+  await expect(
+    organization.getByRole("link", {
+      name: changedOrganizationTag,
+      exact: true,
+    }),
+  ).toHaveAttribute("href", `/organizations/${organizationId}`);
+  await expect(page.getByText(organizationTag, { exact: true })).toHaveCount(0);
   mock.deny();
   await page.getByRole("button", { name: /Refresh$/ }).click();
   await expect(
@@ -112,10 +164,30 @@ test("asset detail resolves the exact asset type tag and refreshes or removes ca
   ).toHaveAttribute("href", `/assettypes/${typeId}`);
   await expect(page.getByText(changedTag, { exact: true })).toHaveCount(0);
   await expect(page.getByText(typeLabel, { exact: true })).toHaveCount(0);
+  await expect(
+    organization.getByRole("link", { name: `#${organizationId}`, exact: true }),
+  ).toHaveAttribute("href", `/organizations/${organizationId}`);
+  await expect(
+    page.getByText(changedOrganizationTag, { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText(organizationLabel, { exact: true })).toHaveCount(
+    0,
+  );
   expect(mock.typeReads).toEqual([typeId, typeId, typeId]);
+  expect(mock.organizationReads).toEqual([
+    organizationId,
+    organizationId,
+    organizationId,
+  ]);
+  await page.goto("/assets/42");
+  await expect(detailField(page, "Organization")).toHaveText("0");
+  await expect(detailField(page, "Organization").getByRole("link")).toHaveCount(
+    0,
+  );
+  expect(mock.organizationReads).toHaveLength(3);
 });
 
-test("asset detail retains the asset type ID without fetching or linking unauthorized metadata", async ({
+test("asset detail retains type and organization IDs without fetching or linking unauthorized metadata", async ({
   page,
 }) => {
   const mock = await syntheticAssetType(page, false);
@@ -123,10 +195,18 @@ test("asset detail retains the asset type ID without fetching or linking unautho
   await expect(
     page.getByRole("heading", { name: assetLabel, exact: true }),
   ).toBeVisible();
-  const field = assetTypeField(page);
+  const field = detailField(page, "Asset type");
   await expect(field).toHaveText(`#${typeId}`);
   await expect(field.getByRole("link")).toHaveCount(0);
   await expect(page.getByText(typeTag, { exact: true })).toHaveCount(0);
   await expect(page.getByText(typeLabel, { exact: true })).toHaveCount(0);
+  const organization = detailField(page, "Organization");
+  await expect(organization).toHaveText(`#${organizationId}`);
+  await expect(organization.getByRole("link")).toHaveCount(0);
+  await expect(page.getByText(organizationTag, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(organizationLabel, { exact: true })).toHaveCount(
+    0,
+  );
   expect(mock.typeReads).toEqual([]);
+  expect(mock.organizationReads).toEqual([]);
 });
