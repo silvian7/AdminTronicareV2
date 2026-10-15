@@ -25,6 +25,7 @@ import {
   type RecordData,
 } from "../../shared/resources";
 import { useAdmin } from "../context";
+import { hubLastEventTime } from "../../shared/hub-status";
 
 export function ReferenceSelect({
   id,
@@ -77,10 +78,16 @@ export function ReferenceSelect({
     ...(allowZero && resource !== "usertypes"
       ? [{ value: "0", label: "Unassigned" }]
       : []),
-    ...rows.map((row) => ({
-      value: row.id!,
-      label: `${recordTitle(row)} · ${row.id}`,
-    })),
+    ...rows.map((row) => {
+      const title =
+        resource === "organizations"
+          ? translated(valueOf(row, "Tag")).trim()
+          : recordTitle(row);
+      return {
+        value: row.id!,
+        label: title ? `${title} · ${row.id}` : `ID ${row.id}`,
+      };
+    }),
     ...(value && value !== "0" && !rows.some((r) => r.id === value)
       ? [{ value, label: `ID ${value}` }]
       : []),
@@ -577,6 +584,23 @@ export function TypeTag({
 export function SensorCurrentValue({ row }: { row: RecordData }) {
   return <SensorReadingValue row={row} />;
 }
+function LocalEventTime({ timestamp }: { timestamp: number | null }) {
+  if (timestamp === null) return <span className="muted">—</span>;
+  const date = new Date(timestamp);
+  return (
+    <time
+      className="numeric-value"
+      dateTime={date.toISOString()}
+      title={Intl.DateTimeFormat().resolvedOptions().timeZone}
+    >
+      {date.toLocaleString(undefined, { hourCycle: "h23" })}
+    </time>
+  );
+}
+export function AssetLastEvent({ value }: { value: unknown }) {
+  // Current Assets event timestamps use UTC, including legacy values without a zone.
+  return <LocalEventTime timestamp={hubLastEventTime(value)} />;
+}
 export function SensorLastReading({ row }: { row: RecordData }) {
   const value = valueOf(row, "DhLastEvent");
   if (typeof value !== "string") return <span className="muted">—</span>;
@@ -596,15 +620,7 @@ export function SensorLastReading({ row }: { row: RecordData }) {
     !Number.isFinite(date.getTime())
   )
     return <span className="muted">—</span>;
-  return (
-    <time
-      className="numeric-value"
-      dateTime={date.toISOString()}
-      title={Intl.DateTimeFormat().resolvedOptions().timeZone}
-    >
-      {date.toLocaleString(undefined, { hourCycle: "h23" })}
-    </time>
-  );
+  return <LocalEventTime timestamp={date.getTime()} />;
 }
 export function SensorHistoryValue({ row }: { row: RecordData }) {
   return <SensorReadingValue row={row} history />;

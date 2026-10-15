@@ -49,7 +49,12 @@ async function syntheticWorkspace(page: Page, level = 90) {
       m_nIDOrganization: "0",
       m_sTag: "Synthetic zero organization tag",
     },
-    { id: "7", m_nIDOrganization: "7", m_sTag: "Synthetic organization seven" },
+    {
+      id: "7",
+      m_nIDOrganization: "7",
+      m_sTag: "Synthetic organization seven",
+      m_sLabel: "Synthetic descriptive organization label",
+    },
   ];
   const reads: URL[] = [];
   const updates: { path: string; body: unknown }[] = [];
@@ -252,15 +257,23 @@ test("a platform administrator can assign an asset while the workspace remains U
   await expect(
     page.getByRole("heading", { name: "Edit asset", exact: true }),
   ).toBeVisible();
-  await page
+  const organizationPicker = page
     .locator("form .ant-select")
-    .filter({ has: page.locator("#m_nIDOrganization") })
-    .locator(".ant-select-selector")
-    .click();
+    .filter({ has: page.locator("#m_nIDOrganization") });
+  await organizationPicker.locator(".ant-select-selector").click();
   const dropdown = page.locator(
     ".ant-select-dropdown:not(.ant-select-dropdown-hidden)",
   );
+  await expect(dropdown.getByText(/Synthetic organization seven/)).toHaveText(
+    "Synthetic organization seven \u00b7 7",
+  );
+  await expect(
+    dropdown.getByText(/Synthetic descriptive organization label/),
+  ).toHaveCount(0);
   await dropdown.getByText(/Synthetic organization seven/).click();
+  await expect(
+    organizationPicker.locator(".ant-select-selection-item"),
+  ).toHaveText("Synthetic organization seven \u00b7 7");
   await expect(
     page.locator(".organization-picker .ant-select-selection-item"),
   ).toHaveText("Unassigned");

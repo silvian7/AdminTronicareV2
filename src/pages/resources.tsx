@@ -70,6 +70,7 @@ import { useAdmin } from "../context";
 import {
   ErrorNotice,
   AssetIdentity,
+  AssetLastEvent,
   DeviceIdentity,
   FieldInput,
   FieldValue,
@@ -375,6 +376,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
             organizationIdentityResources.has(resource.name) &&
             canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
+            ) : resource.name === "assets" &&
+              canonical(f.key) === "DhLastEvent" ? (
+              <AssetLastEvent value={value} />
             ) : assetIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDAsset" ? (
               <AssetIdentity value={value} />
@@ -653,6 +657,9 @@ function RelatedList({
                 assetIdentityResources.has(resource) &&
                 canonical(f.key) === "IDAsset" ? (
                   <AssetIdentity value={v} />
+                ) : resource === "assets" &&
+                  canonical(f.key) === "DhLastEvent" ? (
+                  <AssetLastEvent value={v} />
                 ) : resource === "sensors" &&
                   canonical(f.key) === "IDDevice" ? (
                   <DeviceIdentity value={v} />
@@ -1114,8 +1121,11 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     ? "Last reading"
                     : fieldLabel(f.key),
               children:
-                resource.name === "sensors" &&
+                resource.name === "assets" &&
                 canonical(f.key) === "DhLastEvent" ? (
+                  <AssetLastEvent value={record?.[f.key]} />
+                ) : resource.name === "sensors" &&
+                  canonical(f.key) === "DhLastEvent" ? (
                   <SensorLastReading row={record ?? {}} />
                 ) : resource.name === "actions" &&
                   canonical(f.key) === "IDAsset" ? (

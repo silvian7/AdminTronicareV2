@@ -29,7 +29,7 @@ import {
   type Service,
 } from "../../shared/resources";
 import { useAdmin } from "../context";
-import { ErrorNotice } from "../components/fields";
+import { AssetLastEvent, ErrorNotice } from "../components/fields";
 import { CoreOutboxes } from "../components/core-outboxes";
 import { ServiceOutboxes } from "../components/service-outboxes";
 import { request } from "../api";
@@ -157,12 +157,7 @@ export function Overview() {
                 {
                   title: "Last event",
                   render: (_, row) => (
-                    <span className="muted">
-                      {String(valueOf(row, "DhLastEvent") ?? "—").replace(
-                        "T",
-                        " ",
-                      )}
-                    </span>
+                    <AssetLastEvent value={valueOf(row, "DhLastEvent")} />
                   ),
                 },
               ]}
