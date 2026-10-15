@@ -343,7 +343,10 @@ export function ResourceList({ resource }: { resource: Resource }) {
                 );
               },
             },
-          ]),
+          ]
+      ).filter(
+        (column) => resource.name !== "users" || column.key !== "record",
+      ),
       ...(["hubs", "devices"].includes(resource.name)
         ? [
             {
