@@ -388,8 +388,11 @@ export function ResourceList({ resource }: { resource: Resource }) {
             (resource.name === "rules" && canonical(f.key) === "IDRuleType")
           ),
           render: (value: unknown) =>
-            organizationIdentityResources.has(resource.name) &&
+            resource.name === "usergroups" &&
             canonical(f.key) === "IDOrganization" ? (
+              <ReferenceTag resource="organizations" value={value} />
+            ) : organizationIdentityResources.has(resource.name) &&
+              canonical(f.key) === "IDOrganization" ? (
               <OrganizationIdentity value={value} />
             ) : resource.name === "assets" &&
               canonical(f.key) === "DhLastEvent" ? (
