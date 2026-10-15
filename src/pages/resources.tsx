@@ -284,10 +284,18 @@ export function ResourceList({ resource }: { resource: Resource }) {
         "field" in f && f.field === key,
     )?.value;
   const filter = (key: string, value: unknown) => {
+    if (String(active(key) ?? "") === String(value ?? "")) return;
     setFilters([{ field: key, operator: "eq", value }], "merge");
     setCurrentPage(1);
   };
-  const [search, setSearch] = useState(String(active("_q") ?? ""));
+  const activeSearch = String(active("_q") ?? "");
+  const [search, setSearch] = useState(activeSearch);
+  useEffect(() => setSearch(activeSearch), [activeSearch]);
+  const [filterDrafts, setFilterDrafts] = useState<Record<string, string>>({});
+  const appliedFilterValues = JSON.stringify(
+    resource.query.map((field) => [field.key, String(active(field.key) ?? "")]),
+  );
+  useEffect(() => setFilterDrafts({}), [appliedFilterValues]);
   const columns = useMemo(
     () => [
       ...(["sensors", "devices"].includes(resource.name)
@@ -415,13 +423,6 @@ export function ResourceList({ resource }: { resource: Resource }) {
   );
   if (!can(resource, "list"))
     return <Result status="403" title="Access unavailable" />;
-  if (tableQuery.error)
-    return (
-      <ErrorNotice
-        error={tableQuery.error}
-        retry={() => tableQuery.refetch()}
-      />
-    );
   return (
     <>
       <PageHeading
@@ -456,7 +457,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
         error={tableQuery.error}
         retry={() => tableQuery.refetch()}
       />
-      {result.limited && (
+      {!tableQuery.error && result.limited && (
         <Alert
           className="page-alert"
           showIcon
@@ -481,7 +482,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
           />
           <Space>
             <Typography.Text type="secondary">
-              {result.total ?? 0} loaded matches
+              {tableQuery.error
+                ? "Results unavailable"
+                : `${result.total ?? 0} loaded matches`}
             </Typography.Text>
             {resource.query.some(
               (f) => !["limit", "offset", "reverseorder"].includes(f.key),
@@ -519,7 +522,17 @@ export function ResourceList({ resource }: { resource: Resource }) {
                     />
                   ) : (
                     <Input
-                      defaultValue={String(active(field.key) ?? "")}
+                      value={
+                        filterDrafts[field.key] ??
+                        String(active(field.key) ?? "")
+                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFilterDrafts((drafts) => ({
+                          ...drafts,
+                          [field.key]: value,
+                        }));
+                      }}
                       placeholder="Any"
                       onBlur={(e) => filter(field.key, e.target.value)}
                       onPressEnter={(e) =>
@@ -532,32 +545,36 @@ export function ResourceList({ resource }: { resource: Resource }) {
             <Button
               onClick={() => {
                 setFilters([], "replace");
+                setFilterDrafts({});
                 setSearch("");
+                setCurrentPage(1);
               }}
             >
               Clear filters
             </Button>
           </div>
         )}
-        <Table
-          {...tableProps}
-          rowKey="id"
-          columns={columns}
-          scroll={{ x: 950 }}
-          size="middle"
-          pagination={{
-            ...tableProps.pagination,
-            showSizeChanger: true,
-            pageSizeOptions: [10, 25, 50, 100],
-          }}
-          locale={{
-            emptyText: (
-              <Empty
-                description={`No ${resource.label.toLowerCase()} match this view.`}
-              />
-            ),
-          }}
-        />
+        {!tableQuery.error && (
+          <Table
+            {...tableProps}
+            rowKey="id"
+            columns={columns}
+            scroll={{ x: 950 }}
+            size="middle"
+            pagination={{
+              ...tableProps.pagination,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 25, 50, 100],
+            }}
+            locale={{
+              emptyText: (
+                <Empty
+                  description={`No ${resource.label.toLowerCase()} match this view.`}
+                />
+              ),
+            }}
+          />
+        )}
       </Card>
     </>
   );
