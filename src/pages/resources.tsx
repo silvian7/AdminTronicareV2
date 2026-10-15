@@ -400,6 +400,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
             ) : resource.name === "organizations" &&
               canonical(f.key) === "IDOrganizationType" ? (
               <ReferenceTag resource="organizationstypes" value={value} />
+            ) : resource.name === "users" &&
+              canonical(f.key) === "IDUserType" ? (
+              <ReferenceTag resource="usertypes" value={value} />
             ) : (
               <FieldValue field={f} value={value} />
             ),
