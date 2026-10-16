@@ -34,6 +34,12 @@ import {
   ruleScheduleLabels,
   utcScheduleDate,
 } from "../../shared/rule-schedule";
+import {
+  parseTranslations,
+  setTranslation,
+  translationLanguage,
+  translationText,
+} from "../../shared/translations";
 
 export function ReferenceSelect({
   id,
@@ -143,15 +149,9 @@ function TranslationInput({
   onChange?: (v: string) => void;
   maxLength?: number;
 }) {
-  let messages: { lang: string; text: string }[] | undefined;
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed.messages)) messages = parsed.messages;
-  } catch {
-    /* Plain text. */
-  }
-  const [multilingual, setMultilingual] = useState(!!messages);
-  if (!multilingual)
+  const messages = parseTranslations(value)?.messages;
+  const [multilingual, setMultilingual] = useState(false);
+  if (!multilingual && !messages)
     return (
       <Space.Compact style={{ width: "100%" }}>
         <Input
@@ -193,17 +193,16 @@ function TranslationInput({
               aria-label={`${id} (${lang})`}
               autoSize={{ minRows: 2, maxRows: 4 }}
               value={
-                current.find((m) => m.lang.toLowerCase() === lang)?.text ?? ""
+                translationText(
+                  current.find(
+                    (entry) =>
+                      translationLanguage(entry) === lang &&
+                      translationText(entry) !== undefined,
+                  ),
+                ) ?? ""
               }
               onChange={(e) => {
-                const rest = current.filter(
-                  (m) => m.lang.toLowerCase() !== lang,
-                );
-                onChange?.(
-                  JSON.stringify({
-                    messages: [...rest, { lang, text: e.target.value }],
-                  }),
-                );
+                onChange?.(setTranslation(value, lang, e.target.value));
               }}
             />
           ),

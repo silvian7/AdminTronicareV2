@@ -1,4 +1,9 @@
 import generated from "./contracts.generated.json" with { type: "json" };
+import {
+  parseTranslations,
+  translationLanguage,
+  translationText,
+} from "./translations";
 
 export type Service =
   | "users"
@@ -213,20 +218,18 @@ export function fieldLabel(key: string): string {
 }
 export function translated(value: unknown, language = "en"): string {
   if (typeof value !== "string") return value == null ? "" : String(value);
-  try {
-    const json = JSON.parse(value);
-    if (Array.isArray(json.messages))
-      return (
-        json.messages.find(
-          (m: { lang: string }) => m.lang?.toLowerCase() === language,
-        )?.text ??
-        json.messages[0]?.text ??
-        value
-      );
-  } catch {
-    /* Plain legacy text is valid. */
-  }
-  return value;
+  const document = parseTranslations(value);
+  if (!document) return value;
+  const preferred = document.messages.find(
+    (entry) =>
+      translationLanguage(entry) === language.toLowerCase() &&
+      translationText(entry) !== undefined,
+  );
+  return (
+    translationText(preferred) ??
+    document.messages.map(translationText).find((text) => text !== undefined) ??
+    value
+  );
 }
 export const recordTitle = (r: RecordData) =>
   translated(
