@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient } from "@tanstack/react-query";
+import { focusManager, QueryClient } from "@tanstack/react-query";
 import { Refine, Authenticated } from "@refinedev/core";
 import { useNotificationProvider } from "@refinedev/antd";
 import routerProvider from "@refinedev/react-router";
@@ -32,6 +32,26 @@ import {
 import { SensorHistory } from "./pages/history";
 import "antd/dist/reset.css";
 import "./styles.css";
+
+focusManager.setEventListener((onFocus) => {
+  const visible = () => document.visibilityState !== "hidden";
+  const onVisibilityChange = () => onFocus(visible());
+  const onWindowFocus = (event: FocusEvent) => {
+    if (event.target === window) onFocus(visible());
+  };
+  const onWindowBlur = (event: FocusEvent) => {
+    if (event.target === window) onFocus(false);
+  };
+  onFocus(visible() && document.hasFocus());
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("focus", onWindowFocus);
+  window.addEventListener("blur", onWindowBlur);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("focus", onWindowFocus);
+    window.removeEventListener("blur", onWindowBlur);
+  };
+});
 
 function createQueryClient() {
   return new QueryClient({

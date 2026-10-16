@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getDefaultSortOrder, useTable } from "@refinedev/antd";
-import { useQueryClient } from "@tanstack/react-query";
+import { focusManager, useQueryClient } from "@tanstack/react-query";
 import {
   useList,
   useOne,
@@ -280,8 +280,20 @@ export function ResourceList({ resource }: { resource: Resource }) {
     meta: { organization },
     syncWithLocation: true,
     errorNotification: false,
-    queryOptions: { enabled: can(resource, "list") },
+    queryOptions: {
+      enabled: can(resource, "list"),
+      refetchOnWindowFocus: "always",
+    },
   });
+  useEffect(
+    () =>
+      focusManager.subscribe((focused) => {
+        if (!focused || !can(resource, "list")) return;
+        setStatusNow(Date.now());
+        void refreshRecordReferences();
+      }),
+    [resource, can, refreshRecordReferences],
+  );
   const active = (key: string) =>
     filters.find(
       (f): f is CrudFilter & { field: string; value: unknown } =>
@@ -597,19 +609,18 @@ function AddGroupMember({
   organization,
   members,
   disabled,
+  saving,
+  onAdd,
 }: {
   groupId: string;
   organization: string;
   members: RecordData[];
   disabled: boolean;
+  saving: boolean;
+  onAdd: (userId: string) => Promise<boolean>;
 }) {
-  const { message } = App.useApp();
-  const invalidate = useInvalidate();
   const [selected, setSelected] = useState<string>();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const mounted = useRef(false);
-  const busy = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -636,38 +647,14 @@ function AddGroupMember({
     !query.isFetching &&
     !query.isError;
   async function addMember() {
-    if (!canAdd || busy.current) return;
+    if (!canAdd || !selected) return;
     const epoch = getSessionEpoch();
-    const current = () => mounted.current && getSessionEpoch() === epoch;
-    busy.current = true;
-    setSaving(true);
-    setError("");
-    try {
-      await request("/api/memberships", {
-        method: "POST",
-        body: JSON.stringify({ userId: selected, groupId, action: "add" }),
-      });
-      if (getSessionEpoch() !== epoch) return;
-      if (current()) setSelected(undefined);
-      await Promise.all(
-        ["users", "usergroups"].map((resource) =>
-          invalidate({ resource, invalidates: ["list"] }),
-        ),
-      );
-      if (current()) message.success("Member added.");
-    } catch (e) {
-      if (current())
-        setError((e as Error).message ?? "Could not add this member.");
-    } finally {
-      busy.current = false;
-      if (current()) setSaving(false);
-    }
+    const added = await onAdd(selected);
+    if (added && mounted.current && getSessionEpoch() === epoch)
+      setSelected(undefined);
   }
   return (
     <>
-      {error && (
-        <Alert type="error" showIcon message={error} className="page-alert" />
-      )}
       <ErrorNotice error={query.error} retry={() => query.refetch()} />
       <div className="membership-add group-member-add">
         <div style={{ flex: 1 }}>
@@ -712,11 +699,13 @@ function RelatedList({
   filterName,
   filterValue,
   memberOrganization,
+  memberGroupLabel,
 }: {
   resource: string;
   filterName: string;
   filterValue: string;
   memberOrganization?: string;
+  memberGroupLabel?: string;
 }) {
   const { organization, can } = useAdmin();
   const r = resourceMap[resource];
@@ -730,6 +719,31 @@ function RelatedList({
     (resource === "users" &&
       ["idorganization", "idusergroup"].includes(filterName));
   const { modal, message } = App.useApp();
+  const invalidate = useInvalidate();
+  const [membershipSaving, setMembershipSaving] = useState(false);
+  const [membershipError, setMembershipError] = useState("");
+  const membershipBusy = useRef<symbol | null>(null);
+  const membershipMounted = useRef(false);
+  const membershipConfirmation = useRef<{ destroy: () => void } | null>(null);
+  const membershipView = `${resource}:${filterName}:${filterValue}:${memberOrganization}:${organization}`;
+  const currentMembershipView = useRef(membershipView);
+  currentMembershipView.current = membershipView;
+  useEffect(() => {
+    membershipMounted.current = true;
+    return () => {
+      membershipMounted.current = false;
+      membershipConfirmation.current?.destroy();
+    };
+  }, []);
+  useEffect(() => {
+    membershipConfirmation.current?.destroy();
+    membershipConfirmation.current = null;
+    membershipBusy.current = null;
+    setMembershipSaving(false);
+    setMembershipError("");
+  }, [membershipView]);
+  const canEditMembers =
+    groupMembers && validMemberOrganization && can(r, "edit");
   const deletion = useDelete();
   const refreshRecordReferences = useRefreshRecordReferences(resource);
   const { result, query } = useList<RecordData>({
@@ -745,6 +759,57 @@ function RelatedList({
     errorNotification: false,
     queryOptions: { enabled: can(r, "list") },
   });
+  async function changeMember(userId: string, action: "add" | "remove") {
+    if (
+      !canEditMembers ||
+      !membershipMounted.current ||
+      membershipBusy.current ||
+      currentMembershipView.current !== membershipView ||
+      query.isFetching ||
+      query.isError ||
+      (action === "remove" &&
+        !result.data?.some(
+          (user) =>
+            user.id === userId &&
+            valueOf(user, "IDOrganization") === memberOrganization,
+        ))
+    )
+      return false;
+    const epoch = getSessionEpoch();
+    const operation = Symbol();
+    const current = () =>
+      membershipMounted.current &&
+      currentMembershipView.current === membershipView &&
+      membershipBusy.current === operation &&
+      getSessionEpoch() === epoch;
+    membershipBusy.current = operation;
+    setMembershipSaving(true);
+    setMembershipError("");
+    try {
+      await request("/api/memberships", {
+        method: "POST",
+        body: JSON.stringify({ userId, groupId: filterValue, action }),
+      });
+      if (getSessionEpoch() !== epoch) return false;
+      await Promise.all(
+        ["users", "usergroups"].map((name) =>
+          invalidate({ resource: name, invalidates: ["list"] }),
+        ),
+      );
+      if (current())
+        message.success(action === "add" ? "Member added." : "Member removed.");
+      return true;
+    } catch (e) {
+      if (current())
+        setMembershipError(
+          (e as Error).message ?? "Membership changes failed.",
+        );
+      return false;
+    } finally {
+      if (current()) setMembershipSaving(false);
+      if (membershipBusy.current === operation) membershipBusy.current = null;
+    }
+  }
   if (!can(r, "list"))
     return (
       <Alert type="info" message="You do not have access to these records." />
@@ -754,19 +819,29 @@ function RelatedList({
   return (
     <>
       <ErrorNotice error={query.error} retry={() => query.refetch()} />
+      {membershipError && (
+        <Alert
+          type="error"
+          showIcon
+          message={membershipError}
+          className="page-alert"
+        />
+      )}
       {result.limited && (
         <Alert
           type="warning"
           message="This collection is limited by the service."
         />
       )}
-      {groupMembers && validMemberOrganization && can(r, "edit") && (
+      {canEditMembers && (
         <AddGroupMember
           key={`${filterValue}:${memberOrganization}:${organization}`}
           groupId={filterValue}
           organization={memberOrganization!}
           members={result.data ?? []}
           disabled={query.isFetching}
+          saving={membershipSaving}
+          onAdd={(userId) => changeMember(userId, "add")}
         />
       )}
       {resource === "sensors" && (
@@ -841,6 +916,38 @@ function RelatedList({
                 ),
             })),
           ...(resource === "rules" ? [{ title: "ID", dataIndex: "id" }] : []),
+          ...(canEditMembers
+            ? [
+                {
+                  title: "Actions",
+                  key: "membership-actions",
+                  render: (_: unknown, user: RecordData) =>
+                    valueOf(user, "IDOrganization") === memberOrganization ? (
+                      <Button
+                        danger
+                        aria-label="Remove member"
+                        disabled={membershipSaving || query.isFetching}
+                        onClick={() => {
+                          const epoch = getSessionEpoch();
+                          membershipConfirmation.current = modal.confirm({
+                            title: "Remove this member?",
+                            content: `${recordTitle(user)} (#${user.id}) will be removed from ${memberGroupLabel || "this user group"}.`,
+                            okText: "Remove member",
+                            okButtonProps: { danger: true },
+                            onOk: () =>
+                              epoch === getSessionEpoch() &&
+                              currentMembershipView.current === membershipView
+                                ? changeMember(user.id!, "remove")
+                                : undefined,
+                          });
+                        }}
+                      >
+                        Remove member
+                      </Button>
+                    ) : null,
+                },
+              ]
+            : []),
           ...(resource === "sensors"
             ? [
                 {
@@ -1451,6 +1558,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
           memberOrganization={String(
             valueOf(record ?? {}, "IDOrganization") ?? "",
           )}
+          memberGroupLabel={record ? recordTitle(record) : undefined}
         />
       ),
     });

@@ -17,6 +17,7 @@ async function mockMembers(
     userRights?: string;
     writable?: boolean;
     level?: number;
+    crossOrganizationMember?: boolean;
   } = {},
 ) {
   const identity: Identity = {
@@ -84,7 +85,10 @@ async function mockMembers(
       m_sTag: otherOrganizationTag,
     },
   ];
-  const memberIds = new Set([memberId]);
+  const memberIds = new Set([
+    memberId,
+    ...(options.crossOrganizationMember ? ["42"] : []),
+  ]);
   const reads: URL[] = [];
   const mutations: {
     method: string;
@@ -126,6 +130,7 @@ async function mockMembers(
           return reply({ message: failure.message }, failure.status);
         }
         if (body.action === "add") memberIds.add(body.userId);
+        if (body.action === "remove") memberIds.delete(body.userId);
         return reply({ success: true });
       }
       return reply({ message: "Synthetic operation unavailable." }, 405);
@@ -223,6 +228,26 @@ async function chooseMember(page: Page, label = candidateOption) {
     .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")
     .getByText(label, { exact: true })
     .click();
+}
+
+async function returnToMembers(page: Page) {
+  await page.getByRole("link", { name: groupLabel, exact: true }).click();
+  await page.getByRole("tab", { name: "Members", exact: true }).click();
+}
+
+async function openRemoval(page: Page, id = memberId) {
+  await page
+    .getByRole("link", { name: id, exact: true })
+    .locator("xpath=ancestor::tr")
+    .getByRole("button", { name: "Remove member", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Remove this member?");
+  await expect(dialog).toContainText("synthetic-current-member");
+  await expect(dialog).toContainText(id);
+  await expect(dialog).toContainText(groupLabel);
+  return dialog;
 }
 
 for (const workspace of [undefined, otherOrganizationTag])
@@ -368,6 +393,9 @@ for (const restriction of [
     await expect(
       page.getByRole("button", { name: "Add member", exact: true }),
     ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Remove member", exact: true }),
+    ).toHaveCount(0);
     expect(mock.mutations).toEqual([]);
     expect(
       mock.reads.filter(
@@ -435,8 +463,7 @@ test("a membership completed after leaving the group refreshes members when retu
   );
   held.release();
   await completed;
-  await page.getByRole("link", { name: groupLabel, exact: true }).click();
-  await page.getByRole("tab", { name: "Members", exact: true }).click();
+  await returnToMembers(page);
   await expect(
     page.getByRole("link", { name: candidateId, exact: true }),
   ).toHaveAttribute("href", `/users/${candidateId}`);
@@ -447,4 +474,146 @@ test("a membership completed after leaving the group refreshes members when retu
       .getByText(candidateOption, { exact: true }),
   ).toHaveCount(0);
   expect(mock.mutations).toHaveLength(1);
+});
+
+test("removing a member requires confirmation and restores the user as an add candidate", async ({
+  page,
+}, testInfo) => {
+  const mock = await mockMembers(page, { crossOrganizationMember: true });
+  await openMembers(page);
+  const otherMember = page
+    .getByRole("link", { name: "42", exact: true })
+    .locator("xpath=ancestor::tr");
+  await expect(otherMember).toContainText(
+    "Synthetic other organization member",
+  );
+  await expect(
+    otherMember.getByRole("button", { name: "Remove member", exact: true }),
+  ).toHaveCount(0);
+  let dialog = await openRemoval(page);
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(mock.mutations).toEqual([]);
+  await expect(
+    page.getByRole("link", { name: memberId, exact: true }),
+  ).toBeVisible();
+  dialog = await openRemoval(page);
+  await page.screenshot({
+    path: testInfo.outputPath("group-members-remove.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await dialog
+    .getByRole("button", { name: "Remove member", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: memberId, exact: true }),
+  ).toHaveCount(0);
+  await expect(otherMember).toBeVisible();
+  await page.getByLabel("User to add", { exact: true }).click();
+  await expect(
+    page
+      .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")
+      .getByText(`synthetic-current-member · ${memberId}`, { exact: true }),
+  ).toBeVisible();
+  expect(mock.mutations).toEqual([
+    {
+      method: "POST",
+      path: "/api/memberships",
+      body: { userId: memberId, groupId, action: "remove" },
+      csrf: "synthetic-group-members-csrf",
+    },
+  ]);
+});
+
+test("a rejected member removal retains the row and can be retried with a new confirmation", async ({
+  page,
+}) => {
+  const mock = await mockMembers(page);
+  await openMembers(page);
+  mock.failNext(403, "Synthetic membership removal denied.");
+  let dialog = await openRemoval(page);
+  await dialog
+    .getByRole("button", { name: "Remove member", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByText("Synthetic membership removal denied.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: memberId, exact: true }),
+  ).toBeVisible();
+  dialog = await openRemoval(page);
+  await dialog
+    .getByRole("button", { name: "Remove member", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: memberId, exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Synthetic membership removal denied.", { exact: true }),
+  ).toHaveCount(0);
+  expect(mock.mutations.map(({ body }) => body)).toEqual([
+    { userId: memberId, groupId, action: "remove" },
+    { userId: memberId, groupId, action: "remove" },
+  ]);
+});
+
+test("leaving the group closes an unconfirmed removal without changing membership", async ({
+  page,
+}) => {
+  const mock = await mockMembers(page);
+  await page.goto("/usergroups");
+  await returnToMembers(page);
+  const dialog = await openRemoval(page);
+  await page.goBack();
+  await expect(
+    page.getByRole("heading", { name: "User groups", exact: true }),
+  ).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await returnToMembers(page);
+  await expect(
+    page.getByRole("link", { name: memberId, exact: true }),
+  ).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  expect(mock.mutations).toEqual([]);
+});
+
+test("a removal completed after leaving the group refreshes members before a quick return", async ({
+  page,
+}) => {
+  const mock = await mockMembers(page);
+  await page.goto("/usergroups");
+  await returnToMembers(page);
+  const held = mock.holdNext();
+  const dialog = await openRemoval(page);
+  await dialog
+    .getByRole("button", { name: "Remove member", exact: true })
+    .click();
+  await held.entered;
+  await page.goBack();
+  await expect(
+    page.getByRole("heading", { name: "User groups", exact: true }),
+  ).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  const completed = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/memberships",
+  );
+  held.release();
+  await completed;
+  await returnToMembers(page);
+  await expect(
+    page.getByRole("link", { name: memberId, exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("User to add", { exact: true }).click();
+  await expect(
+    page
+      .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden)")
+      .getByText(`synthetic-current-member · ${memberId}`, { exact: true }),
+  ).toBeVisible();
+  expect(mock.mutations.map(({ body }) => body)).toEqual([
+    { userId: memberId, groupId, action: "remove" },
+  ]);
 });
