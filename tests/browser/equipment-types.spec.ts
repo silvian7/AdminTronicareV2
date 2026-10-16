@@ -297,7 +297,7 @@ async function openEquipmentDetail(
 ) {
   const row = equipmentListRow(page, kind, id);
   if (kind.resource === "sensors")
-    await row.getByRole("button", { name: "View", exact: true }).click();
+    await row.getByRole("cell", { name: id, exact: true }).click();
   else await row.getByRole("link", { name: id, exact: true }).click();
 }
 

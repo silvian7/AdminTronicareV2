@@ -80,12 +80,14 @@ import {
   SensorLastReading,
   SensorTypeTag,
   ReferenceTag,
+  RuleIdentity,
   RuleDurationSeconds,
   RuleScheduleTime,
   UserDateTime,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 import { HubStatus } from "../components/hub-status";
+import { useRecordRow } from "../components/record-row";
 import {
   millisecondsToSeconds,
   ruleDurationLabels,
@@ -266,6 +268,8 @@ function useRefreshRecordReferences(resource: string) {
         { resource: "sensors", marker: "sensorReference" },
         { resource: "sensortypes", marker: "equipmentTypeReference" },
       );
+    if (resource === "actions")
+      references.push({ resource: "rules", marker: "ruleReference" });
     const equipmentTypeResource = equipmentTypeResources[resource];
     if (equipmentTypeResource)
       references.push({
@@ -291,6 +295,7 @@ function useRefreshRecordReferences(resource: string) {
 }
 export function ResourceList({ resource }: { resource: Resource }) {
   const { organization, can } = useAdmin();
+  const recordRow = useRecordRow(resource.name);
   const canViewDeviceSensors =
     resource.name === "devices" &&
     can(resource, "show") &&
@@ -474,26 +479,20 @@ export function ResourceList({ resource }: { resource: Resource }) {
               <FieldValue field={f} value={value} />
             ),
         })),
-      {
-        title: "",
-        key: "open",
-        width: canViewDeviceSensors ? 180 : 80,
-        render: (_: unknown, row: RecordData) => (
-          <Space>
-            <Button
-              type="link"
-              onClick={() => navigate(`/${resource.name}/${row.id}`)}
-            >
-              View
-            </Button>
-            {canViewDeviceSensors && (
-              <Link to={`/devices/${row.id}?tab=sensors`}>View sensors</Link>
-            )}
-          </Space>
-        ),
-      },
+      ...(canViewDeviceSensors
+        ? [
+            {
+              title: "",
+              key: "sensors",
+              width: 120,
+              render: (_: unknown, row: RecordData) => (
+                <Link to={`/devices/${row.id}?tab=sensors`}>View sensors</Link>
+              ),
+            },
+          ]
+        : []),
     ],
-    [resource, navigate, canViewDeviceSensors, statusNow, sorters],
+    [resource, canViewDeviceSensors, statusNow, sorters],
   );
   if (!can(resource, "list"))
     return <Result status="403" title="Access unavailable" />;
@@ -632,6 +631,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
           <Table
             {...tableProps}
             rowKey="id"
+            onRow={recordRow}
             columns={columns}
             scroll={{ x: 950 }}
             size="middle"
@@ -757,6 +757,7 @@ function RelatedList({
   memberGroupLabel?: string;
 }) {
   const { organization, can } = useAdmin();
+  const recordRow = useRecordRow(resource);
   const r = resourceMap[resource];
   const groupMembers = resource === "users" && filterName === "idusergroup";
   const validMemberOrganization =
@@ -910,6 +911,7 @@ function RelatedList({
       )}
       <Table
         rowKey="id"
+        onRow={recordRow}
         loading={query.isLoading}
         dataSource={result.data}
         pagination={{ pageSize: 10 }}
@@ -1014,46 +1016,47 @@ function RelatedList({
                     <SensorLastReading row={row} />
                   ),
                 },
-                {
-                  title: "Actions",
-                  key: "actions",
-                  render: (_: unknown, row: RecordData) => (
-                    <Space wrap>
-                      {can(r, "show") && (
-                        <Link to={`/sensors/${row.id}`}>View</Link>
-                      )}
-                      {can(r, "edit") && (
-                        <Link to={`/sensors/${row.id}/edit`}>Edit</Link>
-                      )}
-                      {can(r, "delete") && (
-                        <Button
-                          danger
-                          size="small"
-                          disabled={deletion.mutation.isPending}
-                          onClick={() =>
-                            modal.confirm({
-                              title: "Delete this sensor?",
-                              content: `${recordTitle(row)} (#${row.id}). The service will check dependencies. This operation cannot be undone from this screen.`,
-                              okText: "Delete",
-                              okButtonProps: { danger: true },
-                              onOk: async () => {
-                                await deletion.mutateAsync({
-                                  resource: "sensors",
-                                  id: row.id!,
-                                  successNotification: false,
-                                });
-                                message.success("Sensor deleted.");
-                                await query.refetch();
-                              },
-                            })
-                          }
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </Space>
-                  ),
-                },
+                ...(can(r, "edit") || can(r, "delete")
+                  ? [
+                      {
+                        title: "Actions",
+                        key: "actions",
+                        render: (_: unknown, row: RecordData) => (
+                          <Space wrap>
+                            {can(r, "edit") && (
+                              <Link to={`/sensors/${row.id}/edit`}>Edit</Link>
+                            )}
+                            {can(r, "delete") && (
+                              <Button
+                                danger
+                                size="small"
+                                disabled={deletion.mutation.isPending}
+                                onClick={() =>
+                                  modal.confirm({
+                                    title: "Delete this sensor?",
+                                    content: `${recordTitle(row)} (#${row.id}). The service will check dependencies. This operation cannot be undone from this screen.`,
+                                    okText: "Delete",
+                                    okButtonProps: { danger: true },
+                                    onOk: async () => {
+                                      await deletion.mutateAsync({
+                                        resource: "sensors",
+                                        id: row.id!,
+                                        successNotification: false,
+                                      });
+                                      message.success("Sensor deleted.");
+                                      await query.refetch();
+                                    },
+                                  })
+                                }
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </Space>
+                        ),
+                      },
+                    ]
+                  : []),
               ]
             : []),
           ...(resource === "devices" &&
@@ -1087,6 +1090,7 @@ function AssetAssignments({
   assetOrganization?: string;
 }) {
   const { organization, can } = useAdmin();
+  const recordRow = useRecordRow(kind);
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const related = resourceMap[kind];
@@ -1246,6 +1250,7 @@ function AssetAssignments({
       )}
       <Table
         rowKey="id"
+        onRow={recordRow}
         dataSource={linked.result.data}
         loading={linked.query.isLoading}
         pagination={{ pageSize: 10 }}
@@ -1294,6 +1299,7 @@ function AssetAssignments({
 }
 function Memberships({ userId }: { userId: string }) {
   const { organization, can } = useAdmin();
+  const recordRow = useRecordRow("usergroups");
   const { message, modal } = App.useApp();
   const [group, setGroup] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -1363,6 +1369,7 @@ function Memberships({ userId }: { userId: string }) {
       )}
       <Table
         rowKey="id"
+        onRow={recordRow}
         dataSource={linked.result.data}
         loading={linked.query.isLoading}
         columns={[
@@ -1473,7 +1480,8 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
             .map((f) => ({
               key: f.key,
               styles:
-                resource.name === "rules" && f.key === resource.primaryKey
+                ["rules", "actions"].includes(resource.name) &&
+                f.key === resource.primaryKey
                   ? { content: { whiteSpace: "nowrap" as const } }
                   : undefined,
               label:
@@ -1490,12 +1498,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                         ? ruleDurationLabels[canonical(f.key)]
                         : fieldLabel(f.key),
               children:
-                ["assets", "users", "usergroups"].includes(resource.name) &&
-                canonical(f.key) === "IDOrganization" ? (
+                ["assets", "users", "usergroups", "devices"].includes(
+                  resource.name,
+                ) && canonical(f.key) === "IDOrganization" ? (
                   <ReferenceTag
                     resource="organizations"
                     value={record?.[f.key]}
-                    showId={resource.name === "usergroups"}
+                    showId={["usergroups", "devices"].includes(resource.name)}
                   />
                 ) : resource.name === "users" &&
                   canonical(f.key) === "IDUserType" ? (
@@ -1521,7 +1530,10 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ) : resource.name === "rules" &&
                   canonical(f.key) === "IDSensor" ? (
                   <SensorTypeTag value={record?.[f.key]} />
-                ) : ["actions", "rules"].includes(resource.name) &&
+                ) : resource.name === "actions" &&
+                  canonical(f.key) === "IDRule" ? (
+                  <RuleIdentity value={record?.[f.key]} />
+                ) : ["actions", "rules", "devices"].includes(resource.name) &&
                   canonical(f.key) === "IDAsset" ? (
                   <AssetIdentity value={record?.[f.key]} />
                 ) : (

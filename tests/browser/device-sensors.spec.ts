@@ -78,6 +78,7 @@ async function syntheticHierarchy(
     IDDeviceType: options.missingDeviceType ? undefined : deviceTypeId,
     IDHub: hubId,
     IDOrganization: organizationId,
+    IDAsset: assetId,
     Tag: "SYNTHETIC-REALTIME-DEVICE",
     Label: deviceLabel,
   };
@@ -465,9 +466,8 @@ async function expectAssociatedSensors(page: Page) {
     page.getByRole("tab", { name: "Sensors", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   const row = sensorRow(page, sensorId);
-  await expect(
-    row.getByRole("link", { name: "View", exact: true }),
-  ).toHaveAttribute("href", `/sensors/${sensorId}`);
+  await expect(row).toHaveClass(/clickable-record-row/);
+  await expect(row).toHaveAttribute("tabindex", "0");
   const valueColumn = await page
     .getByRole("columnheader", { name: "Last reported value", exact: true })
     .evaluate((cell) => (cell as HTMLTableCellElement).cellIndex);
@@ -544,7 +544,7 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
         url.searchParams.get("_organization") === organizationId,
     ),
   ).toBe(true);
-  await row.getByRole("link", { name: "View", exact: true }).click();
+  await row.getByRole("cell", { name: sensorId, exact: true }).click();
   await expect(page).toHaveURL(`/sensors/${sensorId}`);
   await expect(
     page.getByRole("heading", { name: sensorLabel, exact: true }),
@@ -563,12 +563,40 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
 
 test("device detail exposes its sensors button and keeps manual tab selection in the URL", async ({
   page,
-}) => {
+}, testInfo) => {
   const mock = await syntheticHierarchy(page);
   await page.goto(`/devices/${deviceId}`);
   await expect(
     page.getByRole("tab", { name: "Details", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
+  const organization = page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Organization$/ })
+    .locator("xpath=following-sibling::*[1]");
+  await expect(organization).toHaveText("MSTRONIC-SYNTHETIC (#7)");
+  await expect(
+    organization.getByRole("link", {
+      name: "MSTRONIC-SYNTHETIC (#7)",
+      exact: true,
+    }),
+  ).toHaveAttribute("href", "/organizations/7");
+  await expect(organization.getByText("MStronic", { exact: true })).toHaveCount(
+    0,
+  );
+  const asset = page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Asset$/ })
+    .locator("xpath=following-sibling::*[1]");
+  for (const name of [assetTag, assetLabel])
+    await expect(
+      asset.getByRole("link", { name, exact: true }),
+    ).toHaveAttribute("href", `/assets/${assetId}`);
+  await expect(asset.getByText(`#${assetId}`, { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("device-asset-identity.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
   expect(
     mock.reads.filter((url) => url.pathname === "/api/resources/sensors"),
   ).toHaveLength(0);
@@ -704,9 +732,8 @@ test("device sensor actions stay on sensor rows and refresh only the filtered se
     ).toHaveCount(0);
   for (const id of [sensorId, secondSensorId]) {
     const row = sensorRow(page, id);
-    await expect(
-      row.getByRole("link", { name: "View", exact: true }),
-    ).toHaveAttribute("href", `/sensors/${id}`);
+    await expect(row).toHaveClass(/clickable-record-row/);
+    await expect(row).toHaveAttribute("tabindex", "0");
     await expect(
       row.getByRole("link", { name: "Edit", exact: true }),
     ).toHaveAttribute("href", `/sensors/${id}/edit`);
@@ -756,7 +783,7 @@ test("device sensor actions stay on sensor rows and refresh only the filtered se
   expect(mock.mutations).toEqual([]);
 });
 
-test("sensor row View and Edit navigate to the selected sensor with read-only device permission", async ({
+test("sensor row click and Edit navigate to the selected sensor with read-only device permission", async ({
   page,
 }) => {
   const mock = await syntheticHierarchy(page, {
@@ -766,7 +793,7 @@ test("sensor row View and Edit navigate to the selected sensor with read-only de
   });
   await page.goto(`/devices/${deviceId}?tab=sensors`);
   const row = sensorRow(page, secondSensorId);
-  await row.getByRole("link", { name: "View", exact: true }).click();
+  await row.getByRole("cell", { name: secondSensorId, exact: true }).click();
   await expect(page).toHaveURL(`/sensors/${secondSensorId}`);
   await expect(
     page.getByRole("heading", { name: secondSensorLabel, exact: true }),
@@ -861,9 +888,8 @@ for (const permissions of [
     const mock = await syntheticHierarchy(page, permissions);
     await page.goto(`/devices/${deviceId}?tab=sensors`);
     const row = await expectAssociatedSensors(page);
-    await expect(
-      row.getByRole("link", { name: "View", exact: true }),
-    ).toHaveAttribute("href", `/sensors/${sensorId}`);
+    await expect(row).toHaveClass(/clickable-record-row/);
+    await expect(row).toHaveAttribute("tabindex", "0");
     await expect(
       row.getByRole("link", { name: "Edit", exact: true }),
     ).toHaveCount(permissions.edit ? 1 : 0);

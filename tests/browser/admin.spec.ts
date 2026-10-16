@@ -24,10 +24,8 @@ test("all resource lists and details render without browser errors", async ({
       page.getByRole("heading", { name: resource.label, exact: true }),
     ).toBeVisible();
     await expect(page.locator(".ant-table-row").first()).toBeVisible();
-    await page
-      .getByRole("button", { name: "View", exact: true })
-      .first()
-      .click();
+    await page.locator(".ant-table-row").first().focus();
+    await page.locator(".ant-table-row").first().press("Enter");
     await expect(
       page.getByRole("tab", { name: "Details", exact: true }),
     ).toBeVisible();

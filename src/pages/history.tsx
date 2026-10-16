@@ -11,8 +11,9 @@ import {
   SensorHistoryValue,
   SensorLastReading,
 } from "../components/fields";
-import { resourceMap, type RecordData } from "../../shared/resources";
+import { resourceMap, valueOf, type RecordData } from "../../shared/resources";
 import { useAdmin } from "../context";
+import { useRecordRow } from "../components/record-row";
 
 interface HistoryResponse {
   data: RecordData[];
@@ -22,6 +23,7 @@ interface HistoryResponse {
 }
 export function SensorHistory() {
   const { organization, can } = useAdmin();
+  const sensorRow = useRecordRow("sensors");
   const invalidate = useInvalidate();
   const [params, setParams] = useSearchParams();
   const [target, setTarget] = useState(
@@ -193,6 +195,12 @@ export function SensorHistory() {
       >
         <Table
           rowKey={(r) => String(r.m_nIDSensorHistory)}
+          onRow={(row) => {
+            const sensorId = valueOf(row, "IDSensor");
+            return sensorRow({
+              id: typeof sensorId === "string" ? sensorId : undefined,
+            });
+          }}
           columns={columns}
           dataSource={rows}
           loading={loading}

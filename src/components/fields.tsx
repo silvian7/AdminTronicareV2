@@ -439,7 +439,8 @@ const referenceId = (value: unknown) =>
 const validReferenceId = (id: string) =>
   /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
 function useReferenceRecord(
-  resource: TypeResource | "organizations" | "assets" | "devices" | "sensors",
+  resource:
+    TypeResource | "organizations" | "assets" | "devices" | "sensors" | "rules",
   value: unknown,
 ) {
   const { organization, can } = useAdmin();
@@ -453,6 +454,7 @@ function useReferenceRecord(
       organization,
       ...(resource === "devices" ? { deviceReference: true } : {}),
       ...(resource === "sensors" ? { sensorReference: true } : {}),
+      ...(resource === "rules" ? { ruleReference: true } : {}),
     },
     queryOptions: {
       enabled: allowed && validId,
@@ -471,6 +473,7 @@ function useReferenceRecord(
         assetReference: resource === "assets",
         deviceReference: resource === "devices",
         sensorReference: resource === "sensors",
+        ruleReference: resource === "rules",
         organization,
       },
     },
@@ -486,7 +489,7 @@ function ReferenceIdentity({
   resource,
   value,
 }: {
-  resource: "organizations" | "assets";
+  resource: "organizations" | "assets" | "rules";
   value: unknown;
 }) {
   const { id, record } = useReferenceRecord(resource, value);
@@ -513,6 +516,9 @@ export function OrganizationIdentity({ value }: { value: unknown }) {
 }
 export function AssetIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="assets" value={value} />;
+}
+export function RuleIdentity({ value }: { value: unknown }) {
+  return <ReferenceIdentity resource="rules" value={value} />;
 }
 export function DeviceIdentity({ value }: { value: unknown }) {
   const {

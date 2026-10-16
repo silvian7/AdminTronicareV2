@@ -473,10 +473,7 @@ test("old sensor readings remain reported values with their event time on the li
     );
   }
   await sensorRow(page, "63")
-    .getByRole("link", {
-      name: "View",
-      exact: true,
-    })
+    .getByRole("cell", { name: "63", exact: true })
     .click();
   await expect(
     page.getByRole("heading", {
@@ -607,7 +604,7 @@ test.describe("local times use a 24-hour clock even in a 12-hour browser locale"
       );
     }
     await sensorRow(page, "61")
-      .getByRole("link", { name: "View", exact: true })
+      .getByRole("cell", { name: "61", exact: true })
       .click();
     await expect(page).toHaveURL("/sensors/61");
     for (const [label, display, raw] of [

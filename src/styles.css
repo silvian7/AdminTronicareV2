@@ -246,6 +246,16 @@ a {
 .table-card .ant-table-pagination {
   padding: 0 20px;
 }
+.ant-table-tbody > tr.clickable-record-row {
+  cursor: pointer;
+}
+.ant-table-tbody > tr.clickable-record-row:hover > td {
+  background: #f0f8f9;
+}
+.ant-table-tbody > tr.clickable-record-row:focus-visible {
+  outline: 2px solid #087f8c;
+  outline-offset: -2px;
+}
 .record-identity {
   display: flex;
   flex-direction: column;

@@ -32,6 +32,7 @@ import { useAdmin } from "../context";
 import { AssetLastEvent, ErrorNotice } from "../components/fields";
 import { CoreOutboxes } from "../components/core-outboxes";
 import { ServiceOutboxes } from "../components/service-outboxes";
+import { useRecordRow } from "../components/record-row";
 import { request } from "../api";
 
 function Metric({
@@ -73,6 +74,7 @@ function Metric({
 export function Overview() {
   const { identity, organization, can } = useAdmin();
   const navigate = useNavigate();
+  const assetRow = useRecordRow("assets");
   const { result, query } = useList<RecordData>({
     resource: "assets",
     pagination: { pageSize: 6 },
@@ -133,6 +135,7 @@ export function Overview() {
           {can(resourceMap.assets, "list") ? (
             <Table
               rowKey="id"
+              onRow={assetRow}
               loading={query.isLoading}
               dataSource={result.data}
               pagination={false}
