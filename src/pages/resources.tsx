@@ -79,11 +79,39 @@ import {
   SensorCurrentValue,
   SensorLastReading,
   ReferenceTag,
+  RuleDurationSeconds,
+  RuleScheduleTime,
   UserDateTime,
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 import { HubStatus } from "../components/hub-status";
+import {
+  millisecondsToSeconds,
+  ruleDurationLabels,
+  secondsToMilliseconds,
+} from "../../shared/rule-durations";
 
+function validateRuleDuration(field: Field, value: unknown): Promise<void> {
+  if (value === undefined || value === null || value === "")
+    return Promise.resolve();
+  const milliseconds = secondsToMilliseconds(value);
+  if (milliseconds === undefined)
+    return Promise.reject(
+      new Error("Enter seconds with at most 3 decimal places."),
+    );
+  if (
+    (field.minimum !== undefined &&
+      BigInt(milliseconds) < BigInt(field.minimum)) ||
+    (field.maximum !== undefined &&
+      BigInt(milliseconds) > BigInt(field.maximum))
+  )
+    return Promise.reject(
+      new Error(
+        `Enter a value from ${millisecondsToSeconds(field.minimum)} to ${millisecondsToSeconds(field.maximum)} seconds.`,
+      ),
+    );
+  return Promise.resolve();
+}
 const queryLabels: Record<string, string> = {
   idasset: "Asset ID",
   idorganization: "Organization ID",
@@ -1417,7 +1445,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   : resource.name === "sensors" &&
                       canonical(f.key) === "DhLastEvent"
                     ? "Last reading"
-                    : fieldLabel(f.key),
+                    : resource.name === "rules" &&
+                        ["TimeStart", "TimeEnd"].includes(canonical(f.key))
+                      ? `${canonical(f.key) === "TimeStart" ? "Start" : "End"} time (local)`
+                      : resource.name === "rules" &&
+                          ruleDurationLabels[canonical(f.key)]
+                        ? ruleDurationLabels[canonical(f.key)]
+                        : fieldLabel(f.key),
               children:
                 ["assets", "users", "usergroups"].includes(resource.name) &&
                 canonical(f.key) === "IDOrganization" ? (
@@ -1431,6 +1465,12 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   <ReferenceTag resource="usertypes" value={record?.[f.key]} />
                 ) : resource.name === "users" && f.key.startsWith("m_dh") ? (
                   <UserDateTime value={record?.[f.key]} />
+                ) : resource.name === "rules" &&
+                  ["TimeStart", "TimeEnd"].includes(canonical(f.key)) ? (
+                  <RuleScheduleTime value={record?.[f.key]} />
+                ) : resource.name === "rules" &&
+                  ruleDurationLabels[canonical(f.key)] ? (
+                  <RuleDurationSeconds value={record?.[f.key]} />
                 ) : resource.name === "rules" &&
                   canonical(f.key) === "DhReset" &&
                   valueOf(record ?? {}, "ResetPending") !== true ? (
@@ -1800,7 +1840,11 @@ export function ResourceEditor({
     if (mode === "edit")
       for (const f of fields) {
         const value = detail.result?.[responseKey(resource, f.key)];
-        if (value !== undefined) initial[f.key] = value;
+        if (value !== undefined)
+          initial[f.key] =
+            resource.name === "rules" && ruleDurationLabels[canonical(f.key)]
+              ? millisecondsToSeconds(value)
+              : value;
       }
     else
       for (const f of fields) {
@@ -1896,9 +1940,17 @@ export function ResourceEditor({
           setError("");
           const changed: Record<string, unknown> = {};
           for (const field of fields) {
-            const value = values[field.key];
+            const duration =
+              resource.name === "rules" &&
+              ruleDurationLabels[canonical(field.key)];
+            const value = duration
+              ? secondsToMilliseconds(values[field.key])
+              : values[field.key];
             if (value === undefined) continue;
-            const original = detail.result?.[responseKey(resource, field.key)];
+            const stored = detail.result?.[responseKey(resource, field.key)];
+            const original = duration
+              ? secondsToMilliseconds(millisecondsToSeconds(stored))
+              : stored;
             if (mode === "create" || value !== original)
               changed[field.key] = value;
           }
@@ -1967,7 +2019,11 @@ export function ResourceEditor({
                     <Col xs={24} md={12} key={field.key}>
                       <Form.Item
                         name={field.key}
-                        label={fieldLabel(field.key)}
+                        label={
+                          (resource.name === "rules" &&
+                            ruleDurationLabels[canonical(field.key)]) ||
+                          fieldLabel(field.key)
+                        }
                         extra={
                           resource.name === "rules" &&
                           canonical(field.key) === "ResetDelayMs"
@@ -1998,7 +2054,11 @@ export function ResourceEditor({
                                 },
                               ]
                             : []),
-                          ...(field.type === "integer"
+                          ...(field.type === "integer" &&
+                          !(
+                            resource.name === "rules" &&
+                            ruleDurationLabels[canonical(field.key)]
+                          )
                             ? [
                                 {
                                   validator: (_: unknown, value: unknown) =>
@@ -2014,25 +2074,11 @@ export function ResourceEditor({
                               ]
                             : []),
                           ...(resource.name === "rules" &&
-                          canonical(field.key) === "ResetDelayMs" &&
-                          field.minimum !== undefined &&
-                          field.maximum !== undefined
+                          ruleDurationLabels[canonical(field.key)]
                             ? [
                                 {
                                   validator: (_: unknown, value: unknown) =>
-                                    value !== undefined &&
-                                    value !== null &&
-                                    /^-?\d+$/.test(String(value)) &&
-                                    (BigInt(String(value)) <
-                                      BigInt(field.minimum!) ||
-                                      BigInt(String(value)) >
-                                        BigInt(field.maximum!))
-                                      ? Promise.reject(
-                                          new Error(
-                                            `Enter a value from ${field.minimum} to ${field.maximum} milliseconds.`,
-                                          ),
-                                        )
-                                      : Promise.resolve(),
+                                    validateRuleDuration(field, value),
                                 },
                               ]
                             : []),

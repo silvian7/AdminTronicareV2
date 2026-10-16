@@ -26,6 +26,10 @@ import {
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { hubLastEventTime } from "../../shared/hub-status";
+import {
+  millisecondsToSeconds,
+  ruleDurationLabels,
+} from "../../shared/rule-durations";
 
 export function ReferenceSelect({
   id,
@@ -271,6 +275,17 @@ export function FieldInput({
         checked={value === true}
         onChange={onChange}
         aria-label={fieldLabel(field.key)}
+      />
+    );
+  if (resource === "rules" && ruleDurationLabels[name])
+    return (
+      <Input
+        id={field.key}
+        inputMode="decimal"
+        value={value == null ? "" : String(value)}
+        onChange={(e) =>
+          onChange?.(e.target.value === "" ? undefined : e.target.value)
+        }
       />
     );
   if (field.type === "integer" || field.type === "number")
@@ -615,6 +630,55 @@ export function AssetLastEvent({ value }: { value: unknown }) {
 export function UserDateTime({ value }: { value: unknown }) {
   // Users timestamps are UTC even when the wire value omits the timezone suffix.
   return <LocalEventTime timestamp={hubLastEventTime(value)} />;
+}
+export function RuleDurationSeconds({ value }: { value: unknown }) {
+  const seconds = millisecondsToSeconds(value);
+  if (seconds === undefined) return <span className="muted">—</span>;
+  return (
+    <span className="numeric-value" title={`${String(value)} milliseconds`}>
+      {seconds}
+    </span>
+  );
+}
+export function RuleScheduleTime({ value }: { value: unknown }) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const parts = raw.match(/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/);
+  if (
+    !parts ||
+    Number(parts[1]) > 23 ||
+    Number(parts[2]) > 59 ||
+    Number(parts[3]) > 59
+  )
+    return <span className="muted">—</span>;
+  const milliseconds = Number((parts[4] ?? "").padEnd(3, "0"));
+  // Recurring UTC times have no date; use today's UTC date for seasonal offsets.
+  const date = new Date();
+  date.setUTCHours(
+    Number(parts[1]),
+    Number(parts[2]),
+    Number(parts[3]),
+    milliseconds,
+  );
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const localDate = date.toLocaleString(undefined, {
+    hourCycle: "h23",
+    timeZoneName: "shortOffset",
+  });
+  return (
+    <time
+      className="numeric-value"
+      dateTime={date.toISOString()}
+      title={`${timezone}: ${localDate}; ${raw} UTC on ${date.toISOString().slice(0, 10)} (today's UTC date)`}
+    >
+      {date.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+        ...(milliseconds ? { fractionalSecondDigits: 3 } : {}),
+      })}
+    </time>
+  );
 }
 export function SensorLastReading({ row }: { row: RecordData }) {
   const value = valueOf(row, "DhLastEvent");
