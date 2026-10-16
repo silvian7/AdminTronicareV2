@@ -564,9 +564,11 @@ export function SensorHistoryIdentity({ row }: { row: RecordData }) {
 export function ReferenceTag({
   resource,
   value,
+  showId = false,
 }: {
   resource: TypeResource | "organizations";
   value: unknown;
+  showId?: boolean;
 }) {
   const { id, allowed, validId, record } = useReferenceRecord(resource, value);
   if (value === null || value === undefined || value === "")
@@ -574,7 +576,11 @@ export function ReferenceTag({
   const tag = record ? translated(valueOf(record, "Tag")) : "";
   if (String(value) === "0") return <span className="numeric-value">0</span>;
   const label =
-    typeof tag === "string" && tag.trim() ? tag : `#${String(value)}`;
+    typeof tag === "string" && tag.trim()
+      ? showId
+        ? `${tag} (#${id})`
+        : tag
+      : `#${String(value)}`;
   return allowed && validId ? (
     <Link
       to={`/${resource}/${id}`}

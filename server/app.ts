@@ -380,7 +380,10 @@ export function createApp(
       typeof req.query._sort === "string"
         ? req.query._sort
         : resource.primaryKey;
-    if (["hubs", "devices"].includes(resource.name) && sort === "status") {
+    if (
+      ["assets", "hubs", "devices"].includes(resource.name) &&
+      sort === "status"
+    ) {
       const events = new Map(
         records.map((row) => [
           row,
@@ -518,6 +521,7 @@ export function createApp(
       group = idValue(req.body.groupId);
     if (!["add", "remove"].includes(req.body.action))
       throw new ApiError(400, "Unknown membership operation.");
+    let membershipOrganization: string | undefined;
     for (const [name, id] of [
       ["users", user],
       ["usergroups", group],
@@ -533,6 +537,21 @@ export function createApp(
           "This membership is outside your organization.",
         );
       if (name === "users") await authorization.protectUser(r.session, record);
+      if (req.body.action === "add") {
+        const organization = valueOf(record, "IDOrganization");
+        if (
+          typeof organization !== "string" ||
+          !/^(?:0|[1-9]\d{0,18})$/.test(organization) ||
+          BigInt(organization) > 9223372036854775807n ||
+          (membershipOrganization !== undefined &&
+            membershipOrganization !== organization)
+        )
+          throw new ApiError(
+            403,
+            "Choose a user from the group's organization.",
+          );
+        membershipOrganization = organization;
+      }
     }
     await upstream(
       "users",

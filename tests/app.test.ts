@@ -145,7 +145,7 @@ describe("contract routing", () => {
     expect(call.url.searchParams.has("offset")).toBe(false);
   });
   it.each(
-    ["hubs", "devices"].flatMap((resourceName) =>
+    ["assets", "hubs", "devices"].flatMap((resourceName) =>
       ["asc", "desc"].map((order) => [resourceName, order]),
     ),
   )(

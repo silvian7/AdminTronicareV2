@@ -352,6 +352,9 @@ a {
 .membership-add > .ant-select {
   min-width: 250px;
 }
+.group-member-add {
+  align-items: flex-end;
+}
 .history-filters {
   display: grid;
   grid-template-columns: 180px minmax(220px, 1fr) 210px 210px;
@@ -561,6 +564,7 @@ a {
   }
   .membership-add {
     flex-direction: column;
+    align-items: stretch;
   }
   .app-footer span {
     display: none;

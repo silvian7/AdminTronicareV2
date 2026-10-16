@@ -347,6 +347,112 @@ describe("privileged target protection", () => {
   );
 });
 
+describe("membership organization boundary", () => {
+  it.each([
+    { actor: "ordinary", identity: ordinary, organization: "7" },
+    {
+      actor: "platform",
+      identity: testIdentity,
+      organization: "9223372036854775807",
+    },
+    { actor: "platform unassigned", identity: testIdentity, organization: "0" },
+  ])(
+    "allows $actor membership additions within the target group's organization",
+    async ({ identity, organization }) => {
+      const { mutate, fixture, writes } = await setup(identity);
+      fixture.records.get("users")![0].m_nIDOrganization = organization;
+      fixture.records.get("usergroups")![0].m_nIDOrganization = organization;
+      expect(
+        (
+          await mutate("post", "/api/memberships", {
+            userId: "1",
+            groupId: "1",
+            action: "add",
+          })
+        ).status,
+      ).toBe(200);
+      expect(writes()).toHaveLength(1);
+      expect(writes()[0].url.pathname).toBe("/v1/users2usergroups/addlink");
+      expect(writes()[0].url.searchParams.get("iduser")).toBe("1");
+      expect(writes()[0].url.searchParams.get("idusergroup")).toBe("1");
+    },
+  );
+  it.each([
+    ["7", "999"],
+    ["999", "7"],
+    ["0", "7"],
+    ["9223372036854775807", "9223372036854775806"],
+  ])(
+    "denies platform membership additions from organization %s to group organization %s before mutation",
+    async (userOrganization, groupOrganization) => {
+      const { mutate, fixture, writes } = await setup(testIdentity);
+      fixture.records.get("users")![0].m_nIDOrganization = userOrganization;
+      fixture.records.get("usergroups")![0].m_nIDOrganization =
+        groupOrganization;
+      expect(
+        (
+          await mutate("post", "/api/memberships", {
+            userId: "1",
+            groupId: "1",
+            action: "add",
+          })
+        ).status,
+      ).toBe(403);
+      expect(writes()).toEqual([]);
+    },
+  );
+  it.each([
+    undefined,
+    null,
+    "",
+    "-1",
+    "00",
+    "07",
+    "7.0",
+    " 7",
+    "9223372036854775808",
+  ])(
+    "denies membership additions with missing or malformed organization ownership: %s",
+    async (organization) => {
+      for (const name of ["users", "usergroups"]) {
+        const { mutate, writes } = await setup(testIdentity, (url) =>
+          url.pathname === `/v1/${name}/1`
+            ? Response.json(
+                fixtureRecord(resourceMap[name], "1", {
+                  m_nIDOrganization: organization,
+                }),
+              )
+            : undefined,
+        );
+        expect(
+          (
+            await mutate("post", "/api/memberships", {
+              userId: "1",
+              groupId: "1",
+              action: "add",
+            })
+          ).status,
+        ).toBe(403);
+        expect(writes()).toEqual([]);
+      }
+    },
+  );
+  it("allows platform administrators to remove stale cross-organization memberships", async () => {
+    const { mutate, writes } = await setup(testIdentity);
+    expect(
+      (
+        await mutate("post", "/api/memberships", {
+          userId: "99",
+          groupId: "1",
+          action: "remove",
+        })
+      ).status,
+    ).toBe(200);
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0].url.pathname).toBe("/v1/users2usergroups/removelink");
+  });
+});
+
 describe("automation relationship authorization", () => {
   it("rejects explicit null ownership and a mismatched resolved record ID", async () => {
     const nullOwnership = await setup();

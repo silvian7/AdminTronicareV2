@@ -261,7 +261,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
   const [showFilters, setShowFilters] = useState(false);
   const [statusNow, setStatusNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!["hubs", "devices"].includes(resource.name)) return;
+    if (!["assets", "hubs", "devices"].includes(resource.name)) return;
     setStatusNow(Date.now());
     const timer = window.setInterval(() => setStatusNow(Date.now()), 15_000);
     return () => window.clearInterval(timer);
@@ -347,7 +347,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
       ).filter(
         (column) => resource.name !== "users" || column.key !== "record",
       ),
-      ...(["hubs", "devices"].includes(resource.name)
+      ...(["assets", "hubs", "devices"].includes(resource.name)
         ? [
             {
               title: "Status",
@@ -592,20 +592,143 @@ export function ResourceList({ resource }: { resource: Resource }) {
     </>
   );
 }
+function AddGroupMember({
+  groupId,
+  organization,
+  members,
+  disabled,
+}: {
+  groupId: string;
+  organization: string;
+  members: RecordData[];
+  disabled: boolean;
+}) {
+  const { message } = App.useApp();
+  const invalidate = useInvalidate();
+  const [selected, setSelected] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const mounted = useRef(false);
+  const busy = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const { result, query } = useList<RecordData>({
+    resource: "users",
+    pagination: { mode: "off" },
+    meta: { organization },
+    errorNotification: false,
+  });
+  const candidates = (query.isError ? [] : (result.data ?? [])).filter(
+    (user) =>
+      valueOf(user, "IDOrganization") === organization &&
+      valueOf(user, "Deleted") !== true &&
+      !members.some((member) => member.id === user.id),
+  );
+  const canAdd =
+    !!selected &&
+    candidates.some((user) => user.id === selected) &&
+    !disabled &&
+    !saving &&
+    !query.isFetching &&
+    !query.isError;
+  async function addMember() {
+    if (!canAdd || busy.current) return;
+    const epoch = getSessionEpoch();
+    const current = () => mounted.current && getSessionEpoch() === epoch;
+    busy.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await request("/api/memberships", {
+        method: "POST",
+        body: JSON.stringify({ userId: selected, groupId, action: "add" }),
+      });
+      if (getSessionEpoch() !== epoch) return;
+      if (current()) setSelected(undefined);
+      await Promise.all(
+        ["users", "usergroups"].map((resource) =>
+          invalidate({ resource, invalidates: ["list"] }),
+        ),
+      );
+      if (current()) message.success("Member added.");
+    } catch (e) {
+      if (current())
+        setError((e as Error).message ?? "Could not add this member.");
+    } finally {
+      busy.current = false;
+      if (current()) setSaving(false);
+    }
+  }
+  return (
+    <>
+      {error && (
+        <Alert type="error" showIcon message={error} className="page-alert" />
+      )}
+      <ErrorNotice error={query.error} retry={() => query.refetch()} />
+      <div className="membership-add group-member-add">
+        <div style={{ flex: 1 }}>
+          <label htmlFor={`group-${groupId}-member`}>User to add</label>
+          <Select
+            id={`group-${groupId}-member`}
+            value={selected}
+            onChange={setSelected}
+            options={candidates.map((user) => ({
+              value: user.id!,
+              label: `${recordTitle(user)} · ${user.id}`,
+            }))}
+            showSearch
+            optionFilterProp="label"
+            placeholder="Choose user"
+            loading={query.isFetching}
+            disabled={disabled || saving || query.isFetching || query.isError}
+            style={{ width: "100%" }}
+          />
+          {result.limited && (
+            <Typography.Text type="warning">
+              The service returned a limited set of users.
+            </Typography.Text>
+          )}
+        </div>
+        <Button
+          type="primary"
+          aria-label="Add member"
+          aria-busy={saving}
+          loading={saving}
+          disabled={!canAdd}
+          onClick={addMember}
+        >
+          Add member
+        </Button>
+      </div>
+    </>
+  );
+}
 function RelatedList({
   resource,
   filterName,
   filterValue,
+  memberOrganization,
 }: {
   resource: string;
   filterName: string;
   filterValue: string;
+  memberOrganization?: string;
 }) {
   const { organization, can } = useAdmin();
   const r = resourceMap[resource];
+  const groupMembers = resource === "users" && filterName === "idusergroup";
+  const validMemberOrganization =
+    typeof memberOrganization === "string" &&
+    /^(0|[1-9]\d{0,18})$/.test(memberOrganization) &&
+    BigInt(memberOrganization) <= 9223372036854775807n;
   const identifyById =
     resource === "devices" ||
-    (resource === "users" && filterName === "idorganization");
+    (resource === "users" &&
+      ["idorganization", "idusergroup"].includes(filterName));
   const { modal, message } = App.useApp();
   const deletion = useDelete();
   const refreshRecordReferences = useRefreshRecordReferences(resource);
@@ -613,7 +736,12 @@ function RelatedList({
     resource,
     filters: [{ field: filterName, operator: "eq", value: filterValue }],
     pagination: { mode: "off" },
-    meta: { organization },
+    meta: {
+      organization:
+        groupMembers && validMemberOrganization
+          ? memberOrganization
+          : organization,
+    },
     errorNotification: false,
     queryOptions: { enabled: can(r, "list") },
   });
@@ -630,6 +758,15 @@ function RelatedList({
         <Alert
           type="warning"
           message="This collection is limited by the service."
+        />
+      )}
+      {groupMembers && validMemberOrganization && can(r, "edit") && (
+        <AddGroupMember
+          key={`${filterValue}:${memberOrganization}:${organization}`}
+          groupId={filterValue}
+          organization={memberOrganization!}
+          members={result.data ?? []}
+          disabled={query.isFetching}
         />
       )}
       {resource === "sensors" && (
@@ -1165,11 +1302,12 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     ? "Last reading"
                     : fieldLabel(f.key),
               children:
-                ["assets", "users"].includes(resource.name) &&
+                ["assets", "users", "usergroups"].includes(resource.name) &&
                 canonical(f.key) === "IDOrganization" ? (
                   <ReferenceTag
                     resource="organizations"
                     value={record?.[f.key]}
+                    showId={resource.name === "usergroups"}
                   />
                 ) : resource.name === "users" &&
                   canonical(f.key) === "IDUserType" ? (
@@ -1310,6 +1448,9 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
           resource="users"
           filterName="idusergroup"
           filterValue={id!}
+          memberOrganization={String(
+            valueOf(record ?? {}, "IDOrganization") ?? "",
+          )}
         />
       ),
     });
