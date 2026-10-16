@@ -4509,6 +4509,28 @@
           "key": "m_sAssetTag",
           "type": "string",
           "nullable": false
+        },
+        {
+          "key": "m_nResetDelayMs",
+          "type": "integer",
+          "nullable": false,
+          "description": "Reset delay in milliseconds after an active rule receives normal input. 0 resets immediately; the maximum is seven days. Repeated normal input does not extend the deadline. Triggering input before the deadline cancels the pending reset without creating another alert.",
+          "minimum": "0",
+          "maximum": "604800000",
+          "format": "int64"
+        },
+        {
+          "key": "m_bResetPending",
+          "type": "boolean",
+          "nullable": false,
+          "description": "Whether an active output is waiting for its reset deadline. Runtime-owned and ignored on writes."
+        },
+        {
+          "key": "m_dhDhReset",
+          "type": "string",
+          "nullable": false,
+          "description": "UTC reset deadline with exactly three fractional digits and no timezone suffix. When no reset is pending, the nullable database deadline projects as 1970-01-01T00:00:00.000. Runtime-owned and ignored on writes.",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$"
         }
       ],
       "createFields": [
@@ -4680,6 +4702,15 @@
           "description": "Unicode string; NUL is rejected.",
           "maxLength": 200,
           "pattern": "^[^\\u0000]*$"
+        },
+        {
+          "key": "m_nResetDelayMs",
+          "type": "integer",
+          "nullable": false,
+          "description": "Reset delay in milliseconds after an active rule receives normal input. 0 resets immediately; the maximum is seven days. Repeated normal input does not extend the deadline. Triggering input before the deadline cancels the pending reset without creating another alert.",
+          "minimum": "0",
+          "maximum": "604800000",
+          "format": "int64"
         }
       ],
       "updateFields": [
@@ -4851,6 +4882,15 @@
           "description": "Unicode string; NUL is rejected.",
           "maxLength": 200,
           "pattern": "^[^\\u0000]*$"
+        },
+        {
+          "key": "m_nResetDelayMs",
+          "type": "integer",
+          "nullable": false,
+          "description": "Reset delay in milliseconds after an active rule receives normal input. 0 resets immediately; the maximum is seven days. Repeated normal input does not extend the deadline. Triggering input before the deadline cancels the pending reset without creating another alert.",
+          "minimum": "0",
+          "maximum": "604800000",
+          "format": "int64"
         }
       ],
       "query": [
@@ -6458,7 +6498,7 @@
     },
     "rules": {
       "file": "rules/openapi.json",
-      "sha256": "60553d0b380d10687fe5bb893e10df268b591bbf9213cbe7e6bcd8ce1a055d8a"
+      "sha256": "35e49614e2e03b0acb63a8b695dbfa7c2093d556862ed2e08cba61a7630e59f5"
     },
     "actions": {
       "file": "actions/openapi.json",

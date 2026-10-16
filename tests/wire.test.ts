@@ -28,6 +28,58 @@ describe("wire compatibility", () => {
     expect(body).toContain('"m_nIDOrganizationType":9223372036854775807');
     expect(body).toContain('"m_moEnCoursAutorisé":99999999.123456');
   });
+  it.each(["create", "edit"] as const)(
+    "serializes bounded rule reset delays as milliseconds on %s without forcing omitted values",
+    (mode) => {
+      for (const delay of ["0", "60000", "604800000"])
+        expect(
+          writeBody(resourceMap.rules, { m_nResetDelayMs: delay }, mode),
+        ).toBe(`{"m_nResetDelayMs":${delay}}`);
+      expect(
+        writeBody(resourceMap.rules, { m_sLabel: "Updated rule" }, mode),
+      ).toBe('{"m_sLabel":"Updated rule"}');
+    },
+  );
+  it.each(["create", "edit"] as const)(
+    "rejects invalid rule reset delays before upstream %s",
+    (mode) => {
+      for (const delay of ["-1", "604800001", "1.5", true, null])
+        expect(() =>
+          writeBody(resourceMap.rules, { m_nResetDelayMs: delay }, mode),
+        ).toThrow("highlighted");
+    },
+  );
+  it("returns reset delay and runtime status in rule browser records without changing exact IDs", () => {
+    const row = publicRecord(
+      resourceMap.rules,
+      parseWire(
+        '{"m_nIDRule":9223372036854775807,"m_nResetDelayMs":60000,"m_bResetPending":true,"m_dhDhReset":"2026-10-16T12:01:00.000"}',
+      ),
+    );
+    expect(row).toEqual({
+      id: "9223372036854775807",
+      m_nIDRule: "9223372036854775807",
+      m_nResetDelayMs: "60000",
+      m_bResetPending: true,
+      m_dhDhReset: "2026-10-16T12:01:00.000",
+    });
+  });
+  it.each(["create", "edit"] as const)(
+    "keeps reset runtime status read-only during rule %s",
+    (mode) => {
+      const fields = editableFields(resourceMap.rules, mode).map((f) => f.key);
+      expect(fields).toContain("m_nResetDelayMs");
+      for (const [key, value] of [
+        ["m_bResetPending", false],
+        ["m_dhDhReset", "2026-10-16T12:01:00.000"],
+      ] as const) {
+        expect(fields).not.toContain(key);
+        expect(() =>
+          writeBody(resourceMap.rules, { [key]: value }, mode),
+        ).toThrow("highlighted");
+      }
+    },
+  );
   it("keeps Core response and input member names separate", () => {
     expect(
       writeBody(

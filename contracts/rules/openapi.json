@@ -1583,10 +1583,18 @@
             "maxLength": 200,
             "pattern": "^[^\\u0000]*$",
             "description": "Unicode string; NUL is rejected."
+          },
+          "m_nResetDelayMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 604800000,
+            "default": 0,
+            "description": "Reset delay in milliseconds after an active rule receives normal input. 0 resets immediately; the maximum is seven days. Repeated normal input does not extend the deadline. Triggering input before the deadline cancels the pending reset without creating another alert."
           }
         },
         "additionalProperties": true,
-        "description": "All members are optional. POST uses defaults for omitted fields and generates the primary key. PUT merges supplied members into the existing record; a supplied primary key must match the path. Unknown members are ignored. Integer members accept JSON integers, not strings, booleans or decimal numbers. DhCreated and DhModified are assigned on creation; DhModified is assigned on update."
+        "description": "All members are optional. POST uses defaults for omitted fields and generates the primary key. PUT merges supplied members into the existing record; a supplied primary key must match the path. Unknown members are ignored. Integer members accept JSON integers, not strings, booleans or decimal numbers. DhCreated and DhModified are assigned on creation; DhModified is assigned on update. m_bResetPending and m_dhDhReset are runtime-owned status members and are ignored when supplied."
       },
       "Rules": {
         "type": "object",
@@ -1724,6 +1732,29 @@
           },
           "m_sAssetTag": {
             "type": "string"
+          },
+          "m_nResetDelayMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 604800000,
+            "default": 0,
+            "description": "Reset delay in milliseconds after an active rule receives normal input. 0 resets immediately; the maximum is seven days. Repeated normal input does not extend the deadline. Triggering input before the deadline cancels the pending reset without creating another alert."
+          },
+          "m_bResetPending": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "Whether an active output is waiting for its reset deadline. Runtime-owned and ignored on writes."
+          },
+          "m_dhDhReset": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+            "readOnly": true,
+            "description": "UTC reset deadline with exactly three fractional digits and no timezone suffix. When no reset is pending, the nullable database deadline projects as 1970-01-01T00:00:00.000. Runtime-owned and ignored on writes.",
+            "examples": [
+              "2026-01-01T12:01:00.000",
+              "1970-01-01T00:00:00.000"
+            ]
           }
         },
         "additionalProperties": false,
@@ -1753,7 +1784,10 @@
           "m_bEnabled",
           "m_bIsTemplate",
           "m_nIDAsset",
-          "m_sAssetTag"
+          "m_sAssetTag",
+          "m_nResetDelayMs",
+          "m_bResetPending",
+          "m_dhDhReset"
         ],
         "description": "Raw legacy wire record returned by the configured PostgreSQL store. Null database values are projected as zero, false, empty string, epoch or midnight according to field type.",
         "examples": [
@@ -1783,7 +1817,10 @@
             "m_bEnabled": false,
             "m_bIsTemplate": false,
             "m_nIDAsset": 0,
-            "m_sAssetTag": ""
+            "m_sAssetTag": "",
+            "m_nResetDelayMs": 0,
+            "m_bResetPending": false,
+            "m_dhDhReset": "1970-01-01T00:00:00.000"
           }
         ]
       },

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getDefaultSortOrder, useTable } from "@refinedev/antd";
 import { focusManager, useQueryClient } from "@tanstack/react-query";
 import {
@@ -206,7 +206,7 @@ const assetIdentityResources = new Set([
 function useRefreshRecordReferences(resource: string) {
   const { organization, can } = useAdmin();
   const invalidate = useInvalidate();
-  return async () => {
+  return useCallback(async () => {
     const references: { resource: string; marker: string }[] = [];
     if (organizationIdentityResources.has(resource))
       references.push({
@@ -248,7 +248,7 @@ function useRefreshRecordReferences(resource: string) {
           }),
         ),
     );
-  };
+  }, [resource, organization, can, invalidate]);
 }
 export function ResourceList({ resource }: { resource: Resource }) {
   const { organization, can } = useAdmin();
@@ -294,6 +294,16 @@ export function ResourceList({ resource }: { resource: Resource }) {
       }),
     [resource, can, refreshRecordReferences],
   );
+  useEffect(() => {
+    if (!can(resource, "list")) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      setStatusNow(Date.now());
+      void tableQuery.refetch({ cancelRefetch: false });
+      void refreshRecordReferences();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [resource, can, tableQuery.refetch, refreshRecordReferences]);
   const active = (key: string) =>
     filters.find(
       (f): f is CrudFilter & { field: string; value: unknown } =>
@@ -1421,6 +1431,10 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   <ReferenceTag resource="usertypes" value={record?.[f.key]} />
                 ) : resource.name === "users" && f.key.startsWith("m_dh") ? (
                   <UserDateTime value={record?.[f.key]} />
+                ) : resource.name === "rules" &&
+                  canonical(f.key) === "DhReset" &&
+                  valueOf(record ?? {}, "ResetPending") !== true ? (
+                  <span className="muted">—</span>
                 ) : resource.name === "assets" &&
                   canonical(f.key) === "DhLastEvent" ? (
                   <AssetLastEvent value={record?.[f.key]} />
@@ -1954,6 +1968,12 @@ export function ResourceEditor({
                       <Form.Item
                         name={field.key}
                         label={fieldLabel(field.key)}
+                        extra={
+                          resource.name === "rules" &&
+                          canonical(field.key) === "ResetDelayMs"
+                            ? "Time the input must remain normal before the rule resets. 0 resets immediately; maximum 7 days."
+                            : undefined
+                        }
                         rules={[
                           ...(field.required
                             ? [
@@ -1988,6 +2008,29 @@ export function ResourceEditor({
                                     !/^-?\d+$/.test(String(value))
                                       ? Promise.reject(
                                           new Error("Enter a whole number."),
+                                        )
+                                      : Promise.resolve(),
+                                },
+                              ]
+                            : []),
+                          ...(resource.name === "rules" &&
+                          canonical(field.key) === "ResetDelayMs" &&
+                          field.minimum !== undefined &&
+                          field.maximum !== undefined
+                            ? [
+                                {
+                                  validator: (_: unknown, value: unknown) =>
+                                    value !== undefined &&
+                                    value !== null &&
+                                    /^-?\d+$/.test(String(value)) &&
+                                    (BigInt(String(value)) <
+                                      BigInt(field.minimum!) ||
+                                      BigInt(String(value)) >
+                                        BigInt(field.maximum!))
+                                      ? Promise.reject(
+                                          new Error(
+                                            `Enter a value from ${field.minimum} to ${field.maximum} milliseconds.`,
+                                          ),
                                         )
                                       : Promise.resolve(),
                                 },
