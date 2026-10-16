@@ -149,6 +149,10 @@ function listRow(page: Page, label: string) {
     .locator("xpath=ancestor::tr");
 }
 
+function mainRuleRow(page: Page, id: string) {
+  return page.locator(`tr[data-row-key="${id}"]`);
+}
+
 async function columnIndex(page: Page, name: string) {
   return page
     .getByRole("columnheader", { name, exact: true })
@@ -169,9 +173,20 @@ test("Rules shows type tags after Rule with exact type links and shared lookups"
   await expect(
     page.getByRole("columnheader", { name: "Level", exact: true }),
   ).toHaveCount(0);
-  for (const label of ["Synthetic first rule", "Synthetic second rule"]) {
+  const ruleColumn = await columnIndex(page, "Rule");
+  for (const [id, label] of [
+    ["41", "Synthetic first rule"],
+    ["42", "Synthetic second rule"],
+  ]) {
+    const row = mainRuleRow(page, id!);
+    const ruleCell = row.getByRole("cell").nth(ruleColumn);
     await expect(
-      listRow(page, label).getByRole("link", { name: typeTag, exact: true }),
+      ruleCell.getByRole("link", { name: `SYNTHETIC-RULE-${id}`, exact: true }),
+    ).toHaveAttribute("href", `/rules/${id}`);
+    await expect(ruleCell.getByText(`#${id}`, { exact: true })).toBeVisible();
+    await expect(row.getByText(label!, { exact: true })).toHaveCount(0);
+    await expect(
+      row.getByRole("link", { name: typeTag, exact: true }),
     ).toHaveAttribute("href", `/ruletypes/${largeTypeId}`);
   }
   await expect(page.getByText(typeLabel, { exact: true })).toHaveCount(0);
@@ -184,7 +199,7 @@ test("Rules shows type tags after Rule with exact type links and shared lookups"
     ),
   ).toBe(true);
   await page
-    .getByRole("link", { name: "Synthetic first rule", exact: true })
+    .getByRole("link", { name: "SYNTHETIC-RULE-41", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Synthetic first rule", exact: true }),
@@ -206,11 +221,11 @@ test("Rules type references preserve the exact ID without reading or linking una
 }) => {
   const mock = await syntheticRules(page, { canReadTypes: false });
   await page.goto("/rules");
-  const row = listRow(page, "Synthetic first rule");
+  const row = mainRuleRow(page, "41");
   await expect(row.getByText(`#${largeTypeId}`, { exact: true })).toBeVisible();
   await expect(row.locator('a[href^="/ruletypes/"]')).toHaveCount(0);
   await row
-    .getByRole("link", { name: "Synthetic first rule", exact: true })
+    .getByRole("link", { name: "SYNTHETIC-RULE-41", exact: true })
     .click();
   const detail = page.locator(".ant-descriptions");
   await expect(
@@ -246,20 +261,20 @@ test("unavailable, empty-tag, zero and absent rule types preserve Rules rows", a
   });
   await page.goto("/rules");
   const typeColumn = await columnIndex(page, "Type");
-  for (const { typeId, label } of definitions.slice(0, 4))
+  for (const { id, typeId } of definitions.slice(0, 4))
     await expect(
-      listRow(page, label).getByRole("link", {
+      mainRuleRow(page, id).getByRole("link", {
         name: `#${typeId}`,
         exact: true,
       }),
     ).toHaveAttribute("href", `/ruletypes/${typeId}`);
-  for (const { label, value } of [
-    { label: "Synthetic unassigned type rule", value: "0" },
-    { label: "Synthetic absent type rule", value: "\u2014" },
-    { label: "Synthetic null type rule", value: "\u2014" },
+  for (const { id, value } of [
+    { id: "55", value: "0" },
+    { id: "56", value: "\u2014" },
+    { id: "57", value: "\u2014" },
   ])
     await expect(
-      listRow(page, label).getByRole("cell").nth(typeColumn),
+      mainRuleRow(page, id).getByRole("cell").nth(typeColumn),
     ).toHaveText(value);
   await expect(page.getByText(typeLabel, { exact: true })).toHaveCount(0);
   expect(mock.typeReads).not.toContain("0");
@@ -274,7 +289,7 @@ test("Rules refresh updates type tags and suppresses cached metadata after denie
   const mock = await syntheticRules(page);
   await page.goto("/rules");
   await expect(
-    listRow(page, "Synthetic first rule").getByRole("link", {
+    mainRuleRow(page, "41").getByRole("link", {
       name: typeTag,
       exact: true,
     }),
@@ -282,22 +297,91 @@ test("Rules refresh updates type tags and suppresses cached metadata after denie
   const changedTag = "UPDATED-SYNTHETIC-RULE-TYPE";
   mock.updateTypeTag(largeTypeId, changedTag);
   await page.getByRole("button", { name: /Refresh$/ }).click();
-  for (const label of ["Synthetic first rule", "Synthetic second rule"])
+  for (const id of ["41", "42"])
     await expect(
-      listRow(page, label).getByRole("link", { name: changedTag, exact: true }),
+      mainRuleRow(page, id).getByRole("link", {
+        name: changedTag,
+        exact: true,
+      }),
     ).toHaveAttribute("href", `/ruletypes/${largeTypeId}`);
   await expect(page.getByText(typeTag, { exact: true })).toHaveCount(0);
   mock.denyTypeReads();
   await page.getByRole("button", { name: /Refresh$/ }).click();
-  for (const label of ["Synthetic first rule", "Synthetic second rule"])
+  for (const id of ["41", "42"])
     await expect(
-      listRow(page, label).getByRole("link", {
+      mainRuleRow(page, id).getByRole("link", {
         name: `#${largeTypeId}`,
         exact: true,
       }),
     ).toHaveAttribute("href", `/ruletypes/${largeTypeId}`);
   await expect(page.getByText(changedTag, { exact: true })).toHaveCount(0);
   expect(mock.typeReads).toHaveLength(3);
+  expect(mock.mutations).toEqual([]);
+});
+
+test("Rules uses translated tags and exact IDs without falling back to descriptive labels", async ({
+  page,
+}, testInfo) => {
+  const ruleId = "9223372036854775805";
+  const tag = "SYNTHETIC-NUMERIC-RULE-TAG";
+  const translatedRule = {
+    ...ruleRecord(ruleId, "0", "Synthetic translated rule description"),
+    m_sTag: JSON.stringify({
+      messages: [
+        { lang: 5, text: "REGLE-SYNTHETIQUE" },
+        { lang: 3, text: tag },
+      ],
+    }),
+  };
+  const fallbackRules = [
+    { id: "61", tag: undefined, label: "Synthetic missing tag description" },
+    { id: "62", tag: null, label: "Synthetic null tag description" },
+    { id: "63", tag: "", label: "Synthetic empty tag description" },
+    { id: "64", tag: "  \t ", label: "Synthetic blank tag description" },
+  ];
+  const mock = await syntheticRules(page, {
+    rows: [
+      translatedRule,
+      ...fallbackRules.map(({ id, tag: value, label }) => ({
+        ...ruleRecord(id, "0", label),
+        m_sTag: value,
+      })),
+    ],
+  });
+  await page.goto("/rules");
+  const ruleColumn = await columnIndex(page, "Rule");
+  const cell = mainRuleRow(page, ruleId).getByRole("cell").nth(ruleColumn);
+  await expect(
+    cell.getByRole("link", { name: tag, exact: true }),
+  ).toHaveAttribute("href", `/rules/${ruleId}`);
+  await expect(cell.getByText(`#${ruleId}`, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("REGLE-SYNTHETIQUE", { exact: true }),
+  ).toHaveCount(0);
+  for (const { id, label } of fallbackRules) {
+    const fallback = mainRuleRow(page, id).getByRole("cell").nth(ruleColumn);
+    await expect(fallback.getByText("\u2014", { exact: true })).toBeVisible();
+    await expect(
+      fallback.getByRole("link", { name: `#${id}`, exact: true }),
+    ).toHaveAttribute("href", `/rules/${id}`);
+    await expect(page.getByText(label, { exact: true })).toHaveCount(0);
+  }
+  await expect(
+    page.getByText("Synthetic translated rule description", { exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath("rules-tag-and-id.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await cell.getByRole("link", { name: tag, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/rules/${ruleId}$`));
+  await expect(
+    page.getByRole("heading", {
+      name: "Synthetic translated rule description",
+      exact: true,
+    }),
+  ).toBeVisible();
   expect(mock.mutations).toEqual([]);
 });
 

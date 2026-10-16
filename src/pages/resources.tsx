@@ -389,11 +389,29 @@ export function ResourceList({ resource }: { resource: Resource }) {
               key: "record",
               width: 240,
               render: (_: unknown, row: RecordData) => {
+                const path = `/${resource.name}/${row.id}`;
+                if (resource.name === "rules") {
+                  const tag = translated(valueOf(row, "Tag"));
+                  return (
+                    <div className="record-identity">
+                      {tag.trim() ? (
+                        <>
+                          <Link to={path}>{tag}</Link>
+                          <span>#{row.id}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="record-name muted">—</span>
+                          <Link to={path}>#{row.id}</Link>
+                        </>
+                      )}
+                    </div>
+                  );
+                }
                 const tag = ["assets", "organizations"].includes(resource.name)
                   ? translated(valueOf(row, "Tag"))
                   : "";
                 const label = translated(valueOf(row, "Label"));
-                const path = `/${resource.name}/${row.id}`;
                 return (
                   <div className="record-identity">
                     {tag ? (
