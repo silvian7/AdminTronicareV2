@@ -78,6 +78,7 @@ import {
   ReferenceSelect,
   SensorCurrentValue,
   SensorLastReading,
+  SensorTypeTag,
   ReferenceTag,
   RuleDurationSeconds,
   RuleScheduleTime,
@@ -90,6 +91,11 @@ import {
   ruleDurationLabels,
   secondsToMilliseconds,
 } from "../../shared/rule-durations";
+import {
+  localTimeToUtc,
+  ruleScheduleLabels,
+  utcTimeToLocal,
+} from "../../shared/rule-schedule";
 
 function validateRuleDuration(field: Field, value: unknown): Promise<void> {
   if (value === undefined || value === null || value === "")
@@ -254,6 +260,11 @@ function useRefreshRecordReferences(resource: string) {
       references.push(
         { resource: "devices", marker: "deviceReference" },
         { resource: "devicetypes", marker: "equipmentTypeReference" },
+      );
+    if (resource === "rules")
+      references.push(
+        { resource: "sensors", marker: "sensorReference" },
+        { resource: "sensortypes", marker: "equipmentTypeReference" },
       );
     const equipmentTypeResource = equipmentTypeResources[resource];
     if (equipmentTypeResource)
@@ -1405,6 +1416,27 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     errorNotification: false,
     queryOptions: { enabled: can(resource, "show") },
   });
+  const canReadRuleActions =
+    resource.name === "rules" &&
+    can(resource, "show") &&
+    can(resourceMap.actions, "list") &&
+    query.isSuccess &&
+    record?.id === id;
+  const ruleActions = useList<RecordData>({
+    resource: "actions",
+    filters: [{ field: "idrule", operator: "eq", value: id }],
+    pagination: { mode: "off" },
+    meta: { organization },
+    errorNotification: false,
+    queryOptions: { enabled: canReadRuleActions },
+  });
+  const ruleActionsCount =
+    canReadRuleActions &&
+    ruleActions.query.isSuccess &&
+    !ruleActions.query.isPlaceholderData &&
+    typeof ruleActions.result.total === "number"
+      ? `${ruleActions.result.total}${ruleActions.result.limited ? "+" : ""}`
+      : undefined;
   const userName =
     resource.name === "users" && record
       ? ["First_name", "Last_name"]
@@ -1434,11 +1466,16 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
               (f) =>
                 displayedField(resource, f) &&
                 !(
-                  resource.name === "actions" && canonical(f.key) === "AssetTag"
+                  ["actions", "rules"].includes(resource.name) &&
+                  canonical(f.key) === "AssetTag"
                 ),
             )
             .map((f) => ({
               key: f.key,
+              styles:
+                resource.name === "rules" && f.key === resource.primaryKey
+                  ? { content: { whiteSpace: "nowrap" as const } }
+                  : undefined,
               label:
                 f.key === resource.primaryKey
                   ? "ID"
@@ -1446,8 +1483,8 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                       canonical(f.key) === "DhLastEvent"
                     ? "Last reading"
                     : resource.name === "rules" &&
-                        ["TimeStart", "TimeEnd"].includes(canonical(f.key))
-                      ? `${canonical(f.key) === "TimeStart" ? "Start" : "End"} time (local)`
+                        ruleScheduleLabels[canonical(f.key)]
+                      ? ruleScheduleLabels[canonical(f.key)]
                       : resource.name === "rules" &&
                           ruleDurationLabels[canonical(f.key)]
                         ? ruleDurationLabels[canonical(f.key)]
@@ -1466,7 +1503,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ) : resource.name === "users" && f.key.startsWith("m_dh") ? (
                   <UserDateTime value={record?.[f.key]} />
                 ) : resource.name === "rules" &&
-                  ["TimeStart", "TimeEnd"].includes(canonical(f.key)) ? (
+                  ruleScheduleLabels[canonical(f.key)] ? (
                   <RuleScheduleTime value={record?.[f.key]} />
                 ) : resource.name === "rules" &&
                   ruleDurationLabels[canonical(f.key)] ? (
@@ -1481,7 +1518,10 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ) : resource.name === "sensors" &&
                   canonical(f.key) === "DhLastEvent" ? (
                   <SensorLastReading row={record ?? {}} />
-                ) : resource.name === "actions" &&
+                ) : resource.name === "rules" &&
+                  canonical(f.key) === "IDSensor" ? (
+                  <SensorTypeTag value={record?.[f.key]} />
+                ) : ["actions", "rules"].includes(resource.name) &&
                   canonical(f.key) === "IDAsset" ? (
                   <AssetIdentity value={record?.[f.key]} />
                 ) : (
@@ -1639,7 +1679,10 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
   if (resource.name === "rules")
     tabs.push({
       key: "actions",
-      label: "Actions",
+      label:
+        ruleActionsCount === undefined
+          ? "Actions"
+          : `Actions (${ruleActionsCount})`,
       children: (
         <RelatedList resource="actions" filterName="idrule" filterValue={id!} />
       ),
@@ -1695,7 +1738,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
               <Button
                 icon={<ReloadOutlined />}
                 onClick={async () => {
-                  await query.refetch();
+                  const refreshed = await query.refetch();
+                  if (
+                    canReadRuleActions &&
+                    refreshed.isSuccess &&
+                    refreshed.data?.data.id === id
+                  )
+                    await ruleActions.query.refetch();
                   await refreshRecordReferences();
                 }}
               >
@@ -1791,6 +1840,8 @@ export function ResourceEditor({
   const [form] = Form.useForm();
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [scheduleReference, setScheduleReference] = useState(() => new Date());
+  const originalRuleSchedule = useRef<Record<string, unknown>>({});
   const saved = useRef(false);
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -1836,15 +1887,25 @@ export function ResourceEditor({
     initialized.current = key;
     saved.current = false;
     form.resetFields();
+    const reference = new Date();
+    if (resource.name === "rules") {
+      setScheduleReference(reference);
+      originalRuleSchedule.current = {};
+    }
     const initial: Record<string, unknown> = {};
     if (mode === "edit")
       for (const f of fields) {
         const value = detail.result?.[responseKey(resource, f.key)];
         if (value !== undefined)
           initial[f.key] =
-            resource.name === "rules" && ruleDurationLabels[canonical(f.key)]
-              ? millisecondsToSeconds(value)
-              : value;
+            resource.name === "rules" && ruleScheduleLabels[canonical(f.key)]
+              ? utcTimeToLocal(value, reference)
+              : resource.name === "rules" &&
+                  ruleDurationLabels[canonical(f.key)]
+                ? millisecondsToSeconds(value)
+                : value;
+        if (resource.name === "rules" && ruleScheduleLabels[canonical(f.key)])
+          originalRuleSchedule.current[f.key] = value;
       }
     else
       for (const f of fields) {
@@ -1943,14 +2004,27 @@ export function ResourceEditor({
             const duration =
               resource.name === "rules" &&
               ruleDurationLabels[canonical(field.key)];
-            const value = duration
-              ? secondsToMilliseconds(values[field.key])
-              : values[field.key];
+            const schedule =
+              resource.name === "rules" &&
+              ruleScheduleLabels[canonical(field.key)];
+            const stored = schedule
+              ? originalRuleSchedule.current[field.key]
+              : detail.result?.[responseKey(resource, field.key)];
+            const value = schedule
+              ? localTimeToUtc(values[field.key], scheduleReference, stored)
+              : duration
+                ? secondsToMilliseconds(values[field.key])
+                : values[field.key];
             if (value === undefined) continue;
-            const stored = detail.result?.[responseKey(resource, field.key)];
-            const original = duration
-              ? secondsToMilliseconds(millisecondsToSeconds(stored))
-              : stored;
+            const original = schedule
+              ? localTimeToUtc(
+                  utcTimeToLocal(stored, scheduleReference),
+                  scheduleReference,
+                  stored,
+                )
+              : duration
+                ? secondsToMilliseconds(millisecondsToSeconds(stored))
+                : stored;
             if (mode === "create" || value !== original)
               changed[field.key] = value;
           }
@@ -2011,7 +2085,7 @@ export function ResourceEditor({
                     <Alert
                       className="page-alert"
                       type="info"
-                      message="Schedules use UTC. The times you enter are saved unchanged; all-day mode ignores the daily time window."
+                      message={`Times use your browser's local timezone (${Intl.DateTimeFormat().resolvedOptions().timeZone}), using UTC date ${scheduleReference.toISOString().slice(0, 10)} for daylight saving adjustments. They are saved in UTC; all-day mode ignores the daily time window.`}
                     />
                   )}
                 <Row gutter={24}>
@@ -2021,7 +2095,8 @@ export function ResourceEditor({
                         name={field.key}
                         label={
                           (resource.name === "rules" &&
-                            ruleDurationLabels[canonical(field.key)]) ||
+                            (ruleScheduleLabels[canonical(field.key)] ||
+                              ruleDurationLabels[canonical(field.key)])) ||
                           fieldLabel(field.key)
                         }
                         extra={
@@ -2070,6 +2145,26 @@ export function ResourceEditor({
                                           new Error("Enter a whole number."),
                                         )
                                       : Promise.resolve(),
+                                },
+                              ]
+                            : []),
+                          ...(resource.name === "rules" &&
+                          ruleScheduleLabels[canonical(field.key)]
+                            ? [
+                                {
+                                  validator: (_: unknown, value: unknown) =>
+                                    value === undefined ||
+                                    localTimeToUtc(
+                                      value,
+                                      scheduleReference,
+                                      originalRuleSchedule.current[field.key],
+                                    ) !== undefined
+                                      ? Promise.resolve()
+                                      : Promise.reject(
+                                          new Error(
+                                            "Enter a valid local time for the schedule date.",
+                                          ),
+                                        ),
                                 },
                               ]
                             : []),

@@ -21,7 +21,7 @@ async function mockRuleSchedule(
     userTypeId: "30",
     level: 30,
     mustChangePassword: false,
-    permissions: [{ entity: "rules", rights: "ru" }],
+    permissions: [{ entity: "rules", rights: "cru" }],
   };
   const rule: RecordData = {
     id: "41",
@@ -37,6 +37,7 @@ async function mockRuleSchedule(
     m_bEnabled: true,
     m_bTime24h: false,
   };
+  const records: Record<string, RecordData> = { "41": rule };
   const mutations: {
     method: string;
     path: string;
@@ -70,11 +71,27 @@ async function mockRuleSchedule(
         Object.assign(rule, body);
         return reply({ data: rule });
       }
+      if (path === "/api/resources/rules" && request.method() === "POST") {
+        records["42"] = {
+          id: "42",
+          m_nIDRule: "42",
+          m_nIDSensor: "0",
+          m_nIDRuleType: "0",
+          m_nIDAsset: "0",
+          ...body,
+        };
+        return reply({ data: records["42"] });
+      }
       return reply({ message: "Synthetic operation unavailable." }, 405);
     }
-    if (path === "/api/resources/rules/41") return reply({ data: rule });
+    const selected = records[path.split("/").at(-1)!];
+    if (path.startsWith("/api/resources/rules/") && selected)
+      return reply({ data: selected });
     if (path === "/api/resources/rules")
-      return reply({ data: [rule], total: 1 });
+      return reply({
+        data: Object.values(records),
+        total: Object.keys(records).length,
+      });
     // Every API request, including selectors and unrelated tabs, is synthetic.
     return reply({ data: [], total: 0 });
   });
@@ -249,43 +266,218 @@ test("UTC midnight is a valid schedule while missing and invalid times remain un
   expect(mock.mutations).toEqual([]);
 });
 
-test("editing a rule retains stored UTC times and saving another field does not submit local conversions", async ({
+test("editing a rule shows local times and saving another field preserves stored UTC times and milliseconds", async ({
+  page,
+}) => {
+  const mock = await mockRuleSchedule(
+    page,
+    "2026-07-15T12:00:00.000Z",
+    "00:30:00.123",
+    "23:45:30.007",
+  );
+  await page.goto("/rules/41");
+  await expect(localTime(page, "Start")).toHaveText("02:30:00.123");
+  await expect(localTime(page, "End")).toHaveText("01:45:30.007");
+  await page.getByRole("button", { name: /Edit$/ }).click();
+  await expect(
+    page.getByLabel("Start time (local)", { exact: true }),
+  ).toHaveValue("02:30:00.123");
+  await expect(
+    page.getByLabel("End time (local)", { exact: true }),
+  ).toHaveValue("01:45:30.007");
+  await expect(
+    page.getByLabel("Start time (local)", { exact: true }),
+  ).toHaveAttribute("step", "0.001");
+  await expect(
+    page.getByLabel("End time (local)", { exact: true }),
+  ).toHaveAttribute("step", "0.001");
+  await expect(
+    page.getByLabel("Start time (UTC)", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("End time (UTC)", { exact: true })).toHaveCount(
+    0,
+  );
+  await page
+    .getByLabel("Label", { exact: true })
+    .fill("Synthetic renamed schedule rule");
+  await page.getByRole("button", { name: /Save rule$/ }).click();
+  await expect(page).toHaveURL(/\/rules\/41$/);
+  await expect(localTime(page, "Start")).toHaveText("02:30:00.123");
+  await expect(localTime(page, "End")).toHaveText("01:45:30.007");
+  expect(mock.mutations).toEqual([
+    {
+      method: "PUT",
+      path: "/api/resources/rules/41",
+      body: { m_sLabel: "Synthetic renamed schedule rule" },
+      csrf: "synthetic-rule-schedule-csrf",
+    },
+  ]);
+});
+
+for (const season of [
+  {
+    name: "winter",
+    now: "2026-01-15T12:00:00.000Z",
+    start: "07:15:30.125",
+    end: "21:45:00.007",
+  },
+  {
+    name: "summer",
+    now: "2026-07-15T12:00:00.000Z",
+    start: "06:15:30.125",
+    end: "20:45:00.007",
+  },
+])
+  test(`edited local schedule times are stored as exact UTC times in Brussels ${season.name}`, async ({
+    page,
+  }, testInfo) => {
+    const mock = await mockRuleSchedule(
+      page,
+      season.now,
+      "00:30:00",
+      "23:45:30",
+    );
+    await page.goto("/rules/41/edit");
+    await page
+      .getByLabel("Start time (local)", { exact: true })
+      .fill("08:15:30.125");
+    await page
+      .getByLabel("End time (local)", { exact: true })
+      .fill("22:45:00.007");
+    if (season.name === "summer") {
+      await page
+        .getByLabel("Start time (local)", { exact: true })
+        .evaluate((input) => input.scrollIntoView({ block: "center" }));
+      await page.screenshot({
+        path: testInfo.outputPath("rule-schedule-local-edit.png"),
+        animations: "disabled",
+      });
+    }
+    await page.getByRole("button", { name: /Save rule$/ }).click();
+    await expect(page).toHaveURL(/\/rules\/41$/);
+    await expect(localTime(page, "Start")).toHaveText("08:15:30.125");
+    await expect(localTime(page, "End")).toHaveText("22:45:00.007");
+    expect(mock.mutations).toEqual([
+      {
+        method: "PUT",
+        path: "/api/resources/rules/41",
+        body: { m_hTimeStart: season.start, m_hTimeEnd: season.end },
+        csrf: "synthetic-rule-schedule-csrf",
+      },
+    ]);
+  });
+
+test.describe("editing local schedule times in New York", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("local edits crossing midnight are saved as UTC time-of-day values", async ({
+    page,
+  }) => {
+    const mock = await mockRuleSchedule(
+      page,
+      "2026-01-15T02:00:00.000Z",
+      "00:30:00",
+      "23:45:00",
+    );
+    await page.goto("/rules/41/edit");
+    const start = page.getByLabel("Start time (local)", { exact: true });
+    const end = page.getByLabel("End time (local)", { exact: true });
+    await expect(start).toHaveValue("19:30:00");
+    await expect(end).toHaveValue("18:45:00");
+    await start.fill("20:15:30.125");
+    await end.fill("00:15:00.500");
+    await page.getByRole("button", { name: /Save rule$/ }).click();
+    await expect(page).toHaveURL(/\/rules\/41$/);
+    await expect(localTime(page, "Start")).toHaveText("20:15:30.125");
+    await expect(localTime(page, "End")).toHaveText("00:15:00.500");
+    expect(mock.mutations.map(({ body }) => body)).toEqual([
+      { m_hTimeStart: "01:15:30.125", m_hTimeEnd: "05:15:00.500" },
+    ]);
+  });
+});
+
+test("a nonexistent DST local time is rejected using the editor's initial schedule date after midnight", async ({
+  page,
+}) => {
+  const mock = await mockRuleSchedule(
+    page,
+    "2026-03-29T23:50:00.000Z",
+    "00:30:00",
+    "02:30:00",
+  );
+  await page.goto("/rules/41/edit");
+  const start = page.getByLabel("Start time (local)", { exact: true });
+  await expect(start).toHaveValue("01:30:00");
+  await page.clock.setFixedTime(new Date("2026-03-30T00:10:00.000Z"));
+  await start.fill("02:30:00");
+  await page.getByRole("button", { name: /Save rule$/ }).click();
+  const item = page.locator(".ant-form-item").filter({ has: start });
+  await expect(
+    item.getByText("Enter a valid local time for the schedule date.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/rules\/41\/edit$/);
+  await expect(start).toHaveValue("02:30:00");
+  expect(mock.mutations).toEqual([]);
+});
+
+test("unchanged local times in the autumn DST overlap preserve each original UTC occurrence", async ({
+  page,
+}) => {
+  const mock = await mockRuleSchedule(
+    page,
+    "2026-10-25T12:00:00.000Z",
+    "01:30:00.125",
+    "00:30:00.125",
+  );
+  await page.goto("/rules/41/edit");
+  for (const label of ["Start time (local)", "End time (local)"])
+    await expect(page.getByLabel(label, { exact: true })).toHaveValue(
+      "02:30:00.125",
+    );
+  await page
+    .getByLabel("Label", { exact: true })
+    .fill("Synthetic unchanged overlap schedule");
+  await page.getByRole("button", { name: /Save rule$/ }).click();
+  await expect(page).toHaveURL(/\/rules\/41$/);
+  await expect(localTime(page, "Start")).toHaveText("02:30:00.125");
+  await expect(localTime(page, "End")).toHaveText("02:30:00.125");
+  expect(mock.mutations.map(({ body }) => body)).toEqual([
+    { m_sLabel: "Synthetic unchanged overlap schedule" },
+  ]);
+});
+
+test("new rules accept local schedule times and post UTC times with milliseconds", async ({
   page,
 }) => {
   const mock = await mockRuleSchedule(
     page,
     "2026-07-15T12:00:00.000Z",
     "00:30:00",
-    "23:45:30",
+    "23:45:00",
   );
-  await page.goto("/rules/41");
-  await expect(localTime(page, "Start")).toHaveText("02:30:00");
-  await expect(localTime(page, "End")).toHaveText("01:45:30");
-  await page.getByRole("button", { name: /Edit$/ }).click();
-  await expect(
-    page.getByLabel("Start time (UTC)", { exact: true }),
-  ).toHaveValue("00:30:00");
-  await expect(page.getByLabel("End time (UTC)", { exact: true })).toHaveValue(
-    "23:45:30",
-  );
-  await expect(
-    page.getByLabel("Start time (local)", { exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByLabel("End time (local)", { exact: true }),
-  ).toHaveCount(0);
+  await page.goto("/rules/new");
   await page
     .getByLabel("Label", { exact: true })
-    .fill("Synthetic renamed schedule rule");
+    .fill("Synthetic created local schedule");
+  await page
+    .getByLabel("Start time (local)", { exact: true })
+    .fill("08:00:00.123");
+  await page.getByLabel("End time (local)", { exact: true }).fill("23:45:30");
   await page.getByRole("button", { name: /Save rule$/ }).click();
-  await expect(page).toHaveURL(/\/rules\/41$/);
-  await expect(localTime(page, "Start")).toHaveText("02:30:00");
-  await expect(localTime(page, "End")).toHaveText("01:45:30");
+  await expect(page).toHaveURL(/\/rules\/42$/);
+  await expect(localTime(page, "Start")).toHaveText("08:00:00.123");
+  await expect(localTime(page, "End")).toHaveText("23:45:30");
   expect(mock.mutations).toEqual([
     {
-      method: "PUT",
-      path: "/api/resources/rules/41",
-      body: { m_sLabel: "Synthetic renamed schedule rule" },
+      method: "POST",
+      path: "/api/resources/rules",
+      body: {
+        m_sLabel: "Synthetic created local schedule",
+        m_hTimeStart: "06:00:00.123",
+        m_hTimeEnd: "21:45:30",
+      },
       csrf: "synthetic-rule-schedule-csrf",
     },
   ]);

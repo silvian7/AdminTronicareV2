@@ -495,7 +495,7 @@ test("Rule Actions includes type tags while retaining Asset and Enabled", async 
   await expect(
     page.getByRole("heading", { name: ruleLabel, exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Actions", exact: true }).click();
+  await page.getByRole("tab", { name: "Actions (2)", exact: true }).click();
   await expect(
     page.getByRole("columnheader", { name: "Type", exact: true }),
   ).toBeVisible();

@@ -30,6 +30,10 @@ import {
   millisecondsToSeconds,
   ruleDurationLabels,
 } from "../../shared/rule-durations";
+import {
+  ruleScheduleLabels,
+  utcScheduleDate,
+} from "../../shared/rule-schedule";
 
 export function ReferenceSelect({
   id,
@@ -316,13 +320,17 @@ export function FieldInput({
       <Input
         id={field.key}
         type="time"
-        step="1"
+        step={resource === "rules" && ruleScheduleLabels[name] ? "0.001" : "1"}
         value={String(value ?? "")}
         onChange={(e) =>
           onChange?.(
-            e.target.value.length === 5
-              ? `${e.target.value}:00`
-              : e.target.value,
+            resource === "rules" &&
+              ruleScheduleLabels[name] &&
+              e.target.value === ""
+              ? undefined
+              : e.target.value.length === 5
+                ? `${e.target.value}:00`
+                : e.target.value,
           )
         }
       />
@@ -431,7 +439,7 @@ const referenceId = (value: unknown) =>
 const validReferenceId = (id: string) =>
   /^[1-9]\d{0,18}$/.test(id) && BigInt(id) <= 9223372036854775807n;
 function useReferenceRecord(
-  resource: TypeResource | "organizations" | "assets" | "devices",
+  resource: TypeResource | "organizations" | "assets" | "devices" | "sensors",
   value: unknown,
 ) {
   const { organization, can } = useAdmin();
@@ -444,6 +452,7 @@ function useReferenceRecord(
     meta: {
       organization,
       ...(resource === "devices" ? { deviceReference: true } : {}),
+      ...(resource === "sensors" ? { sensorReference: true } : {}),
     },
     queryOptions: {
       enabled: allowed && validId,
@@ -461,6 +470,7 @@ function useReferenceRecord(
         userTypeReference: resource === "usertypes",
         assetReference: resource === "assets",
         deviceReference: resource === "devices",
+        sensorReference: resource === "sensors",
         organization,
       },
     },
@@ -534,6 +544,31 @@ export function DeviceIdentity({ value }: { value: unknown }) {
         <span>#{String(value)}</span>
       )}
     </div>
+  );
+}
+export function SensorTypeTag({ value }: { value: unknown }) {
+  const {
+    id,
+    allowed,
+    validId,
+    record: sensor,
+  } = useReferenceRecord("sensors", value);
+  const { record: sensorType } = useReferenceRecord(
+    "sensortypes",
+    sensor ? valueOf(sensor, "IDSensorType") : undefined,
+  );
+  if (value === null || value === undefined || value === "")
+    return <span className="muted">—</span>;
+  if (String(value) === "0") return <span className="numeric-value">0</span>;
+  const tag = sensorType ? translated(valueOf(sensorType, "Tag")) : "";
+  const label =
+    typeof tag === "string" && tag.trim() ? tag : `#${String(value)}`;
+  return allowed && validId ? (
+    <Link to={`/sensors/${id}`} title={`Sensor #${id}`}>
+      {label}
+    </Link>
+  ) : (
+    <span>{label}</span>
   );
 }
 export function SensorHistoryIdentity({ row }: { row: RecordData }) {
@@ -641,24 +676,8 @@ export function RuleDurationSeconds({ value }: { value: unknown }) {
   );
 }
 export function RuleScheduleTime({ value }: { value: unknown }) {
-  const raw = typeof value === "string" ? value.trim() : "";
-  const parts = raw.match(/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/);
-  if (
-    !parts ||
-    Number(parts[1]) > 23 ||
-    Number(parts[2]) > 59 ||
-    Number(parts[3]) > 59
-  )
-    return <span className="muted">—</span>;
-  const milliseconds = Number((parts[4] ?? "").padEnd(3, "0"));
-  // Recurring UTC times have no date; use today's UTC date for seasonal offsets.
-  const date = new Date();
-  date.setUTCHours(
-    Number(parts[1]),
-    Number(parts[2]),
-    Number(parts[3]),
-    milliseconds,
-  );
+  const date = utcScheduleDate(value, new Date());
+  if (!date) return <span className="muted">—</span>;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const localDate = date.toLocaleString(undefined, {
     hourCycle: "h23",
@@ -668,14 +687,14 @@ export function RuleScheduleTime({ value }: { value: unknown }) {
     <time
       className="numeric-value"
       dateTime={date.toISOString()}
-      title={`${timezone}: ${localDate}; ${raw} UTC on ${date.toISOString().slice(0, 10)} (today's UTC date)`}
+      title={`${timezone}: ${localDate}; ${String(value).trim()} UTC on ${date.toISOString().slice(0, 10)} (today's UTC date)`}
     >
       {date.toLocaleTimeString(undefined, {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
         hourCycle: "h23",
-        ...(milliseconds ? { fractionalSecondDigits: 3 } : {}),
+        ...(date.getUTCMilliseconds() ? { fractionalSecondDigits: 3 } : {}),
       })}
     </time>
   );
