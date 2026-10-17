@@ -32,6 +32,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  type TabsProps,
 } from "antd";
 import {
   ArrowLeftOutlined,
@@ -170,6 +171,28 @@ function displayedField(resource: Resource, field: Field) {
       canonical(field.key) === "Level"
     )
   );
+}
+function groupFields(fields: Field[], primaryKey?: string) {
+  const groups: { name: string; fields: Field[] }[] = [
+    { name: "General", fields: [] },
+    { name: "Relationships", fields: [] },
+    { name: "Configuration", fields: [] },
+  ];
+  for (const field of fields) {
+    const name = canonical(field.key);
+    groups[
+      field.key === primaryKey
+        ? 0
+        : referenceResource[name]
+          ? 1
+          : /^(Tag|Label|Login|First_name|Last_name|Email|SerialNr|SerialCode)$/.test(
+                name,
+              )
+            ? 0
+            : 2
+    ].fields.push(field);
+  }
+  return groups.filter((group) => group.fields.length);
 }
 function selectedColumns(resource: Resource) {
   const priority = [
@@ -1478,24 +1501,39 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       return next;
     });
   }
-  const tabs = [
+  const detailFields = resource.fields.filter(
+    (field) =>
+      displayedField(resource, field) &&
+      !(
+        ["actions", "rules"].includes(resource.name) &&
+        canonical(field.key) === "AssetTag"
+      ),
+  );
+  const groupedDetails = [
+    "users",
+    "organizations",
+    "usergroups",
+    "assets",
+    "hubs",
+    "devices",
+    "sensors",
+    "rules",
+    "actions",
+  ].includes(resource.name);
+  const detailGroups = groupedDetails
+    ? groupFields(detailFields, resource.primaryKey)
+    : [{ name: "Details", fields: detailFields }];
+  const tabs: NonNullable<TabsProps["items"]> = [
     {
       key: "details",
       label: "Details",
-      children: (
-        <Descriptions
-          bordered
-          column={{ xs: 1, sm: 1, md: 2 }}
-          items={resource.fields
-            .filter(
-              (f) =>
-                displayedField(resource, f) &&
-                !(
-                  ["actions", "rules"].includes(resource.name) &&
-                  canonical(f.key) === "AssetTag"
-                ),
-            )
-            .map((f) => ({
+      children: detailGroups.map((group) => {
+        const descriptions = (
+          <Descriptions
+            key={group.name}
+            bordered
+            column={{ xs: 1, sm: 1, md: 2 }}
+            items={group.fields.map((f) => ({
               key: f.key,
               styles:
                 ["rules", "actions"].includes(resource.name) &&
@@ -1516,13 +1554,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                         ? ruleDurationLabels[canonical(f.key)]
                         : fieldLabel(f.key),
               children:
-                ["assets", "users", "usergroups", "devices"].includes(
+                ["assets", "users", "usergroups", "devices", "hubs"].includes(
                   resource.name,
                 ) && canonical(f.key) === "IDOrganization" ? (
                   <ReferenceTag
                     resource="organizations"
                     value={record?.[f.key]}
-                    showId={["usergroups", "devices"].includes(resource.name)}
+                    showId={resource.name === "usergroups"}
                   />
                 ) : resource.name === "users" &&
                   canonical(f.key) === "IDUserType" ? (
@@ -1551,9 +1589,20 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ) : resource.name === "actions" &&
                   canonical(f.key) === "IDRule" ? (
                   <RuleIdentity value={record?.[f.key]} />
-                ) : ["actions", "rules", "devices"].includes(resource.name) &&
+                ) : resource.name === "sensors" &&
                   canonical(f.key) === "IDAsset" ? (
-                  <AssetIdentity value={record?.[f.key]} />
+                  <ReferenceTag
+                    resource="assets"
+                    value={record?.[f.key]}
+                    showId
+                  />
+                ) : ["actions", "rules", "devices", "hubs"].includes(
+                    resource.name,
+                  ) && canonical(f.key) === "IDAsset" ? (
+                  <AssetIdentity
+                    value={record?.[f.key]}
+                    showId={resource.name !== "hubs"}
+                  />
                 ) : (
                   <FieldValue
                     field={f}
@@ -1562,8 +1611,16 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   />
                 ),
             }))}
-        />
-      ),
+          />
+        );
+        return groupedDetails ? (
+          <Card className="form-section" title={group.name} key={group.name}>
+            {descriptions}
+          </Card>
+        ) : (
+          descriptions
+        );
+      }),
     },
   ];
   if (resource.name === "assets")
@@ -1983,21 +2040,7 @@ export function ResourceEditor({
         retry={() => detail.query.refetch()}
       />
     );
-  const groups: { name: string; fields: Field[] }[] = [
-    { name: "General", fields: [] },
-    { name: "Relationships", fields: [] },
-    { name: "Configuration", fields: [] },
-  ];
-  for (const f of fields)
-    groups[
-      referenceResource[canonical(f.key)]
-        ? 1
-        : /^(Tag|Label|Login|First_name|Last_name|Email|SerialNr|SerialCode)$/.test(
-              canonical(f.key),
-            )
-          ? 0
-          : 2
-    ].fields.push(f);
+  const groups = groupFields(fields);
   return (
     <>
       <Breadcrumb

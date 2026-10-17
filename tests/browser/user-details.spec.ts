@@ -133,12 +133,67 @@ async function expectLocalTime(
 
 test("user details retain the full-name title and resolve exact organization and user type tags on refresh", async ({
   page,
-}) => {
-  const mock = await syntheticUserDetails(page);
+}, testInfo) => {
+  const mock = await syntheticUserDetails(page, true, {
+    m_sTag: "SYNTHETIC-USER-TAG",
+    m_sEmail: "synthetic-user@example.invalid",
+    m_bAdmin: false,
+    m_bConnected: true,
+    m_bDeleted: false,
+    m_dhLastLogin: "2026-01-15T12:34:56.123",
+    m_dhLastLogout: "2026-07-15T12:34:56",
+    m_dhCreated: "2026-01-01T12:00:00",
+    m_dhModified: "2026-07-15T12:00:00",
+    m_sHash: "synthetic-hidden-hash",
+    m_sToken: "synthetic-hidden-token",
+  });
   await page.goto("/users/41");
   await expect(
     page.getByRole("heading", { name: "Synthetic Person", exact: true }),
   ).toBeVisible();
+  const panels = page.locator(".form-section");
+  await expect(panels.locator(".ant-card-head-title")).toHaveText([
+    "General",
+    "Relationships",
+    "Configuration",
+  ]);
+  const fieldGroups = [
+    ["ID", "Login", "First name", "Last name", "Tag", "Label", "Email"],
+    ["Organization", "User type"],
+    [
+      "Admin",
+      "Connected",
+      "Last Login",
+      "Last Logout",
+      "Deleted",
+      "Created",
+      "Modified",
+      "Old Login",
+    ],
+  ];
+  for (const [index, fields] of fieldGroups.entries()) {
+    await expect(
+      panels.nth(index).locator(".ant-descriptions-bordered"),
+    ).toHaveCount(1);
+    await expect(
+      panels.nth(index).locator(".ant-descriptions-item-label"),
+    ).toHaveText(fields);
+  }
+  const labels = await page
+    .locator(".ant-descriptions-item-label")
+    .allTextContents();
+  expect(labels).toEqual(fieldGroups.flat());
+  expect(new Set(labels).size).toBe(labels.length);
+  await expect(detailField(page, "ID")).toHaveText("41");
+  await expect(detailField(page, "Login")).toHaveText("synthetic-login");
+  await expect(detailField(page, "Tag")).toHaveText("SYNTHETIC-USER-TAG");
+  await expect(detailField(page, "Email")).toHaveText(
+    "synthetic-user@example.invalid",
+  );
+  await expect(detailField(page, "Admin")).toHaveText("No");
+  await expect(detailField(page, "Connected")).toHaveText("Yes");
+  for (const secret of ["synthetic-hidden-hash", "synthetic-hidden-token"])
+    await expect(page.getByText(secret, { exact: true })).toHaveCount(0);
   const references = [
     {
       field: "Organization",
@@ -168,6 +223,23 @@ test("user details retain the full-name title and resolve exact organization and
       0,
     );
   }
+  await page.screenshot({
+    path: testInfo.outputPath("user-detail-panels-desktop.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(panels.locator(".ant-card-head-title")).toHaveText([
+    "General",
+    "Relationships",
+    "Configuration",
+  ]);
+  await page.screenshot({
+    path: testInfo.outputPath("user-detail-panels-mobile.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   mock.rename();
   await page.getByRole("button", { name: /Refresh$/ }).click();
   for (const reference of references) {

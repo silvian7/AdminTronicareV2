@@ -69,6 +69,7 @@ async function syntheticHierarchy(
     id: hubId,
     m_nIDHub: hubId,
     m_nIDOrganization: organizationId,
+    m_nIDAsset: assetId,
     m_sTag: "SYNTHETIC-MSTRONIC-HUB",
     m_sLabel: hubLabel,
   };
@@ -128,7 +129,12 @@ async function syntheticHierarchy(
     id: assetId,
     m_nIDAsset: assetId,
     m_nIDOrganization: organizationId,
-    m_sTag: assetTag,
+    m_sTag: JSON.stringify({
+      messages: [
+        { lang: 5, text: "SYNTHETIC-FRENCH-ASSET-TAG" },
+        { lang: 3, text: assetTag },
+      ],
+    }),
     m_sLabel: JSON.stringify({
       messages: [
         { lang: "fr", text: "Synthetic French asset label" },
@@ -450,13 +456,17 @@ test("sensor device cells retain the exact ID without fetching or exposing unava
   }
 });
 
-async function openHubDevices(page: Page) {
+async function openHub(page: Page) {
   await page.goto("/hubs");
   await expect(page.locator(".organization-picker")).toContainText(
     "MSTRONIC-SYNTHETIC",
   );
   await page.getByRole("link", { name: hubLabel, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/hubs/${hubId}$`));
+}
+
+async function openHubDevices(page: Page) {
+  await openHub(page);
   await page.getByRole("tab", { name: "Devices", exact: true }).click();
   return expectDeviceListIdentity(page);
 }
@@ -500,9 +510,44 @@ async function expectAssociatedSensors(page: Page) {
 
 test("hub devices offer an explicit sensor action while realtime remains a device type link", async ({
   page,
-}) => {
+}, testInfo) => {
   const mock = await syntheticHierarchy(page);
-  const device = await openHubDevices(page);
+  await openHub(page);
+  await expect(
+    page.getByRole("tab", { name: "Details", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  const organization = page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Organization$/ })
+    .locator("xpath=following-sibling::*[1]");
+  await expect(organization).toHaveText("MSTRONIC-SYNTHETIC");
+  await expect(
+    organization.getByRole("link", {
+      name: "MSTRONIC-SYNTHETIC",
+      exact: true,
+    }),
+  ).toHaveAttribute("href", "/organizations/7");
+  await expect(organization).not.toContainText("MStronic");
+  await expect(organization).not.toContainText("#7");
+  const hubAsset = page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Asset$/ })
+    .locator("xpath=following-sibling::*[1]");
+  await expect(hubAsset.getByRole("link")).toHaveCount(2);
+  for (const name of [assetTag, assetLabel])
+    await expect(
+      hubAsset.getByRole("link", { name, exact: true }),
+    ).toHaveAttribute("href", `/assets/${assetId}`);
+  await expect(hubAsset).not.toContainText(`#${assetId}`);
+  await expect(hubAsset).not.toContainText("SYNTHETIC-FRENCH-ASSET-TAG");
+  await expect(hubAsset).not.toContainText("Synthetic French asset label");
+  await page.screenshot({
+    path: testInfo.outputPath("hub-organization-asset-identities.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.getByRole("tab", { name: "Devices", exact: true }).click();
+  const device = await expectDeviceListIdentity(page);
   await expect(
     device.getByRole("link", { name: "realtime", exact: true }),
   ).toHaveAttribute("href", `/devicetypes/${deviceTypeId}`);
@@ -558,6 +603,25 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
     "datetime",
     lastReadingInstant,
   );
+  const asset = page
+    .locator(".ant-descriptions-item-label")
+    .filter({ hasText: /^Asset$/ })
+    .locator("xpath=following-sibling::*[1]");
+  await expect(asset).toHaveText(`${assetTag} (#${assetId})`);
+  await expect(asset.getByRole("link")).toHaveCount(1);
+  await expect(
+    asset.getByRole("link", {
+      name: `${assetTag} (#${assetId})`,
+      exact: true,
+    }),
+  ).toHaveAttribute("href", `/assets/${assetId}`);
+  await expect(asset).not.toContainText(assetLabel);
+  await expect(asset).not.toContainText("SYNTHETIC-FRENCH-ASSET-TAG");
+  await page.screenshot({
+    path: testInfo.outputPath("sensor-asset-tag-id.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
   expect(mock.mutations).toEqual([]);
 });
 
@@ -573,16 +637,17 @@ test("device detail exposes its sensors button and keeps manual tab selection in
     .locator(".ant-descriptions-item-label")
     .filter({ hasText: /^Organization$/ })
     .locator("xpath=following-sibling::*[1]");
-  await expect(organization).toHaveText("MSTRONIC-SYNTHETIC (#7)");
+  await expect(organization).toHaveText("MSTRONIC-SYNTHETIC");
   await expect(
     organization.getByRole("link", {
-      name: "MSTRONIC-SYNTHETIC (#7)",
+      name: "MSTRONIC-SYNTHETIC",
       exact: true,
     }),
   ).toHaveAttribute("href", "/organizations/7");
   await expect(organization.getByText("MStronic", { exact: true })).toHaveCount(
     0,
   );
+  await expect(organization).not.toContainText("#7");
   const asset = page
     .locator(".ant-descriptions-item-label")
     .filter({ hasText: /^Asset$/ })

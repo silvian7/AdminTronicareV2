@@ -487,9 +487,11 @@ function useReferenceRecord(
 function ReferenceIdentity({
   resource,
   value,
+  showId = true,
 }: {
   resource: "organizations" | "assets" | "rules";
   value: unknown;
+  showId?: boolean;
 }) {
   const { id, record } = useReferenceRecord(resource, value);
   if (value === null || value === undefined || value === "")
@@ -506,15 +508,21 @@ function ReferenceIdentity({
           </Link>
         </>
       )}
-      <span>#{String(value)}</span>
+      {(showId || !record) && <span>#{String(value)}</span>}
     </div>
   );
 }
 export function OrganizationIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="organizations" value={value} />;
 }
-export function AssetIdentity({ value }: { value: unknown }) {
-  return <ReferenceIdentity resource="assets" value={value} />;
+export function AssetIdentity({
+  value,
+  showId = true,
+}: {
+  value: unknown;
+  showId?: boolean;
+}) {
+  return <ReferenceIdentity resource="assets" value={value} showId={showId} />;
 }
 export function RuleIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="rules" value={value} />;
@@ -621,7 +629,7 @@ export function ReferenceTag({
   value,
   showId = false,
 }: {
-  resource: TypeResource | "organizations";
+  resource: TypeResource | "organizations" | "assets";
   value: unknown;
   showId?: boolean;
 }) {
