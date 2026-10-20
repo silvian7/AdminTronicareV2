@@ -150,7 +150,11 @@ export const authProvider: AuthProvider = {
         throw new DOMException("The account session changed.", "AbortError");
       return {
         success: true,
-        redirectTo: current.identity.mustChangePassword ? "/account" : "/",
+        redirectTo: current.identity.mustChangePassword
+          ? "/account"
+          : current.identity.level >= 90
+            ? "/services"
+            : "/",
       };
     } catch (e) {
       return {

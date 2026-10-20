@@ -35,7 +35,7 @@ import "./styles.css";
 
 focusManager.setEventListener((onFocus) => {
   const visible = () => document.visibilityState !== "hidden";
-  const onVisibilityChange = () => onFocus(visible());
+  const onVisibilityChange = () => onFocus(visible() && document.hasFocus());
   const onWindowFocus = (event: FocusEvent) => {
     if (event.target === window) onFocus(visible());
   };

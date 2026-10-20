@@ -1,18 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { Button, Card, Table, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { coreOutboxLabels, type CoreOutbox } from "../../shared/core-outboxes";
 import { formatLatency } from "../../shared/latency";
-import { request } from "../api";
 import { ErrorNotice } from "./fields";
 
-export function CoreOutboxes() {
-  const query = useQuery({
-    queryKey: ["core-outboxes"],
-    queryFn: ({ signal }) =>
-      request<{ data: CoreOutbox[] }>("/api/core/outboxes", { signal }),
-    refetchInterval: 30_000,
-  });
+export function CoreOutboxes({
+  query,
+}: {
+  query: UseQueryResult<{ data: CoreOutbox[] }>;
+}) {
   const refresh = () => void query.refetch();
   return (
     <Card
@@ -31,7 +28,7 @@ export function CoreOutboxes() {
     >
       <Typography.Paragraph type="secondary">
         Global queues across all workspaces. Latency is the age of the oldest
-        queued message. Updates every 30 seconds.
+        queued message. Updates every minute while this page is in focus.
       </Typography.Paragraph>
       <ErrorNotice error={query.error} retry={refresh} />
       {!query.isError && (

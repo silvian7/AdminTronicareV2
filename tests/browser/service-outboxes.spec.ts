@@ -72,6 +72,12 @@ async function syntheticOutboxes(page: Page, level = 90) {
   let metrics = populatedMetrics();
   let requests = 0;
   let outboxRequests = 0;
+  let coreRequests = 0;
+  let statusRequests = 0;
+  let coreSize = "1";
+  let statusVersion = "synthetic-services-initial";
+  let heartbeatAge: string | undefined;
+  let coreAssetsLatency = "0";
   const identity: Identity = {
     id: "100",
     name: "Synthetic Administrator",
@@ -87,7 +93,7 @@ async function syntheticOutboxes(page: Page, level = 90) {
   const session = () => ({
     identity,
     csrf: "synthetic-csrf",
-    expiresAt: Date.now() + 60000,
+    expiresAt: Date.now() + 60 * 60_000,
   });
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -103,6 +109,19 @@ async function syntheticOutboxes(page: Page, level = 90) {
     }
     if (!signedIn) return reply({ message: "Sign in to continue." }, 401);
     if (path === "/api/session") return reply(session());
+    if (path === "/api/services") {
+      statusRequests++;
+      return reply({
+        data: [
+          {
+            service: "core",
+            state: "available",
+            version: statusVersion,
+            lastHeartbeat: heartbeatAge,
+          },
+        ],
+      });
+    }
     if (["/api/core/outboxes", "/api/outboxes"].includes(path))
       outboxRequests++;
     if (path === "/api/outboxes") {
@@ -111,25 +130,57 @@ async function syntheticOutboxes(page: Page, level = 90) {
         ? reply({ message: "Service outbox metrics are unavailable." }, 502)
         : reply({ data: metrics });
     }
-    if (path === "/api/core/outboxes")
+    if (path === "/api/core/outboxes") {
+      coreRequests++;
       return reply({
         data: [
-          { destination: "rules", size: "0", latencySeconds: "0" },
-          { destination: "assets", size: "0", latencySeconds: "0" },
+          { destination: "rules", size: coreSize, latencySeconds: "0" },
+          {
+            destination: "assets",
+            size: "0",
+            latencySeconds: coreAssetsLatency,
+          },
           { destination: "mqtt_information", size: "0", latencySeconds: "0" },
           { destination: "external_history", size: "0", latencySeconds: "0" },
         ],
       });
+    }
     return reply({ data: [], total: 0 });
   });
   return {
     requests: () => requests,
     outboxRequests: () => outboxRequests,
+    queryRequests: () => ({
+      status: statusRequests,
+      core: coreRequests,
+      services: requests,
+    }),
+    setDelays: (
+      heartbeat: string,
+      coreAssets: string,
+      serviceMirror: string,
+    ) => {
+      heartbeatAge = heartbeat;
+      coreAssetsLatency = coreAssets;
+      metrics = populatedMetrics().map((service) => ({
+        ...service,
+        outboxes: service.outboxes.map((queue) => ({
+          ...queue,
+          latencySeconds:
+            service.service === "mqttbridge" &&
+            queue.destination === "core_mirror"
+              ? serviceMirror
+              : "0",
+        })),
+      }));
+    },
     fail: () => {
       unavailable = true;
     },
-    recoverEmpty: () => {
+    recoverEmpty: (version = "synthetic-services-refreshed") => {
       unavailable = false;
+      coreSize = "0";
+      statusVersion = version;
       metrics = populatedMetrics().map((service) => ({
         ...service,
         outboxes: service.outboxes.map((queue) => ({
@@ -170,19 +221,22 @@ async function loginAndOpenServices(
   await page.getByLabel("Login", { exact: true }).fill("synthetic-admin");
   await page.locator('input[type="password"]').fill("synthetic-password");
   await page.getByRole("button", { name: /Sign in$/ }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole("heading", { name: "Your workspace" }),
-  ).toBeVisible();
-  for (const title of ["Core outboxes", "Service outboxes"])
-    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
-  expect(fixture.outboxRequests()).toBe(0);
   if (platform) {
-    await page.getByRole("menuitem", { name: /Service status$/ }).click();
+    await expect(page).toHaveURL(/\/services$/);
     await expect(
       page.getByRole("heading", { name: "Service status", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("menuitem").first()).toHaveText(
+      "Service status",
+    );
   } else {
+    await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole("heading", { name: "Your workspace" }),
+    ).toBeVisible();
+    for (const title of ["Core outboxes", "Service outboxes"])
+      await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+    expect(fixture.outboxRequests()).toBe(0);
     await page.goto("/services");
     await expect(page.getByRole("alert")).toContainText(
       "Service status is available to platform administrators.",
@@ -286,6 +340,52 @@ test("partial outages retain healthy services and distinguish unavailable from u
   ).toHaveText(["MQTT bridge", "Core mirror", "Available", "62", "00:10:02"]);
 });
 
+test("Service status warns strictly above ten minutes for heartbeat and both outbox sources, then clears on refresh", async ({
+  page,
+}, testInfo) => {
+  const fixture = await syntheticOutboxes(page);
+  fixture.setDelays("600", "600", "600");
+  await loginAndOpenServices(page, fixture);
+  const warning = page.locator(".service-status-warning");
+  const coreAssets = page
+    .locator(".core-outboxes")
+    .getByRole("cell", { name: "Assets", exact: true })
+    .locator("..");
+  const mirror = serviceRow(page, "mqttbridge", "Core mirror");
+  const refresh = page
+    .locator(".page-heading")
+    .getByRole("button", { name: /Refresh$/ });
+  await expect(
+    page.getByRole("cell", { name: "synthetic-services-initial", exact: true }),
+  ).toBeVisible();
+  await expect(coreAssets.getByRole("cell").last()).toHaveText("00:10:00");
+  await expect(mirror.getByRole("cell").last()).toHaveText("00:10:00");
+  await expect(warning).toHaveCount(0);
+
+  for (const [heartbeat, core, service, message] of [
+    ["600.1", "600", "600", "Equipment heartbeat: 00:10:00"],
+    ["600", "600.1", "600", "Core — Assets latency: 00:10:00"],
+    ["600", "600", "601", "MQTT bridge — Core mirror latency: 00:10:01"],
+  ]) {
+    fixture.setDelays(heartbeat!, core!, service!);
+    await refresh.click();
+    await expect(warning).toHaveClass(/ant-alert-warning/);
+    await expect(
+      warning.getByText("Service delays exceed 10 minutes", { exact: true }),
+    ).toBeVisible();
+    await expect(warning.locator("li")).toHaveText([message!]);
+  }
+  await page.screenshot({
+    path: testInfo.outputPath("service-delay-warning.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  fixture.setDelays("600", "600", "600");
+  await refresh.click();
+  await expect(mirror.getByRole("cell").last()).toHaveText("00:10:00");
+  await expect(warning).toHaveCount(0);
+});
+
 test("a failed aggregate refresh removes stale counts and retry restores empty queues", async ({
   page,
 }) => {
@@ -313,16 +413,108 @@ test("a failed aggregate refresh removes stale counts and retry restores empty q
   expect(fixture.requests()).toBe(3);
 });
 
-test("service metrics poll again after thirty seconds", async ({ page }) => {
+test("Service status polls all metrics each minute, pauses in the background and refreshes on return", async ({
+  page,
+}) => {
   await page.clock.install({ time: new Date("2026-10-14T10:00:00Z") });
   const fixture = await syntheticOutboxes(page);
   await loginAndOpenServices(page, fixture);
-  await expectMetrics(page);
-  const initialRequests = fixture.requests();
-  fixture.recoverEmpty();
-  await page.clock.fastForward(30_001);
-  await expect.poll(() => fixture.requests()).toBeGreaterThan(initialRequests);
-  await expectMetrics(page, true);
+
+  // Reload at a frozen instant so all three query timers share an exact boundary.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
+  await page.reload();
+  async function settledMetrics(version: string, empty: boolean) {
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(0);
+        return {
+          version: await page
+            .getByRole("cell", { name: version, exact: true })
+            .isVisible(),
+          core: await page
+            .locator(".core-outboxes")
+            .getByRole("cell", { name: "Rules", exact: true })
+            .locator("..")
+            .getByRole("cell")
+            .allTextContents(),
+          services: await serviceRow(page, "rules", "Rule forwarding")
+            .getByRole("cell")
+            .allTextContents(),
+        };
+      })
+      .toEqual({
+        version: true,
+        core: ["Rules", empty ? "0" : "1", "00:00:00"],
+        services: [
+          "Rules",
+          "Rule forwarding",
+          "Available",
+          empty ? "0" : "9223372036854775807",
+          "00:00:00",
+        ],
+      });
+    await expectMetrics(page, empty);
+  }
+  async function visibility(state: "hidden" | "visible") {
+    await page.evaluate((state) => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: state,
+      });
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        value: state === "hidden",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event(state === "hidden" ? "blur" : "focus"));
+    }, state);
+  }
+  try {
+    await settledMetrics("synthetic-services-initial", false);
+    const initialRequests = fixture.queryRequests();
+    const next = (counts: typeof initialRequests) => ({
+      status: counts.status + 1,
+      core: counts.core + 1,
+      services: counts.services + 1,
+    });
+    fixture.recoverEmpty();
+    await page.clock.runFor(59_999);
+    expect(fixture.queryRequests()).toEqual(initialRequests);
+    await page.clock.runFor(1);
+    await settledMetrics("synthetic-services-refreshed", true);
+    expect(fixture.queryRequests()).toEqual(next(initialRequests));
+
+    await visibility("hidden");
+    const beforeHidden = fixture.queryRequests();
+    fixture.recoverEmpty("synthetic-services-after-return");
+    await page.clock.runFor(120_000);
+    expect(fixture.queryRequests()).toEqual(beforeHidden);
+    await visibility("visible");
+    await settledMetrics("synthetic-services-after-return", true);
+    expect(fixture.queryRequests()).toEqual(next(beforeHidden));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(0);
+    expect(fixture.queryRequests()).toEqual(next(beforeHidden));
+
+    await page.clock.resume();
+    await page.getByRole("menuitem", { name: /Overview$/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Your workspace" }),
+    ).toBeVisible();
+    const overviewRequests = fixture.queryRequests();
+    for (const title of ["Core outboxes", "Service outboxes"])
+      await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
+    await page.clock.runFor(60_000);
+    expect(fixture.queryRequests()).toEqual(overviewRequests);
+  } finally {
+    await page.evaluate(() => {
+      Reflect.deleteProperty(document, "visibilityState");
+      Reflect.deleteProperty(document, "hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    });
+  }
 });
 
 test("ordinary administrators neither see nor fetch service outbox metrics", async ({
@@ -336,4 +528,5 @@ test("ordinary administrators neither see nor fetch service outbox metrics", asy
   ).toHaveCount(0);
   expect(fixture.requests()).toBe(0);
   expect(fixture.outboxRequests()).toBe(0);
+  expect(fixture.queryRequests()).toEqual({ status: 0, core: 0, services: 0 });
 });

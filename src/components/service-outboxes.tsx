@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { Button, Card, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { serviceLabels } from "../../shared/resources";
@@ -8,7 +8,6 @@ import {
   type ServiceOutbox,
   type ServiceOutboxStatus,
 } from "../../shared/service-outboxes";
-import { request } from "../api";
 import { ErrorNotice } from "./fields";
 
 interface OutboxRow extends Omit<ServiceOutboxStatus, "outboxes"> {
@@ -17,13 +16,11 @@ interface OutboxRow extends Omit<ServiceOutboxStatus, "outboxes"> {
   latencySeconds?: string;
 }
 
-export function ServiceOutboxes() {
-  const query = useQuery({
-    queryKey: ["service-outboxes"],
-    queryFn: ({ signal }) =>
-      request<{ data: ServiceOutboxStatus[] }>("/api/outboxes", { signal }),
-    refetchInterval: 30_000,
-  });
+export function ServiceOutboxes({
+  query,
+}: {
+  query: UseQueryResult<{ data: ServiceOutboxStatus[] }>;
+}) {
   const refresh = () => void query.refetch();
   const rows: OutboxRow[] = query.isError
     ? []
@@ -50,7 +47,7 @@ export function ServiceOutboxes() {
       <Typography.Paragraph type="secondary">
         Global queues across all workspaces. Latency is the queue age reported
         by each service; Actions uses the current forwarding or retry wait.
-        Updates every 30 seconds.
+        Updates every minute while this page is in focus.
       </Typography.Paragraph>
       <ErrorNotice error={query.error} retry={refresh} />
       {!query.isError && (

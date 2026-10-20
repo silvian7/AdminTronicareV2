@@ -60,6 +60,15 @@ export function Shell() {
     return () => window.removeEventListener("session-expired", handler);
   }, [navigate]);
   const nav = [
+    ...(identity.level >= 90
+      ? [
+          {
+            key: "/services",
+            icon: <DeploymentUnitOutlined />,
+            label: "Service status",
+          },
+        ]
+      : []),
     { key: "/", icon: <AppstoreOutlined />, label: "Overview" },
     ...Object.entries(groupIcons)
       .map(([group, icon]) => ({
@@ -77,15 +86,6 @@ export function Shell() {
             key: "/sensor-history",
             icon: <HistoryOutlined />,
             label: "Sensor history",
-          },
-        ]
-      : []),
-    ...(identity.level >= 90
-      ? [
-          {
-            key: "/services",
-            icon: <DeploymentUnitOutlined />,
-            label: "Service status",
           },
         ]
       : []),

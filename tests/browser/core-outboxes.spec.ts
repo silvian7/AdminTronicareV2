@@ -29,7 +29,7 @@ async function syntheticOutboxes(page: Page, level = 90) {
   const session = () => ({
     identity,
     csrf: "synthetic-csrf",
-    expiresAt: Date.now() + 60000,
+    expiresAt: Date.now() + 60 * 60_000,
   });
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -81,19 +81,22 @@ async function loginAndOpenServices(
   await page.getByLabel("Login", { exact: true }).fill("synthetic-admin");
   await page.locator('input[type="password"]').fill("synthetic-password");
   await page.getByRole("button", { name: /Sign in$/ }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole("heading", { name: "Your workspace" }),
-  ).toBeVisible();
-  for (const title of ["Core outboxes", "Service outboxes"])
-    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
-  expect(fixture.outboxRequests()).toBe(0);
   if (platform) {
-    await page.getByRole("menuitem", { name: /Service status$/ }).click();
+    await expect(page).toHaveURL(/\/services$/);
     await expect(
       page.getByRole("heading", { name: "Service status", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("menuitem").first()).toHaveText(
+      "Service status",
+    );
   } else {
+    await expect(page).toHaveURL(/\/$/);
+    await expect(
+      page.getByRole("heading", { name: "Your workspace" }),
+    ).toBeVisible();
+    for (const title of ["Core outboxes", "Service outboxes"])
+      await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+    expect(fixture.outboxRequests()).toBe(0);
     await page.goto("/services");
     await expect(page.getByRole("alert")).toContainText(
       "Service status is available to platform administrators.",
@@ -137,6 +140,15 @@ test("Service status shows global core outbox sizes and oldest-message latencies
   await expectRow(card, "MQTT information", "0", "00:00:00");
   await expectRow(card, "External history", "11", "25:01:01");
   expect(fixture.requests()).toBe(1);
+  const requests = fixture.outboxRequests();
+  await page.getByRole("menuitem", { name: /Overview$/ }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Your workspace" }),
+  ).toBeVisible();
+  for (const title of ["Core outboxes", "Service outboxes"])
+    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+  expect(fixture.outboxRequests()).toBe(requests);
 });
 
 test("a failed refresh removes stale metrics and retry recovers zero values", async ({

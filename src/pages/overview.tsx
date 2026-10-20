@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useList } from "@refinedev/core";
+import { useQuery } from "@tanstack/react-query";
 import {
   Alert,
   Button,
@@ -35,6 +36,12 @@ import { CoreOutboxes } from "../components/core-outboxes";
 import { ServiceOutboxes } from "../components/service-outboxes";
 import { useRecordRow } from "../components/record-row";
 import { request } from "../api";
+import { coreOutboxLabels, type CoreOutbox } from "../../shared/core-outboxes";
+import {
+  serviceOutboxLabels,
+  type ServiceOutboxStatus,
+} from "../../shared/service-outboxes";
+import { exceedsTenMinutes, formatLatency } from "../../shared/latency";
 
 function Metric({
   resource,
@@ -232,29 +239,67 @@ interface ServiceRow {
   service: Service;
   state: string;
   version?: string;
-  lastHeartbeat?: string;
+  lastHeartbeat?: unknown;
   message?: string;
 }
 export function Services() {
   const { identity } = useAdmin();
-  const [rows, setRows] = useState<ServiceRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  async function refresh() {
-    setLoading(true);
-    setError(null);
-    try {
-      setRows((await request<{ data: ServiceRow[] }>("/api/services")).data);
-    } catch (e) {
-      setError(e as Error);
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    if (identity.level >= 90) void refresh();
-    else setLoading(false);
-  }, [identity.level]);
+  const query = useQuery({
+    queryKey: ["service-status"],
+    queryFn: ({ signal }) =>
+      request<{ data: ServiceRow[] }>("/api/services", { signal }),
+    enabled: identity.level >= 90,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+  const coreQuery = useQuery({
+    queryKey: ["core-outboxes"],
+    queryFn: ({ signal }) =>
+      request<{ data: CoreOutbox[] }>("/api/core/outboxes", { signal }),
+    enabled: identity.level >= 90,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+  const outboxesQuery = useQuery({
+    queryKey: ["service-outboxes"],
+    queryFn: ({ signal }) =>
+      request<{ data: ServiceOutboxStatus[] }>("/api/outboxes", { signal }),
+    enabled: identity.level >= 90,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+  const refresh = () => {
+    void query.refetch();
+    void coreQuery.refetch();
+    void outboxesQuery.refetch();
+  };
+  const warnings = [
+    ...(query.isError ? [] : (query.data?.data ?? []))
+      .filter((row) => exceedsTenMinutes(row.lastHeartbeat))
+      .map(
+        (row) =>
+          `${serviceLabels[row.service]} heartbeat: ${formatLatency(row.lastHeartbeat)}`,
+      ),
+    ...(coreQuery.isError ? [] : (coreQuery.data?.data ?? []))
+      .filter((row) => exceedsTenMinutes(row.latencySeconds))
+      .map(
+        (row) =>
+          `Core — ${coreOutboxLabels[row.destination]} latency: ${formatLatency(row.latencySeconds)}`,
+      ),
+    ...(outboxesQuery.isError ? [] : (outboxesQuery.data?.data ?? []))
+      .filter((status) => status.state === "available")
+      .flatMap((status) =>
+        status.outboxes
+          .filter((row) => exceedsTenMinutes(row.latencySeconds))
+          .map(
+            (row) =>
+              `${serviceLabels[status.service]} — ${serviceOutboxLabels[status.service][row.destination]} latency: ${formatLatency(row.latencySeconds)}`,
+          ),
+      ),
+  ];
   if (identity.level < 90)
     return (
       <Alert
@@ -268,18 +313,42 @@ export function Services() {
         <div>
           <span className="eyebrow">OPERATIONS</span>
           <h1>Service status</h1>
-          <p>Availability reported by the configured administration APIs.</p>
+          <p>
+            Availability reported by the configured administration APIs.
+            Refreshes every minute while this page is in focus.
+          </p>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={refresh}
+          loading={
+            query.isFetching || coreQuery.isFetching || outboxesQuery.isFetching
+          }
+        >
           Refresh
         </Button>
       </div>
-      <ErrorNotice error={error} retry={refresh} />
+      {warnings.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          className="page-alert service-status-warning"
+          message="Service delays exceed 10 minutes"
+          description={
+            <ul>
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          }
+        />
+      )}
+      <ErrorNotice error={query.error} retry={refresh} />
       <Card>
         <Table
           rowKey="service"
-          dataSource={rows}
-          loading={loading}
+          dataSource={query.data?.data ?? []}
+          loading={query.isFetching}
           pagination={false}
           columns={[
             {
@@ -319,8 +388,8 @@ export function Services() {
           scroll={{ x: 750 }}
         />
       </Card>
-      <CoreOutboxes />
-      <ServiceOutboxes />
+      <CoreOutboxes query={coreQuery} />
+      <ServiceOutboxes query={outboxesQuery} />
     </>
   );
 }

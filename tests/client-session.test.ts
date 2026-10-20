@@ -52,6 +52,45 @@ describe("account request isolation", () => {
     return { api, fetcher };
   }
 
+  it.each([
+    { level: 30, mustChangePassword: false, redirectTo: "/" },
+    { level: 89, mustChangePassword: false, redirectTo: "/" },
+    { level: 90, mustChangePassword: false, redirectTo: "/services" },
+    { level: 100, mustChangePassword: false, redirectTo: "/services" },
+    { level: 30, mustChangePassword: true, redirectTo: "/account" },
+    { level: 90, mustChangePassword: true, redirectTo: "/account" },
+  ])(
+    "redirects level $level with password change $mustChangePassword to $redirectTo",
+    async ({ level, mustChangePassword, redirectTo }) => {
+      const api = await import("../src/api");
+      const current = account("A");
+      current.identity = {
+        ...current.identity,
+        level,
+        mustChangePassword,
+      };
+      const fetcher = vi.fn(async (path: string) => {
+        if (path === "/api/session/login" || path === "/api/session")
+          return Response.json(current);
+        throw new Error("Unexpected authentication request");
+      });
+      vi.stubGlobal("fetch", fetcher);
+
+      await expect(
+        api.authProvider.login!({
+          login: "A",
+          password: "synthetic",
+          mode: "password",
+        }),
+      ).resolves.toMatchObject({ success: true, redirectTo });
+      expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
+        "/api/session/login",
+        "/api/session",
+      ]);
+      expect(api.getSession()?.identity).toEqual(current.identity);
+    },
+  );
+
   it("keeps failed sign-in forms mounted while invalidating pending requests", async () => {
     const api = await import("../src/api");
     const pending = delayedResponse();

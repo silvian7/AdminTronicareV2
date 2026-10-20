@@ -6,7 +6,7 @@ async function login(page: Page) {
   await page.getByLabel("Login", { exact: true }).fill("fixture-admin");
   await page.locator('input[type="password"]').fill("fixture-password");
   await page.getByRole("button", { name: /Sign in$/ }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/services$/);
   await expect(
     page.getByText("Test Administrator", { exact: true }),
   ).toBeAttached();
@@ -17,6 +17,7 @@ test("all resource lists and details render without browser errors", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await login(page);
+  await page.getByRole("menuitem", { name: /Overview$/ }).click();
   await page.screenshot({ path: "test-results/overview.png", fullPage: true });
   for (const resource of resources) {
     await page.goto(`/${resource.name}`);
