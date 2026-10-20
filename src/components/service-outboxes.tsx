@@ -29,6 +29,9 @@ export function ServiceOutboxes({
           ? outboxes.map((outbox: ServiceOutbox) => ({ ...status, ...outbox }))
           : [{ ...status, destination: "" }],
       );
+  const push = query.isError
+    ? undefined
+    : query.data?.data.find((row) => row.service === "push");
   return (
     <Card
       title="Service outboxes"
@@ -50,6 +53,32 @@ export function ServiceOutboxes({
         Updates every minute while this page is in focus.
       </Typography.Paragraph>
       <ErrorNotice error={query.error} retry={refresh} />
+      {!query.isError && (
+        <Typography.Paragraph className="push-partial-deliveries">
+          Partial push deliveries (total):{" "}
+          <Typography.Text strong>
+            {query.isPending
+              ? "Checking…"
+              : push?.state === "available"
+                ? (push.partialSuccesses ?? "Unavailable")
+                : "Unavailable"}
+          </Typography.Text>
+          . Completed jobs with both accepted and failed devices; separate from
+          queued work.
+          {push?.state === "available" &&
+            push.legacyPartialAcceptances &&
+            push.legacyPartialAcceptances !== "0" && (
+              <>
+                {" "}
+                Includes {push.legacyPartialAcceptances} historical{" "}
+                {push.legacyPartialAcceptances === "1"
+                  ? "delivery"
+                  : "deliveries"}
+                classified from device outcomes.
+              </>
+            )}
+        </Typography.Paragraph>
+      )}
       {!query.isError && (
         <Table<OutboxRow>
           rowKey={(row) => `${row.service}:${row.destination}`}

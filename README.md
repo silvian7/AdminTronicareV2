@@ -93,6 +93,10 @@ Runtime settings:
 
 No internal service credential is embedded in the frontend. Administration information uses the signed-in platform administrator's token; a service that declines it is shown as unavailable.
 
+Users lists and details show active push-registration status through a read-only, caller-scoped check. Missing registrations and counts above the current 32-device delivery limit have separate warnings. Registration does not confirm phone notification permission or guarantee delivery. The screen refreshes this status every 30 seconds while focused; denied, malformed, or unavailable responses remain unavailable rather than becoming zero. This requires Push's `GET /v1/pushadmin/devices/readiness/{user_id}` endpoint. The Admin adapter checks at most 50 requested users per batch, with four concurrent reads and a ten-second batch deadline. It does not register devices or send notifications.
+
+The service monitor displays Push's optional partial-delivery total separately from queue sizes. Its historical partial-acceptance count is a subset of that total and is not added again. Older backends without these metrics show them as unavailable.
+
 ## Validation and deployment boundaries
 
 Assignment controls require the Assets service version exposing `POST` and `DELETE /v1/assets/{asset_id}/users/{related_id}` and `/v1/assets/{asset_id}/usergroups/{related_id}`. Admin resolves existing target records through Users; listing and selecting users/groups requires access to those records. Ordinary administrators must already have access to the asset and select users/groups in their organization. Platform administrators retain broader scope. The service removes one matching association per request; legacy duplicate links can keep an assignment visible after removal, so the screen reloads the actual links.

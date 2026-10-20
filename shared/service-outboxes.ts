@@ -42,4 +42,6 @@ export interface ServiceOutboxStatus {
   state: "available" | "unavailable" | "unconfigured";
   outboxes: ServiceOutbox[];
   message?: string;
+  partialSuccesses?: string;
+  legacyPartialAcceptances?: string;
 }

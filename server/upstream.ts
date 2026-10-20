@@ -17,6 +17,7 @@ export function createUpstream(config: Config, transport: Transport = fetch) {
       method?: string;
       query?: Record<string, string>;
       body?: string;
+      signal?: AbortSignal;
     } = {},
   ): Promise<UpstreamResult> => {
     const origin = config.origins[service];
@@ -45,7 +46,12 @@ export function createUpstream(config: Config, transport: Transport = fetch) {
         headers,
         body: options.body,
         redirect: "error",
-        signal: AbortSignal.timeout(config.requestTimeoutMs),
+        signal: options.signal
+          ? AbortSignal.any([
+              options.signal,
+              AbortSignal.timeout(config.requestTimeoutMs),
+            ])
+          : AbortSignal.timeout(config.requestTimeoutMs),
       });
     } catch {
       throw new ApiError(

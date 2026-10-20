@@ -24,7 +24,15 @@ import type { Config } from "./config";
 import { hubLastEventTime } from "../shared/hub-status";
 import { createUpstream, type Transport } from "./upstream";
 import { coreOutboxes } from "./core-outboxes";
-import { serviceOutboxes } from "./service-outboxes";
+import {
+  serviceOutboxes,
+  pushPartialSuccesses,
+  pushLegacyPartialAcceptances,
+} from "./service-outboxes";
+import {
+  notificationReadiness,
+  readinessUserIds,
+} from "./notification-readiness";
 import {
   outboxServices,
   type ServiceOutboxStatus,
@@ -288,6 +296,18 @@ export function createApp(
     if (!resource) throw new ApiError(404, "Resource not found.");
     return resource;
   };
+  app.get("/api/users/notification-readiness", async (req, res) => {
+    const r = requirePermission(req, resourceMap.users, "list");
+    if (r.session.identity.mustChangePassword)
+      throw new ApiError(
+        403,
+        "Change your password before checking notification registrations.",
+      );
+    const ids = readinessUserIds(req.query);
+    res.json({
+      data: await notificationReadiness(ids, r.session.token, upstream),
+    });
+  });
   app.get("/api/resources/:resource", async (req, res) => {
     const resource = getResource(req);
     const r = requirePermission(req, resource, "list");
@@ -713,6 +733,12 @@ export function createApp(
             service,
             state: "available",
             outboxes: serviceOutboxes(service, data),
+            ...(service === "push"
+              ? {
+                  partialSuccesses: pushPartialSuccesses(data),
+                  legacyPartialAcceptances: pushLegacyPartialAcceptances(data),
+                }
+              : {}),
           };
         } catch (e) {
           return {

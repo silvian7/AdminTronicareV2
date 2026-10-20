@@ -82,6 +82,59 @@ function expectedAvailable(service: OutboxService) {
 }
 
 describe("service outbox aggregate", () => {
+  it("projects only the optional Push partial-success total without changing queue sizes", async () => {
+    const { api, replies } = await setup();
+    replies.set("push", () =>
+      Response.json({
+        ...serviceInfo("push"),
+        DeliveryOutcomes: {
+          PartialSuccess: 3,
+          LegacyPartialAcceptance: 1,
+          private_token: "synthetic-secret",
+        },
+      }),
+    );
+    const response = await api.get("/api/outboxes");
+    expect(
+      response.body.data.find(
+        (row: { service: string }) => row.service === "push",
+      ),
+    ).toEqual({
+      ...expectedAvailable("push"),
+      partialSuccesses: "3",
+      legacyPartialAcceptances: "1",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("synthetic-secret");
+  });
+
+  it("does not turn an absent partial-success metric into zero", async () => {
+    const { api } = await setup();
+    const response = await api.get("/api/outboxes");
+    expect(
+      response.body.data.find(
+        (row: { service: string }) => row.service === "push",
+      ),
+    ).not.toHaveProperty("partialSuccesses");
+  });
+  it.each([
+    { PartialSuccess: -1 },
+    { PartialSuccess: 2, LegacyPartialAcceptance: 3 },
+    { PartialSuccess: 2, LegacyPartialAcceptance: "invalid" },
+  ])(
+    "does not display malformed partial-success metrics as valid counts",
+    async (outcomes) => {
+      const { api, replies } = await setup();
+      replies.set("push", () =>
+        Response.json({ ...serviceInfo("push"), DeliveryOutcomes: outcomes }),
+      );
+      const response = await api.get("/api/outboxes");
+      const push = response.body.data.find(
+        (row: { service: string }) => row.service === "push",
+      );
+      expect(push.state).toBe("unavailable");
+      expect(push).not.toHaveProperty("partialSuccesses");
+    },
+  );
   it("requires a local session without contacting any outbox service", async () => {
     const { api, calls } = makeApi();
     expect((await api.get("/api/outboxes")).status).toBe(401);

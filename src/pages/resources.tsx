@@ -88,6 +88,11 @@ import {
 } from "../components/fields";
 import { getSessionEpoch, request } from "../api";
 import { HubStatus } from "../components/hub-status";
+import {
+  NotificationReadinessCard,
+  NotificationRegistrationTag,
+  useNotificationReadiness,
+} from "../components/notification-readiness";
 import { useRecordRow } from "../components/record-row";
 import {
   millisecondsToSeconds,
@@ -352,6 +357,14 @@ export function ResourceList({ resource }: { resource: Resource }) {
       refetchOnWindowFocus: "always",
     },
   });
+  const notificationIds =
+    resource.name === "users" &&
+    can(resource, "list") &&
+    tableQuery.isSuccess &&
+    !tableQuery.isPlaceholderData
+      ? (tableProps.dataSource ?? []).flatMap((row) => (row.id ? [row.id] : []))
+      : [];
+  const notificationReadiness = useNotificationReadiness(notificationIds);
   useEffect(
     () =>
       focusManager.subscribe((focused) => {
@@ -520,6 +533,24 @@ export function ResourceList({ resource }: { resource: Resource }) {
               <FieldValue field={f} value={value} />
             ),
         })),
+      ...(resource.name === "users"
+        ? [
+            {
+              title: "Push registrations",
+              key: "notification-readiness",
+              width: 195,
+              render: (_: unknown, row: RecordData) => (
+                <NotificationRegistrationTag
+                  value={notificationReadiness.byUser.get(row.id!)}
+                  loading={
+                    notificationReadiness.query.isPending &&
+                    notificationIds.length > 0
+                  }
+                />
+              ),
+            },
+          ]
+        : []),
       ...(canViewDeviceSensors
         ? [
             {
@@ -533,7 +564,15 @@ export function ResourceList({ resource }: { resource: Resource }) {
           ]
         : []),
     ],
-    [resource, canViewDeviceSensors, statusNow, sorters],
+    [
+      resource,
+      canViewDeviceSensors,
+      statusNow,
+      sorters,
+      notificationReadiness.byUser,
+      notificationReadiness.query.isPending,
+      notificationIds.length,
+    ],
   );
   if (!can(resource, "list"))
     return <Result status="403" title="Access unavailable" />;
@@ -550,6 +589,8 @@ export function ResourceList({ resource }: { resource: Resource }) {
               onClick={async () => {
                 await tableQuery.refetch();
                 await refreshRecordReferences();
+                if (notificationIds.length)
+                  await notificationReadiness.query.refetch();
               }}
               loading={tableQuery.isFetching}
             >
@@ -1448,6 +1489,7 @@ function Memberships({ userId }: { userId: string }) {
   );
 }
 export function ResourceDetail({ resource }: { resource: Resource }) {
+  const queryClient = useQueryClient();
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const viewingDeviceSensors =
@@ -1833,6 +1875,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   )
                     await ruleActions.query.refetch();
                   await refreshRecordReferences();
+                  if (resource.name === "users")
+                    await queryClient.invalidateQueries({
+                      queryKey: [
+                        "notification-readiness",
+                        getSessionEpoch(),
+                        organization,
+                      ],
+                    });
                 }}
               >
                 Refresh
@@ -1889,6 +1939,9 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         }
       />
       <ErrorNotice error={query.error} retry={() => query.refetch()} />
+      {resource.name === "users" && query.isSuccess && record?.id === id && (
+        <NotificationReadinessCard userId={id!} />
+      )}
       <Card>
         {query.isLoading ? (
           <Skeleton active />
