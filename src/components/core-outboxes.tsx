@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, Card, Table, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { coreOutboxLabels, type CoreOutbox } from "../../shared/core-outboxes";
+import { formatLatency } from "../../shared/latency";
 import { request } from "../api";
 import { ErrorNotice } from "./fields";
 
@@ -48,9 +49,10 @@ export function CoreOutboxes() {
             },
             { title: "Size (messages)", dataIndex: "size", align: "right" },
             {
-              title: "Latency (s)",
+              title: "Latency (hh:mm:ss)",
               dataIndex: "latencySeconds",
               align: "right",
+              render: formatLatency,
             },
           ]}
           scroll={{ x: 450 }}

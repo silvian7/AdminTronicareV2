@@ -5,14 +5,15 @@ const populatedMetrics = [
   { destination: "rules", size: "9223372036854775807", latencySeconds: "7.25" },
   { destination: "assets", size: "5", latencySeconds: "0.5" },
   { destination: "mqtt_information", size: "0", latencySeconds: "0" },
-  { destination: "external_history", size: "11", latencySeconds: "123.75" },
+  { destination: "external_history", size: "11", latencySeconds: "90061.75" },
 ];
 
-async function syntheticDashboard(page: Page, level = 90) {
+async function syntheticOutboxes(page: Page, level = 90) {
   let signedIn = false;
   let unavailable = false;
   let metrics = populatedMetrics;
   let requests = 0;
+  let outboxRequests = 0;
   const identity: Identity = {
     id: "100",
     name: "Synthetic Administrator",
@@ -44,6 +45,8 @@ async function syntheticDashboard(page: Page, level = 90) {
     }
     if (!signedIn) return reply({ message: "Sign in to continue." }, 401);
     if (path === "/api/session") return reply(session());
+    if (["/api/core/outboxes", "/api/outboxes"].includes(path))
+      outboxRequests++;
     if (path === "/api/core/outboxes") {
       requests++;
       return unavailable
@@ -65,10 +68,15 @@ async function syntheticDashboard(page: Page, level = 90) {
       }));
     },
     requests: () => requests,
+    outboxRequests: () => outboxRequests,
   };
 }
 
-async function login(page: Page) {
+async function loginAndOpenServices(
+  page: Page,
+  fixture: { outboxRequests(): number },
+  platform = true,
+) {
   await page.goto("/login");
   await page.getByLabel("Login", { exact: true }).fill("synthetic-admin");
   await page.locator('input[type="password"]').fill("synthetic-password");
@@ -77,6 +85,21 @@ async function login(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Your workspace" }),
   ).toBeVisible();
+  for (const title of ["Core outboxes", "Service outboxes"])
+    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+  expect(fixture.outboxRequests()).toBe(0);
+  if (platform) {
+    await page.getByRole("menuitem", { name: /Service status$/ }).click();
+    await expect(
+      page.getByRole("heading", { name: "Service status", exact: true }),
+    ).toBeVisible();
+  } else {
+    await page.goto("/services");
+    await expect(page.getByRole("alert")).toContainText(
+      "Service status is available to platform administrators.",
+    );
+  }
+  await expect(page).toHaveURL(/\/services$/);
 }
 
 function outboxCard(page: Page) {
@@ -95,34 +118,34 @@ async function expectRow(
   await expect(row.getByRole("cell")).toHaveText([name, size, latency]);
 }
 
-test("dashboard shows global core outbox sizes and oldest-message latencies", async ({
+test("Service status shows global core outbox sizes and oldest-message latencies", async ({
   page,
 }) => {
-  const fixture = await syntheticDashboard(page);
-  await login(page);
+  const fixture = await syntheticOutboxes(page);
+  await loginAndOpenServices(page, fixture);
   const card = outboxCard(page);
   await expect(card).toBeVisible();
   await expect(card.getByRole("columnheader")).toHaveText([
     "Outbox",
     "Size (messages)",
-    "Latency (s)",
+    "Latency (hh:mm:ss)",
   ]);
   await expect(card).toContainText(/global/i);
   await expect(card).toContainText(/oldest/i);
-  await expectRow(card, "Rules", "9223372036854775807", "7.25");
-  await expectRow(card, "Assets", "5", "0.5");
-  await expectRow(card, "MQTT information", "0", "0");
-  await expectRow(card, "External history", "11", "123.75");
+  await expectRow(card, "Rules", "9223372036854775807", "00:00:07");
+  await expectRow(card, "Assets", "5", "00:00:00");
+  await expectRow(card, "MQTT information", "0", "00:00:00");
+  await expectRow(card, "External history", "11", "25:01:01");
   expect(fixture.requests()).toBe(1);
 });
 
 test("a failed refresh removes stale metrics and retry recovers zero values", async ({
   page,
 }) => {
-  const fixture = await syntheticDashboard(page);
-  await login(page);
+  const fixture = await syntheticOutboxes(page);
+  await loginAndOpenServices(page, fixture);
   const card = outboxCard(page);
-  await expectRow(card, "Rules", "9223372036854775807", "7.25");
+  await expectRow(card, "Rules", "9223372036854775807", "00:00:07");
   fixture.fail();
   await card
     .getByRole("button", { name: "Refresh core outboxes", exact: true })
@@ -145,18 +168,19 @@ test("a failed refresh removes stale metrics and retry recovers zero values", as
     "MQTT information",
     "External history",
   ])
-    await expectRow(card, name, "0", "0");
+    await expectRow(card, name, "0", "00:00:00");
   expect(fixture.requests()).toBe(3);
 });
 
 test("ordinary administrators do not see or fetch core outbox metrics", async ({
   page,
 }) => {
-  const fixture = await syntheticDashboard(page, 30);
-  await login(page);
+  const fixture = await syntheticOutboxes(page, 30);
+  await loginAndOpenServices(page, fixture, false);
   await expect(outboxCard(page)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Refresh core outboxes", exact: true }),
   ).toHaveCount(0);
   expect(fixture.requests()).toBe(0);
+  expect(fixture.outboxRequests()).toBe(0);
 });

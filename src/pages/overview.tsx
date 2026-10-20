@@ -30,6 +30,7 @@ import {
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { AssetLastEvent, ErrorNotice } from "../components/fields";
+import { HubStatus } from "../components/hub-status";
 import { CoreOutboxes } from "../components/core-outboxes";
 import { ServiceOutboxes } from "../components/service-outboxes";
 import { useRecordRow } from "../components/record-row";
@@ -75,6 +76,11 @@ export function Overview() {
   const { identity, organization, can } = useAdmin();
   const navigate = useNavigate();
   const assetRow = useRecordRow("assets");
+  const [statusNow, setStatusNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setStatusNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const { result, query } = useList<RecordData>({
     resource: "assets",
     pagination: { pageSize: 6 },
@@ -150,6 +156,16 @@ export function Overview() {
                   ),
                 },
                 {
+                  title: "Status",
+                  width: 80,
+                  render: (_, row) => (
+                    <HubStatus
+                      value={valueOf(row, "DhLastEvent")}
+                      now={statusNow}
+                    />
+                  ),
+                },
+                {
                   title: "Rules",
                   render: (_, row) => (
                     <Tag color={row.m_bPauseRules ? "gold" : "cyan"}>
@@ -164,7 +180,7 @@ export function Overview() {
                   ),
                 },
               ]}
-              scroll={{ x: 550 }}
+              scroll={{ x: 630 }}
             />
           ) : (
             <Empty description="No asset access is assigned to this account." />
@@ -205,12 +221,6 @@ export function Overview() {
           )}
         </Card>
       </div>
-      {identity.level >= 90 && (
-        <>
-          <CoreOutboxes />
-          <ServiceOutboxes />
-        </>
-      )}
       <Typography.Paragraph type="secondary" className="overview-note">
         Counts reflect records available to your account and the selected
         workspace. Service limits are shown where applicable.
@@ -309,6 +319,8 @@ export function Services() {
           scroll={{ x: 750 }}
         />
       </Card>
+      <CoreOutboxes />
+      <ServiceOutboxes />
     </>
   );
 }

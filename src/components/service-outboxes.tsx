@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, Card, Table, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { serviceLabels } from "../../shared/resources";
+import { formatLatency } from "../../shared/latency";
 import {
   serviceOutboxLabels,
   type ServiceOutbox,
@@ -48,8 +49,8 @@ export function ServiceOutboxes() {
     >
       <Typography.Paragraph type="secondary">
         Global queues across all workspaces. Latency is the queue age reported
-        by each service in seconds; Actions uses the current forwarding or retry
-        wait. Updates every 30 seconds.
+        by each service; Actions uses the current forwarding or retry wait.
+        Updates every 30 seconds.
       </Typography.Paragraph>
       <ErrorNotice error={query.error} retry={refresh} />
       {!query.isError && (
@@ -104,10 +105,10 @@ export function ServiceOutboxes() {
               render: (value?: string) => value ?? "—",
             },
             {
-              title: "Latency (s)",
+              title: "Latency (hh:mm:ss)",
               dataIndex: "latencySeconds",
               align: "right",
-              render: (value?: string) => value ?? "—",
+              render: formatLatency,
             },
           ]}
           scroll={{ x: 750 }}
