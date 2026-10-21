@@ -89,6 +89,10 @@ import {
 import { getSessionEpoch, request } from "../api";
 import { HubStatus } from "../components/hub-status";
 import {
+  LastRefreshed,
+  useOperationalRefresh,
+} from "../components/operational-freshness";
+import {
   NotificationReadinessCard,
   NotificationRegistrationTag,
   useNotificationReadiness,
@@ -354,9 +358,13 @@ export function ResourceList({ resource }: { resource: Resource }) {
     errorNotification: false,
     queryOptions: {
       enabled: can(resource, "list"),
-      refetchOnWindowFocus: "always",
+      refetchOnWindowFocus: resource.name === "assets" ? false : "always",
     },
   });
+  useOperationalRefresh(
+    resource.name === "assets" && can(resource, "list"),
+    tableQuery.refetch,
+  );
   const notificationIds =
     resource.name === "users" &&
     can(resource, "list") &&
@@ -379,7 +387,8 @@ export function ResourceList({ resource }: { resource: Resource }) {
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       setStatusNow(Date.now());
-      void tableQuery.refetch({ cancelRefetch: false });
+      if (resource.name !== "assets")
+        void tableQuery.refetch({ cancelRefetch: false });
       void refreshRecordReferences();
     }, 60_000);
     return () => window.clearInterval(timer);
@@ -587,7 +596,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
             <Button
               icon={<ReloadOutlined />}
               onClick={async () => {
-                await tableQuery.refetch();
+                await tableQuery.refetch({ cancelRefetch: false });
                 await refreshRecordReferences();
                 if (notificationIds.length)
                   await notificationReadiness.query.refetch();
@@ -608,9 +617,16 @@ export function ResourceList({ resource }: { resource: Resource }) {
           </>
         }
       />
+      {resource.name === "assets" && (
+        <LastRefreshed
+          dataUpdatedAt={tableQuery.dataUpdatedAt}
+          isFetching={tableQuery.isFetching}
+          isError={tableQuery.isError}
+        />
+      )}
       <ErrorNotice
         error={tableQuery.error}
-        retry={() => tableQuery.refetch()}
+        retry={() => tableQuery.refetch({ cancelRefetch: false })}
       />
       {!tableQuery.error && result.limited && (
         <Alert

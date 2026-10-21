@@ -97,6 +97,8 @@ Users lists and details show active push-registration status through a read-only
 
 The service monitor displays Push's optional partial-delivery total separately from queue sizes. Its historical partial-acceptance count is a subset of that total and is not added again. Older backends without these metrics show them as unavailable.
 
+Overview's asset status and the Assets list refresh every 15 seconds while visible and immediately on browser return. Timer, focus and manual refreshes reuse an existing in-flight query. Counts, reference records and service outboxes keep their separate cadence; dirty editors do not poll. “Last refreshed” is the last successful fetch of the view, distinct from each device's event time, and remains unchanged after a failed refresh.
+
 ## Validation and deployment boundaries
 
 Assignment controls require the Assets service version exposing `POST` and `DELETE /v1/assets/{asset_id}/users/{related_id}` and `/v1/assets/{asset_id}/usergroups/{related_id}`. Admin resolves existing target records through Users; listing and selecting users/groups requires access to those records. Ordinary administrators must already have access to the asset and select users/groups in their organization. Platform administrators retain broader scope. The service removes one matching association per request; legacy duplicate links can keep an assignment visible after removal, so the screen reloads the actual links.

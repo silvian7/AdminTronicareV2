@@ -35,6 +35,10 @@ import { HubStatus } from "../components/hub-status";
 import { CoreOutboxes } from "../components/core-outboxes";
 import { ServiceOutboxes } from "../components/service-outboxes";
 import { useRecordRow } from "../components/record-row";
+import {
+  LastRefreshed,
+  useOperationalRefresh,
+} from "../components/operational-freshness";
 import { request } from "../api";
 import { coreOutboxLabels, type CoreOutbox } from "../../shared/core-outboxes";
 import {
@@ -46,9 +50,11 @@ import { exceedsTenMinutes, formatLatency } from "../../shared/latency";
 function Metric({
   resource,
   icon,
+  refreshVersion,
 }: {
   resource: string;
   icon: React.ReactNode;
+  refreshVersion: number;
 }) {
   const { organization } = useAdmin();
   const { result, query } = useList<RecordData>({
@@ -57,23 +63,50 @@ function Metric({
     meta: { organization },
     errorNotification: false,
   });
+  useEffect(() => {
+    if (refreshVersion) void query.refetch({ cancelRefetch: false });
+  }, [refreshVersion, query.refetch]);
+  return (
+    <MetricCard
+      resource={resource}
+      icon={icon}
+      total={result.total}
+      limited={result.limited}
+      isLoading={query.isLoading}
+      isError={query.isError}
+    />
+  );
+}
+function MetricCard({
+  resource,
+  icon,
+  total,
+  limited,
+  isLoading,
+  isError,
+}: {
+  resource: string;
+  icon: React.ReactNode;
+  total?: number;
+  limited?: boolean;
+  isLoading: boolean;
+  isError: boolean;
+}) {
   return (
     <Card className="metric-card">
       <div className="metric-top">
         <span>{resourceMap[resource].label}</span>
         <span className="metric-icon">{icon}</span>
       </div>
-      {query.isLoading ? (
+      {isLoading ? (
         <Skeleton.Input active size="small" />
       ) : (
         <div className="metric-value">
-          {query.isError
-            ? "—"
-            : `${result.total ?? 0}${result.limited ? "+" : ""}`}
+          {isError ? "—" : `${total ?? 0}${limited ? "+" : ""}`}
         </div>
       )}
       <Link to={`/${resource}`} className="metric-link">
-        {query.isError ? "Check access or service" : "View records"}
+        {isError ? "Check access or service" : "View records"}
         <ArrowRightOutlined />
       </Link>
     </Card>
@@ -84,6 +117,7 @@ export function Overview() {
   const navigate = useNavigate();
   const assetRow = useRecordRow("assets");
   const [statusNow, setStatusNow] = useState(() => Date.now());
+  const [refreshVersion, setRefreshVersion] = useState(0);
   useEffect(() => {
     const timer = window.setInterval(() => setStatusNow(Date.now()), 15_000);
     return () => window.clearInterval(timer);
@@ -93,8 +127,12 @@ export function Overview() {
     pagination: { pageSize: 6 },
     meta: { organization },
     errorNotification: false,
-    queryOptions: { enabled: can(resourceMap.assets, "list") },
+    queryOptions: {
+      enabled: can(resourceMap.assets, "list"),
+      refetchOnWindowFocus: false,
+    },
   });
+  useOperationalRefresh(can(resourceMap.assets, "list"), query.refetch);
   const cards: [string, React.ReactNode][] = [
     ["assets", <ApartmentOutlined />],
     ["hubs", <ClusterOutlined />],
@@ -114,7 +152,12 @@ export function Overview() {
         </div>
         <Button
           icon={<ReloadOutlined />}
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            if (can(resourceMap.assets, "list"))
+              void query.refetch({ cancelRefetch: false });
+            setRefreshVersion((version) => version + 1);
+          }}
+          loading={query.isFetching}
         >
           Refresh
         </Button>
@@ -122,9 +165,26 @@ export function Overview() {
       <div className="metrics-grid">
         {cards
           .filter(([r]) => can(resourceMap[r], "list"))
-          .map(([resource, icon]) => (
-            <Metric key={resource} resource={resource} icon={icon} />
-          ))}
+          .map(([resource, icon]) =>
+            resource === "assets" ? (
+              <MetricCard
+                key={resource}
+                resource={resource}
+                icon={icon}
+                total={result.total}
+                limited={result.limited}
+                isLoading={query.isLoading}
+                isError={query.isError}
+              />
+            ) : (
+              <Metric
+                key={resource}
+                resource={resource}
+                icon={icon}
+                refreshVersion={refreshVersion}
+              />
+            ),
+          )}
       </div>
       <div className="overview-grid">
         <Card
@@ -137,7 +197,18 @@ export function Overview() {
             ) : undefined
           }
         >
-          <ErrorNotice error={query.error} retry={() => query.refetch()} />
+          <LastRefreshed
+            dataUpdatedAt={query.dataUpdatedAt}
+            isFetching={query.isFetching}
+            isError={query.isError}
+          />
+          <ErrorNotice
+            error={query.error}
+            retry={() => {
+              if (can(resourceMap.assets, "list"))
+                void query.refetch({ cancelRefetch: false });
+            }}
+          />
           {result.limited && (
             <Alert
               type="warning"

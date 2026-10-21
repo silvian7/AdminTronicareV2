@@ -421,7 +421,7 @@ test("Service status polls all metrics each minute, pauses in the background and
   await loginAndOpenServices(page, fixture);
 
   // Reload at a frozen instant so all three query timers share an exact boundary.
-  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   await page.reload();
   async function settledMetrics(version: string, empty: boolean) {
     await expect
