@@ -80,6 +80,7 @@ import {
   SensorCurrentValue,
   SensorLastReading,
   SensorTypeTag,
+  SharedGatewayIndicator,
   ReferenceTag,
   RuleIdentity,
   RuleDurationSeconds,
@@ -849,6 +850,7 @@ interface RelatedListProps {
   filterValue: string;
   memberOrganization?: string;
   memberGroupLabel?: string;
+  assetEquipmentHubs?: boolean;
 }
 
 function isMemberOrganizationId(value: unknown): value is string {
@@ -860,7 +862,13 @@ function isMemberOrganizationId(value: unknown): value is string {
 }
 
 function useRelatedRecords(
-  { resource, filterName, filterValue, memberOrganization }: RelatedListProps,
+  {
+    resource,
+    filterName,
+    filterValue,
+    memberOrganization,
+    assetEquipmentHubs,
+  }: RelatedListProps,
   enabled = true,
 ): ResourceList {
   const { organization, can } = useAdmin();
@@ -870,6 +878,7 @@ function useRelatedRecords(
     filters: [{ field: filterName, operator: "eq", value: filterValue }],
     pagination: { mode: "off" },
     meta: {
+      ...(assetEquipmentHubs ? { assetEquipmentHubs: filterValue } : {}),
       organization:
         groupMembers && isMemberOrganizationId(memberOrganization)
           ? memberOrganization
@@ -1002,7 +1011,11 @@ function RelatedListContent({
       {result.limited && (
         <Alert
           type="warning"
-          message="This collection is limited by the service."
+          message={
+            resource === "hubs" && filterName === "idasset"
+              ? "Some related gateways could not be loaded. The list may be incomplete."
+              : "This collection is limited by the service."
+          }
         />
       )}
       {canEditMembers && (
@@ -1033,7 +1046,9 @@ function RelatedListContent({
       )}
       <Table
         rowKey="id"
-        onRow={recordRow}
+        onRow={(row) =>
+          resource === "hubs" && row._canOpenHub === false ? {} : recordRow(row)
+        }
         loading={query.isLoading}
         dataSource={result.data}
         pagination={{ pageSize: 10 }}
@@ -1044,9 +1059,19 @@ function RelatedListContent({
                 {
                   title: identifyById ? "ID" : r.singular,
                   render: (_: unknown, row: RecordData) => (
-                    <Link to={`/${resource}/${row.id}`}>
-                      {identifyById ? row.id : recordTitle(row)}
-                    </Link>
+                    <Space>
+                      {resource === "hubs" && row._canOpenHub === false ? (
+                        <span>{identifyById ? row.id : recordTitle(row)}</span>
+                      ) : (
+                        <Link to={`/${resource}/${row.id}`}>
+                          {identifyById ? row.id : recordTitle(row)}
+                        </Link>
+                      )}
+                      {resource === "hubs" &&
+                        typeof row._sharedGateway === "boolean" && (
+                          <SharedGatewayIndicator row={row} />
+                        )}
+                    </Space>
                   ),
                 },
               ]),
@@ -1223,7 +1248,11 @@ function countedTabLabel(
 function AssetEquipmentTabs({ assetId }: { assetId: string }) {
   const { organization, can } = useAdmin();
   const filter = { filterName: "idasset", filterValue: assetId };
-  const hubs = useRelatedRecords({ resource: "hubs", ...filter });
+  const hubs = useRelatedRecords({
+    resource: "hubs",
+    ...filter,
+    assetEquipmentHubs: true,
+  });
   const devices = useRelatedRecords({ resource: "devices", ...filter });
   const sensors = useRelatedRecords({ resource: "sensors", ...filter });
   const rules = useRelatedRecords({ resource: "rules", ...filter });

@@ -422,7 +422,7 @@ test("a pending equipment read cannot cache its old payload after assignment rev
     releaseFirstRead = resolve;
   });
   let hubReads = 0;
-  await page.route("**/api/resources/hubs?**", async (route) => {
+  await page.route("**/api/assets/42/equipment-hubs?**", async (route) => {
     hubReads += 1;
     if (hubReads === 1) {
       await firstReadHeld;
@@ -445,7 +445,8 @@ test("a pending equipment read cannot cache its old payload after assignment rev
   });
   await openAssignments(page);
   const initialRead = page.waitForRequest(
-    (request) => new URL(request.url()).pathname === "/api/resources/hubs",
+    (request) =>
+      new URL(request.url()).pathname === "/api/assets/42/equipment-hubs",
   );
   await page.getByRole("tab", { name: "Equipment", exact: true }).click();
   await initialRead;
@@ -460,7 +461,7 @@ test("a pending equipment read cannot cache its old payload after assignment rev
   expect(hubReads).toBe(1);
   const oldResponse = page.waitForResponse(
     (response) =>
-      new URL(response.url()).pathname === "/api/resources/hubs" &&
+      new URL(response.url()).pathname === "/api/assets/42/equipment-hubs" &&
       response.status() === 200,
   );
   releaseFirstRead();

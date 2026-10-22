@@ -38,6 +38,7 @@ import {
   type ServiceOutboxStatus,
 } from "../shared/service-outboxes";
 import { createAuthorization, parseRoleLevel } from "./authorization";
+import { assetEquipmentHubs } from "./asset-equipment-hubs";
 import {
   ApiError,
   publicRecord,
@@ -307,6 +308,25 @@ export function createApp(
     res.json({
       data: await notificationReadiness(ids, r.session.token, upstream),
     });
+  });
+  app.get("/api/assets/:assetId/equipment-hubs", async (req, res) => {
+    const r = requirePermission(req, resourceMap.assets, "show");
+    requirePermission(req, resourceMap.hubs, "list");
+    const assetId = idValue(req.params.assetId);
+    if (Object.keys(req.query).some((key) => key !== "_organization"))
+      throw new ApiError(400, "Unknown gateway filter.");
+    const organization = req.query._organization;
+    if (organization !== undefined && typeof organization !== "string")
+      throw new ApiError(400, "Check the organization filter.");
+    res.json(
+      await assetEquipmentHubs(
+        assetId,
+        r.session,
+        upstream,
+        authorization,
+        organization,
+      ),
+    );
   });
   app.get("/api/resources/:resource", async (req, res) => {
     const resource = getResource(req);

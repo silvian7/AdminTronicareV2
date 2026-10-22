@@ -11,7 +11,9 @@ import {
   Alert,
   Typography,
   Tag,
+  Tooltip,
 } from "antd";
+import { ShareAltOutlined } from "@ant-design/icons";
 import { Link } from "react-router";
 import {
   canonical,
@@ -484,6 +486,28 @@ function useReferenceRecord(
       : undefined;
   return { id, allowed, validId, record };
 }
+export function SharedGatewayIndicator({ row }: { row: RecordData }) {
+  const { record: type } = useReferenceRecord(
+    "hubtypes",
+    valueOf(row, "IDHubType"),
+  );
+  if (
+    row._sharedGateway !== true &&
+    valueOf(type ?? {}, "IsSingleAsset") !== false
+  )
+    return null;
+  return (
+    <Tooltip title="Shared gateway" trigger={["hover", "focus"]}>
+      <span tabIndex={0} data-no-row-navigation>
+        <ShareAltOutlined
+          aria-label="Shared gateway"
+          style={{ color: "#1677ff" }}
+        />
+      </span>
+    </Tooltip>
+  );
+}
+
 function ReferenceIdentity({
   resource,
   value,

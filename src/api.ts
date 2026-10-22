@@ -219,6 +219,13 @@ export const authProvider: AuthProvider = {
 export const dataProvider: DataProvider = {
   getApiUrl: () => "/api",
   getList: async ({ resource, pagination, sorters, filters, meta }) => {
+    if (resource === "hubs" && typeof meta?.assetEquipmentHubs === "string") {
+      const params = new URLSearchParams();
+      if (meta.organization) params.set("_organization", meta.organization);
+      return request(
+        `/api/assets/${encodeURIComponent(meta.assetEquipmentHubs)}/equipment-hubs${params.size ? `?${params}` : ""}`,
+      );
+    }
     const params = new URLSearchParams({
       _page: String(pagination?.currentPage ?? 1),
       _pageSize: String(
