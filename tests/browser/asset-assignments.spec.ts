@@ -439,8 +439,9 @@ test("a pending equipment read cannot cache its old payload after assignment rev
   const initialRead = page.waitForRequest(
     (request) => new URL(request.url()).pathname === "/api/resources/hubs",
   );
-  await page.getByRole("tab", { name: "Hubs", exact: true }).click();
+  await page.getByRole("tab", { name: "Equipment", exact: true }).click();
   await initialRead;
+  await page.getByRole("tab", { name: "Assignments", exact: true }).click();
   await page.getByRole("tab", { name: "Users", exact: true }).click();
   await remove(page, "Synthetic current user");
   await expect(
@@ -472,8 +473,7 @@ test("a pending equipment read cannot cache its old payload after assignment rev
     });
     Object.assign(window, { assignmentCacheObservation: observation });
   }, privateHubLabel);
-  await page.getByRole("tab", { name: "Assignments", exact: true }).click();
-  await page.getByRole("tab", { name: "Hubs", exact: true }).click();
+  await page.getByRole("tab", { name: "Equipment", exact: true }).click();
   await expect(
     page.getByText("This equipment is outside your scope.", { exact: true }),
   ).toBeVisible();

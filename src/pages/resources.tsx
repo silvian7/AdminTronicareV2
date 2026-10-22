@@ -1719,17 +1719,6 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   />
                 ),
               },
-              {
-                key: "hubs",
-                label: "Hubs",
-                children: (
-                  <RelatedList
-                    resource="hubs"
-                    filterName="idasset"
-                    filterValue={id!}
-                  />
-                ),
-              },
             ]}
           />
         </>
@@ -1742,6 +1731,17 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       children: (
         <Tabs
           items={[
+            {
+              key: "hubs",
+              label: "Hubs",
+              children: (
+                <RelatedList
+                  resource="hubs"
+                  filterName="idasset"
+                  filterValue={id!}
+                />
+              ),
+            },
             {
               key: "devices",
               label: "Devices",
