@@ -271,7 +271,7 @@ test("Members Remove opens its confirmation while clicking the member row opens 
 }) => {
   const mock = await mockRows(page);
   await page.goto(`/usergroups/${groupId}`);
-  await page.getByRole("tab", { name: "Members", exact: true }).click();
+  await page.getByRole("tab", { name: /^Members(?: \(\d+\+?\))?$/ }).click();
   const selected = row(page, userId);
   await selected
     .getByRole("button", { name: "Remove member", exact: true })

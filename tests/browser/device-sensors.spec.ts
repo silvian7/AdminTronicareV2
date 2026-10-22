@@ -467,13 +467,13 @@ async function openHub(page: Page) {
 
 async function openHubDevices(page: Page) {
   await openHub(page);
-  await page.getByRole("tab", { name: "Devices", exact: true }).click();
+  await page.getByRole("tab", { name: /^Devices(?: \(\d+\+?\))?$/ }).click();
   return expectDeviceListIdentity(page);
 }
 
 async function expectAssociatedSensors(page: Page) {
   await expect(
-    page.getByRole("tab", { name: "Sensors", exact: true }),
+    page.getByRole("tab", { name: /^Sensors(?: \(\d+\+?\))?$/ }),
   ).toHaveAttribute("aria-selected", "true");
   const row = sensorRow(page, sensorId);
   await expect(row).toHaveClass(/clickable-record-row/);
@@ -546,7 +546,7 @@ test("hub devices offer an explicit sensor action while realtime remains a devic
     fullPage: true,
     animations: "disabled",
   });
-  await page.getByRole("tab", { name: "Devices", exact: true }).click();
+  await page.getByRole("tab", { name: /^Devices(?: \(\d+\+?\))?$/ }).click();
   const device = await expectDeviceListIdentity(page);
   await expect(
     device.getByRole("link", { name: "realtime", exact: true }),
@@ -662,19 +662,30 @@ test("device detail exposes its sensors button and keeps manual tab selection in
     fullPage: true,
     animations: "disabled",
   });
-  expect(
-    mock.reads.filter((url) => url.pathname === "/api/resources/sensors"),
-  ).toHaveLength(0);
+  await expect(
+    page.getByRole("tab", { name: "Sensors (1)", exact: true }),
+  ).toBeVisible();
+  const prefetchedSensors = mock.reads.filter(
+    (url) => url.pathname === "/api/resources/sensors",
+  );
+  expect(prefetchedSensors).toHaveLength(1);
+  expect(prefetchedSensors[0]!.searchParams.get("iddevice")).toBe(deviceId);
+  expect(prefetchedSensors[0]!.searchParams.get("_organization")).toBe(
+    organizationId,
+  );
   await page.getByRole("button", { name: "View sensors", exact: true }).click();
   await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
   await expectAssociatedSensors(page);
+  expect(
+    mock.reads.filter((url) => url.pathname === "/api/resources/sensors"),
+  ).toHaveLength(prefetchedSensors.length);
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   await expect(
     page.getByRole("tab", { name: "Details", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   expect(new URL(page.url()).searchParams.get("tab")).not.toBe("sensors");
-  await expect(page.locator(".ant-descriptions")).toBeVisible();
-  await page.getByRole("tab", { name: "Sensors", exact: true }).click();
+  await expect(page.locator(".ant-descriptions").first()).toBeVisible();
+  await page.getByRole("tab", { name: /^Sensors(?: \(\d+\+?\))?$/ }).click();
   await expect(page).toHaveURL(`/devices/${deviceId}?tab=sensors`);
   await expectAssociatedSensors(page);
   await page.reload();
@@ -715,7 +726,7 @@ test("a direct device sensor URL retains the selected tab and displays an empty 
     page.getByRole("heading", { name: deviceLabel, exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("tab", { name: "Sensors", exact: true }),
+    page.getByRole("tab", { name: /^Sensors(?: \(\d+\+?\))?$/ }),
   ).toHaveAttribute("aria-selected", "true");
   await expect(
     page.getByRole("columnheader", {
@@ -749,7 +760,7 @@ test("sensor permissions hide navigation actions and prevent reads even for a di
   await expect(
     page.getByRole("button", { name: "View sensors", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("tab", { name: "Sensors", exact: true }).click();
+  await page.getByRole("tab", { name: /^Sensors(?: \(\d+\+?\))?$/ }).click();
   await expect(
     page.getByText("You do not have access to these records.", { exact: true }),
   ).toBeVisible();

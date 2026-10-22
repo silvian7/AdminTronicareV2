@@ -210,7 +210,7 @@ async function openMembers(page: Page, workspace?: string) {
       page.getByRole("heading", { name: groupLabel, exact: true }),
     ).toBeVisible();
   }
-  await page.getByRole("tab", { name: "Members", exact: true }).click();
+  await page.getByRole("tab", { name: /^Members(?: \(\d+\+?\))?$/ }).click();
   await expect(
     page.getByRole("link", { name: memberId, exact: true }),
   ).toHaveAttribute("href", `/users/${memberId}`);
@@ -232,7 +232,7 @@ async function chooseMember(page: Page, label = candidateOption) {
 
 async function returnToMembers(page: Page) {
   await page.getByRole("link", { name: groupLabel, exact: true }).click();
-  await page.getByRole("tab", { name: "Members", exact: true }).click();
+  await page.getByRole("tab", { name: /^Members(?: \(\d+\+?\))?$/ }).click();
 }
 
 async function openRemoval(page: Page, id = memberId) {

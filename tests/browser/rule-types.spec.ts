@@ -394,7 +394,7 @@ test("Asset Equipment Rules places Type second and retains Asset, Enabled and Ou
     page.getByRole("heading", { name: assetLabel, exact: true }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Equipment", exact: true }).click();
-  await page.getByRole("tab", { name: "Rules", exact: true }).click();
+  await page.getByRole("tab", { name: /^Rules(?: \(\d+\+?\))?$/ }).click();
   await expect(
     page.getByRole("columnheader", { name: "Type", exact: true }),
   ).toBeVisible();

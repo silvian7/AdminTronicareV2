@@ -137,7 +137,7 @@ async function descendToSensors(page: Page) {
   await expect(
     page.getByRole("heading", { name: hubLabel, exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Devices", exact: true }).click();
+  await page.getByRole("tab", { name: /^Devices(?: \(\d+\+?\))?$/ }).click();
   await expect(page.getByRole("columnheader").first()).toHaveText("ID");
   const deviceLink = page.getByRole("link", { name: "51", exact: true });
   await expect(deviceLink).toHaveAttribute("href", "/devices/51");
@@ -148,7 +148,7 @@ async function descendToSensors(page: Page) {
   await expect(
     page.getByRole("heading", { name: deviceLabel, exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Sensors", exact: true }).click();
+  await page.getByRole("tab", { name: /^Sensors(?: \(\d+\+?\))?$/ }).click();
   await expect(
     page.getByRole("columnheader", {
       name: "Last reported value",

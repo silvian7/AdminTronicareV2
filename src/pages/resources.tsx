@@ -841,27 +841,63 @@ function AddGroupMember({
     </>
   );
 }
-function RelatedList({
-  resource,
-  filterName,
-  filterValue,
-  memberOrganization,
-  memberGroupLabel,
-}: {
+type ResourceList = ReturnType<typeof useList<RecordData>>;
+
+interface RelatedListProps {
   resource: string;
   filterName: string;
   filterValue: string;
   memberOrganization?: string;
   memberGroupLabel?: string;
-}) {
+}
+
+function isMemberOrganizationId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^(0|[1-9]\d{0,18})$/.test(value) &&
+    BigInt(value) <= 9223372036854775807n
+  );
+}
+
+function useRelatedRecords(
+  { resource, filterName, filterValue, memberOrganization }: RelatedListProps,
+  enabled = true,
+): ResourceList {
+  const { organization, can } = useAdmin();
+  const groupMembers = resource === "users" && filterName === "idusergroup";
+  return useList<RecordData>({
+    resource,
+    filters: [{ field: filterName, operator: "eq", value: filterValue }],
+    pagination: { mode: "off" },
+    meta: {
+      organization:
+        groupMembers && isMemberOrganizationId(memberOrganization)
+          ? memberOrganization
+          : organization,
+    },
+    errorNotification: false,
+    queryOptions: { enabled: enabled && can(resourceMap[resource], "list") },
+  });
+}
+
+function RelatedList(props: RelatedListProps) {
+  const linked = useRelatedRecords(props);
+  return <RelatedListContent {...props} linked={linked} />;
+}
+
+function RelatedListContent({
+  resource,
+  filterName,
+  filterValue,
+  memberOrganization,
+  memberGroupLabel,
+  linked,
+}: RelatedListProps & { linked: ResourceList }) {
   const { organization, can } = useAdmin();
   const recordRow = useRecordRow(resource);
   const r = resourceMap[resource];
   const groupMembers = resource === "users" && filterName === "idusergroup";
-  const validMemberOrganization =
-    typeof memberOrganization === "string" &&
-    /^(0|[1-9]\d{0,18})$/.test(memberOrganization) &&
-    BigInt(memberOrganization) <= 9223372036854775807n;
+  const validMemberOrganization = isMemberOrganizationId(memberOrganization);
   const identifyById =
     resource === "devices" ||
     (resource === "users" &&
@@ -894,19 +930,7 @@ function RelatedList({
     groupMembers && validMemberOrganization && can(r, "edit");
   const deletion = useDelete();
   const refreshRecordReferences = useRefreshRecordReferences(resource);
-  const { result, query } = useList<RecordData>({
-    resource,
-    filters: [{ field: filterName, operator: "eq", value: filterValue }],
-    pagination: { mode: "off" },
-    meta: {
-      organization:
-        groupMembers && validMemberOrganization
-          ? memberOrganization
-          : organization,
-    },
-    errorNotification: false,
-    queryOptions: { enabled: can(r, "list") },
-  });
+  const { result, query } = linked;
   async function changeMember(userId: string, action: "add" | "remove") {
     if (
       !canEditMembers ||
@@ -1178,7 +1202,53 @@ function RelatedList({
     </>
   );
 }
-type AssetAssignmentList = ReturnType<typeof useList<RecordData>>;
+function countedTabLabel(
+  title: string,
+  linked: ResourceList,
+  canRead: boolean,
+) {
+  const total = linked.result.total;
+  const count =
+    canRead &&
+    linked.query.isSuccess &&
+    !linked.query.isPlaceholderData &&
+    typeof total === "number" &&
+    Number.isSafeInteger(total) &&
+    total > 0
+      ? ` (${total}${linked.result.limited ? "+" : ""})`
+      : "";
+  return `${title}${count}`;
+}
+
+function AssetEquipmentTabs({ assetId }: { assetId: string }) {
+  const { organization, can } = useAdmin();
+  const filter = { filterName: "idasset", filterValue: assetId };
+  const hubs = useRelatedRecords({ resource: "hubs", ...filter });
+  const devices = useRelatedRecords({ resource: "devices", ...filter });
+  const sensors = useRelatedRecords({ resource: "sensors", ...filter });
+  const rules = useRelatedRecords({ resource: "rules", ...filter });
+  const lists = { hubs, devices, sensors, rules };
+  return (
+    <Tabs
+      items={(["hubs", "devices", "sensors", "rules"] as const).map((name) => ({
+        key: name,
+        label: countedTabLabel(
+          resourceMap[name].label,
+          lists[name],
+          can(resourceMap[name], "list"),
+        ),
+        children: (
+          <RelatedListContent
+            key={`${assetId}:${organization}:${name}`}
+            resource={name}
+            {...filter}
+            linked={lists[name]}
+          />
+        ),
+      }))}
+    />
+  );
+}
 
 function AssetAssignmentTabs({
   assetId,
@@ -1210,19 +1280,9 @@ function AssetAssignmentTabs({
       items={(["users", "usergroups"] as const).map((kind) => {
         const linked = kind === "users" ? users : groups;
         const title = kind === "users" ? "Users" : "User groups";
-        const total = linked.result.total;
-        const count =
-          can(resourceMap[kind], "list") &&
-          linked.query.isSuccess &&
-          !linked.query.isPlaceholderData &&
-          typeof total === "number" &&
-          Number.isSafeInteger(total) &&
-          total > 0
-            ? ` (${total}${linked.result.limited ? "+" : ""})`
-            : "";
         return {
           key: kind === "users" ? "users" : "groups",
-          label: `${title}${count}`,
+          label: countedTabLabel(title, linked, can(resourceMap[kind], "list")),
           children: (
             <AssetAssignments
               key={`${assetId}:${organization}:${scopedOrganization}:${kind}`}
@@ -1247,7 +1307,7 @@ function AssetAssignments({
   assetId: string;
   kind: AssetAssignmentKind;
   assetOrganization?: string;
-  linked: AssetAssignmentList;
+  linked: ResourceList;
 }) {
   const { organization, can } = useAdmin();
   const recordRow = useRecordRow(kind);
@@ -1449,21 +1509,19 @@ function AssetAssignments({
     </>
   );
 }
-function Memberships({ userId }: { userId: string }) {
-  const { organization, can } = useAdmin();
+function Memberships({
+  userId,
+  linked,
+}: {
+  userId: string;
+  linked: ResourceList;
+}) {
+  const { can } = useAdmin();
   const recordRow = useRecordRow("usergroups");
   const { message, modal } = App.useApp();
   const [group, setGroup] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const linked = useList<RecordData>({
-    resource: "usergroups",
-    filters: [{ field: "iduser", operator: "eq", value: userId }],
-    pagination: { mode: "off" },
-    meta: { organization },
-    errorNotification: false,
-    queryOptions: { enabled: can(resourceMap.usergroups, "list") },
-  });
   async function change(groupId: string, action: "add" | "remove") {
     setSaving(true);
     setError("");
@@ -1576,6 +1634,80 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     errorNotification: false,
     queryOptions: { enabled: can(resource, "show") },
   });
+  const groupOrganization = String(
+    valueOf(record ?? {}, "IDOrganization") ?? "",
+  );
+  const canReadGroupMembers =
+    resource.name === "usergroups" &&
+    can(resource, "show") &&
+    can(resourceMap.users, "list") &&
+    query.isSuccess &&
+    !query.isPlaceholderData &&
+    record?.id === id;
+  const groupMembers = useRelatedRecords(
+    {
+      resource: "users",
+      filterName: "idusergroup",
+      filterValue: id!,
+      memberOrganization: groupOrganization,
+    },
+    canReadGroupMembers,
+  );
+  const canReadUserMemberships =
+    resource.name === "users" &&
+    can(resource, "show") &&
+    can(resourceMap.usergroups, "list") &&
+    query.isSuccess &&
+    !query.isPlaceholderData &&
+    record?.id === id;
+  const userMemberships = useRelatedRecords(
+    {
+      resource: "usergroups",
+      filterName: "iduser",
+      filterValue: id!,
+    },
+    canReadUserMemberships,
+  );
+  const canReadOrganizationLists =
+    resource.name === "organizations" &&
+    can(resource, "show") &&
+    query.isSuccess &&
+    !query.isPlaceholderData &&
+    record?.id === id;
+  const canReadOrganizationUsers =
+    canReadOrganizationLists && can(resourceMap.users, "list");
+  const canReadOrganizationAssets =
+    canReadOrganizationLists && can(resourceMap.assets, "list");
+  const organizationUsers = useRelatedRecords(
+    { resource: "users", filterName: "idorganization", filterValue: id! },
+    canReadOrganizationUsers,
+  );
+  const organizationAssets = useRelatedRecords(
+    { resource: "assets", filterName: "idorganization", filterValue: id! },
+    canReadOrganizationAssets,
+  );
+  const canReadHubDevices =
+    resource.name === "hubs" &&
+    can(resource, "show") &&
+    can(resourceMap.devices, "list") &&
+    query.isSuccess &&
+    !query.isPlaceholderData &&
+    record?.id === id;
+  const hubDevices = useRelatedRecords(
+    { resource: "devices", filterName: "idhub", filterValue: id! },
+    canReadHubDevices,
+  );
+  const canReadDeviceSensors =
+    resource.name === "devices" &&
+    can(resource, "show") &&
+    can(resourceMap.sensors, "list") &&
+    query.isSuccess &&
+    !query.isPlaceholderData &&
+    record?.id === id;
+  const deviceSensors = useRelatedRecords(
+    { resource: "sensors", filterName: "iddevice", filterValue: id! },
+    canReadDeviceSensors,
+  );
   const canReadRuleActions =
     resource.name === "rules" &&
     can(resource, "show") &&
@@ -1754,95 +1886,57 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       key: "equipment",
       label: "Equipment",
       children: (
-        <Tabs
-          items={[
-            {
-              key: "hubs",
-              label: "Hubs",
-              children: (
-                <RelatedList
-                  resource="hubs"
-                  filterName="idasset"
-                  filterValue={id!}
-                />
-              ),
-            },
-            {
-              key: "devices",
-              label: "Devices",
-              children: (
-                <RelatedList
-                  resource="devices"
-                  filterName="idasset"
-                  filterValue={id!}
-                />
-              ),
-            },
-            {
-              key: "sensors",
-              label: "Sensors",
-              children: (
-                <RelatedList
-                  resource="sensors"
-                  filterName="idasset"
-                  filterValue={id!}
-                />
-              ),
-            },
-            {
-              key: "rules",
-              label: "Rules",
-              children: (
-                <RelatedList
-                  resource="rules"
-                  filterName="idasset"
-                  filterValue={id!}
-                />
-              ),
-            },
-          ]}
-        />
+        <AssetEquipmentTabs key={`${id}:${organization}`} assetId={id!} />
       ),
     });
   if (resource.name === "users")
     tabs.push({
       key: "groups",
-      label: "Group memberships",
-      children: <Memberships userId={id!} />,
+      label: countedTabLabel(
+        "Group memberships",
+        userMemberships,
+        canReadUserMemberships,
+      ),
+      children: <Memberships userId={id!} linked={userMemberships} />,
     });
   if (resource.name === "usergroups")
     tabs.push({
       key: "users",
-      label: "Members",
+      label: countedTabLabel("Members", groupMembers, canReadGroupMembers),
       children: (
-        <RelatedList
+        <RelatedListContent
           resource="users"
           filterName="idusergroup"
           filterValue={id!}
-          memberOrganization={String(
-            valueOf(record ?? {}, "IDOrganization") ?? "",
-          )}
+          memberOrganization={groupOrganization}
           memberGroupLabel={record ? recordTitle(record) : undefined}
+          linked={groupMembers}
         />
       ),
     });
   if (resource.name === "hubs")
     tabs.push({
       key: "devices",
-      label: "Devices",
+      label: countedTabLabel("Devices", hubDevices, canReadHubDevices),
       children: (
-        <RelatedList resource="devices" filterName="idhub" filterValue={id!} />
+        <RelatedListContent
+          resource="devices"
+          filterName="idhub"
+          filterValue={id!}
+          linked={hubDevices}
+        />
       ),
     });
   if (resource.name === "devices")
     tabs.push({
       key: "sensors",
-      label: "Sensors",
+      label: countedTabLabel("Sensors", deviceSensors, canReadDeviceSensors),
       children: (
-        <RelatedList
+        <RelatedListContent
           resource="sensors"
           filterName="iddevice"
           filterValue={id!}
+          linked={deviceSensors}
         />
       ),
     });
@@ -1861,23 +1955,33 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     tabs.push(
       {
         key: "users",
-        label: "Users",
+        label: countedTabLabel(
+          "Users",
+          organizationUsers,
+          canReadOrganizationUsers,
+        ),
         children: (
-          <RelatedList
+          <RelatedListContent
             resource="users"
             filterName="idorganization"
             filterValue={id!}
+            linked={organizationUsers}
           />
         ),
       },
       {
         key: "assets",
-        label: "Assets",
+        label: countedTabLabel(
+          "Assets",
+          organizationAssets,
+          canReadOrganizationAssets,
+        ),
         children: (
-          <RelatedList
+          <RelatedListContent
             resource="assets"
             filterName="idorganization"
             filterValue={id!}
+            linked={organizationAssets}
           />
         ),
       },
@@ -1915,6 +2019,46 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     refreshed.data?.data.id === id
                   )
                     await ruleActions.query.refetch();
+                  if (
+                    canReadGroupMembers &&
+                    refreshed.isSuccess &&
+                    refreshed.data?.data.id === id &&
+                    String(
+                      valueOf(refreshed.data.data, "IDOrganization") ?? "",
+                    ) === groupOrganization
+                  )
+                    await groupMembers.query.refetch();
+                  if (
+                    canReadUserMemberships &&
+                    refreshed.isSuccess &&
+                    refreshed.data?.data.id === id
+                  )
+                    await userMemberships.query.refetch();
+                  if (
+                    canReadOrganizationLists &&
+                    refreshed.isSuccess &&
+                    refreshed.data?.data.id === id
+                  )
+                    await Promise.all([
+                      canReadOrganizationUsers
+                        ? organizationUsers.query.refetch()
+                        : undefined,
+                      canReadOrganizationAssets
+                        ? organizationAssets.query.refetch()
+                        : undefined,
+                    ]);
+                  if (
+                    canReadHubDevices &&
+                    refreshed.isSuccess &&
+                    refreshed.data?.data.id === id
+                  )
+                    await hubDevices.query.refetch();
+                  if (
+                    canReadDeviceSensors &&
+                    refreshed.isSuccess &&
+                    refreshed.data?.data.id === id
+                  )
+                    await deviceSensors.query.refetch();
                   await refreshRecordReferences();
                   if (resource.name === "users")
                     await queryClient.invalidateQueries({
