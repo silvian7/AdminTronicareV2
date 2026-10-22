@@ -5,6 +5,10 @@ import {
 } from "../../shared/resources";
 
 const assetLabel = "Synthetic assigned asset";
+const assignmentTabNames = {
+  Users: /^Users(?: \(\d+\+?\))?$/,
+  "User groups": /^User groups(?: \(\d+\+?\))?$/,
+};
 const candidates = {
   users: [
     {
@@ -221,7 +225,9 @@ test("asset users and groups can be assigned and removed with organization-scope
       label: "Synthetic assignment group",
     },
   ] as const) {
-    await page.getByRole("tab", { name: assignment.tab, exact: true }).click();
+    await page
+      .getByRole("tab", { name: assignmentTabNames[assignment.tab] })
+      .click();
     const row = page.getByRole("link", { name: assignment.label, exact: true });
     await expect(row).toHaveCount(0);
     await choose(
@@ -334,7 +340,9 @@ for (const restriction of [
     await expect(
       page.getByRole("button", { name: "Remove", exact: true }),
     ).toHaveCount(0);
-    await page.getByRole("tab", { name: "User groups", exact: true }).click();
+    await page
+      .getByRole("tab", { name: assignmentTabNames["User groups"] })
+      .click();
     await expect(
       page.getByRole("button", { name: "Assign group", exact: true }),
     ).toHaveCount(0);
@@ -442,7 +450,7 @@ test("a pending equipment read cannot cache its old payload after assignment rev
   await page.getByRole("tab", { name: "Equipment", exact: true }).click();
   await initialRead;
   await page.getByRole("tab", { name: "Assignments", exact: true }).click();
-  await page.getByRole("tab", { name: "Users", exact: true }).click();
+  await page.getByRole("tab", { name: assignmentTabNames.Users }).click();
   await remove(page, "Synthetic current user");
   await expect(
     page.getByText("This asset is outside your scope.", { exact: true }),

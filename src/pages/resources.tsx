@@ -1178,14 +1178,76 @@ function RelatedList({
     </>
   );
 }
+type AssetAssignmentList = ReturnType<typeof useList<RecordData>>;
+
+function AssetAssignmentTabs({
+  assetId,
+  assetOrganization,
+}: {
+  assetId: string;
+  assetOrganization?: string;
+}) {
+  const { organization, can } = useAdmin();
+  const scopedOrganization = assetOrganization ?? organization;
+  const users = useList<RecordData>({
+    resource: "users",
+    filters: [{ field: "idasset", operator: "eq", value: assetId }],
+    pagination: { mode: "off" },
+    meta: { organization: scopedOrganization },
+    errorNotification: false,
+    queryOptions: { enabled: can(resourceMap.users, "list") },
+  });
+  const groups = useList<RecordData>({
+    resource: "usergroups",
+    filters: [{ field: "idasset", operator: "eq", value: assetId }],
+    pagination: { mode: "off" },
+    meta: { organization: scopedOrganization },
+    errorNotification: false,
+    queryOptions: { enabled: can(resourceMap.usergroups, "list") },
+  });
+  return (
+    <Tabs
+      items={(["users", "usergroups"] as const).map((kind) => {
+        const linked = kind === "users" ? users : groups;
+        const title = kind === "users" ? "Users" : "User groups";
+        const total = linked.result.total;
+        const count =
+          can(resourceMap[kind], "list") &&
+          linked.query.isSuccess &&
+          !linked.query.isPlaceholderData &&
+          typeof total === "number" &&
+          Number.isSafeInteger(total) &&
+          total > 0
+            ? ` (${total}${linked.result.limited ? "+" : ""})`
+            : "";
+        return {
+          key: kind === "users" ? "users" : "groups",
+          label: `${title}${count}`,
+          children: (
+            <AssetAssignments
+              key={`${assetId}:${organization}:${scopedOrganization}:${kind}`}
+              assetId={assetId}
+              kind={kind}
+              assetOrganization={assetOrganization}
+              linked={linked}
+            />
+          ),
+        };
+      })}
+    />
+  );
+}
+
 function AssetAssignments({
   assetId,
   kind,
   assetOrganization,
+  linked,
 }: {
   assetId: string;
   kind: AssetAssignmentKind;
   assetOrganization?: string;
+  linked: AssetAssignmentList;
 }) {
   const { organization, can } = useAdmin();
   const recordRow = useRecordRow(kind);
@@ -1216,14 +1278,6 @@ function AssetAssignments({
     setSelected(undefined);
     setError("");
   }, [viewKey]);
-  const linked = useList<RecordData>({
-    resource: kind,
-    filters: [{ field: "idasset", operator: "eq", value: assetId }],
-    pagination: { mode: "off" },
-    meta: { organization: scopedOrganization },
-    errorNotification: false,
-    queryOptions: { enabled: canRead },
-  });
   async function refreshVisibility(epoch: number) {
     if (getSessionEpoch() !== epoch) return;
     // A first fetch can still be pending without cached data. Cancel it so a
@@ -1686,42 +1740,13 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       key: "assignments",
       label: "Assignments",
       children: (
-        <>
-          <Tabs
-            items={[
-              {
-                key: "users",
-                label: "Users",
-                children: (
-                  <AssetAssignments
-                    key={`${id}:${organization}:users`}
-                    assetId={id!}
-                    kind="users"
-                    assetOrganization={
-                      record &&
-                      String(valueOf(record, "IDOrganization") ?? organization)
-                    }
-                  />
-                ),
-              },
-              {
-                key: "groups",
-                label: "User groups",
-                children: (
-                  <AssetAssignments
-                    key={`${id}:${organization}:usergroups`}
-                    assetId={id!}
-                    kind="usergroups"
-                    assetOrganization={
-                      record &&
-                      String(valueOf(record, "IDOrganization") ?? organization)
-                    }
-                  />
-                ),
-              },
-            ]}
-          />
-        </>
+        <AssetAssignmentTabs
+          key={`${id}:${organization}:${valueOf(record ?? {}, "IDOrganization") ?? ""}`}
+          assetId={id!}
+          assetOrganization={
+            record && String(valueOf(record, "IDOrganization") ?? organization)
+          }
+        />
       ),
     });
   if (resource.name === "assets")
