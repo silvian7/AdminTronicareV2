@@ -447,8 +447,9 @@ test("a pending equipment read cannot cache its old payload after assignment rev
   await expect(
     page.getByText("This asset is outside your scope.", { exact: true }),
   ).toBeVisible();
-  // Refetch must run while the original response is still held by the server.
-  await expect.poll(() => hubReads).toBeGreaterThan(1);
+  // Leaving Equipment unmounts its list. Revocation must discard the inactive
+  // query before the original response can finish and populate it.
+  expect(hubReads).toBe(1);
   const oldResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/resources/hubs" &&
@@ -474,6 +475,7 @@ test("a pending equipment read cannot cache its old payload after assignment rev
     Object.assign(window, { assignmentCacheObservation: observation });
   }, privateHubLabel);
   await page.getByRole("tab", { name: "Equipment", exact: true }).click();
+  await expect.poll(() => hubReads).toBeGreaterThan(1);
   await expect(
     page.getByText("This equipment is outside your scope.", { exact: true }),
   ).toBeVisible();
