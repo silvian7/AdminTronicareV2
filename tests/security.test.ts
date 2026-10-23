@@ -695,8 +695,9 @@ describe("password completion and logout", () => {
     expect(logout.status).toBe(200);
     release();
     const finished = await changing;
-    expect(finished.status).toBe(401);
-    expect(finished.headers["set-cookie"][0]).toContain("Max-Age=0");
+    expect(finished.status).toBe(409);
+    expect(finished.body.code).toBe("organization_context_changed");
+    expect(finished.headers["set-cookie"]).toBeUndefined();
     expect(
       (await supertest(app).get("/api/session").set("Cookie", cookie)).status,
     ).toBe(401);

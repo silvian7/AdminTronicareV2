@@ -118,6 +118,8 @@ export function fixtureTransport(identity = testIdentity) {
         onetimepwd: identity.mustChangePassword,
         authorizations: identity.permissions,
       });
+    if (url.pathname === "/v1/usersadmin/organizations")
+      return new Response(null, { status: 404 });
     if (url.pathname === "/v1/assets/scope")
       return Response.json([
         { m_nIDAsset: "1", m_nIDOrganization: identity.organizationId },

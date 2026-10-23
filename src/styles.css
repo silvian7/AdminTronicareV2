@@ -93,6 +93,33 @@ a {
   min-width: 265px;
   max-width: 350px;
 }
+.workspace-controls {
+  min-width: 0;
+}
+.topbar.organization-topbar {
+  height: auto;
+  min-height: 76px;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+.active-organization-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.organization-role {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-inline-end: 0;
+}
+.organization-switch-error {
+  width: 100%;
+  color: #b42318;
+  font-size: 12px;
+}
 .account-button {
   display: flex;
   align-items: center;

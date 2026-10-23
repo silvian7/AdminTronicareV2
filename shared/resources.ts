@@ -283,6 +283,12 @@ export function responseKey(resource: Resource, writeKey: string): string {
 export const isReadOnly = (r: Resource) =>
   r.name === "userlog" || r.name === "entities";
 
+export interface OrganizationMembership {
+  organizationId: string;
+  userTypeId: string;
+  active: boolean;
+}
+
 export interface Identity {
   id: string;
   name: string;

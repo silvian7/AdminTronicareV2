@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLogin } from "@refinedev/core";
 import {
   Form,
@@ -177,11 +177,38 @@ export function Login() {
   );
 }
 export function Account() {
-  const { identity } = useAdmin();
-  const { message } = App.useApp();
+  const { identity, registerOrganizationChangeGuard } = useAdmin();
+  const { message, modal } = App.useApp();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [form] = Form.useForm();
+  useEffect(() => {
+    let confirmation: { destroy: () => void } | undefined;
+    let resolvePending: ((discard: boolean) => void) | undefined;
+    const unregister = registerOrganizationChangeGuard(() => {
+      if (saving) {
+        message.info("Wait for the password update to finish.");
+        return false;
+      }
+      if (!form.isFieldsTouched()) return true;
+      return new Promise<boolean>((resolve) => {
+        resolvePending = resolve;
+        confirmation = modal.confirm({
+          title: "Discard unsaved changes?",
+          content: "Switching organization will clear the password form.",
+          okText: "Discard",
+          cancelText: "Keep editing",
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+    });
+    return () => {
+      unregister();
+      confirmation?.destroy();
+      resolvePending?.(false);
+    };
+  }, [registerOrganizationChangeGuard, saving, form, message, modal]);
   return (
     <>
       <div className="page-heading">

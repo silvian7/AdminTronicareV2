@@ -2306,7 +2306,8 @@ export function ResourceEditor({
   mode: "create" | "edit";
 }) {
   const { id } = useParams();
-  const { organization, identity, can } = useAdmin();
+  const { organization, identity, can, registerOrganizationChangeGuard } =
+    useAdmin();
   const navigate = useNavigate();
   const { message, modal } = App.useApp();
   const [params] = useSearchParams();
@@ -2350,6 +2351,33 @@ export function ResourceEditor({
     (f) => identity.level >= 90 || canonical(f.key) !== "Admin",
   );
   const saving = create.mutation.isPending || update.mutation.isPending;
+  useEffect(() => {
+    let confirmation: { destroy: () => void } | undefined;
+    let resolvePending: ((discard: boolean) => void) | undefined;
+    const unregister = registerOrganizationChangeGuard(() => {
+      if (saving) {
+        message.info("Wait for the current save to finish.");
+        return false;
+      }
+      if (!dirty || saved.current) return true;
+      return new Promise<boolean>((resolve) => {
+        resolvePending = resolve;
+        confirmation = modal.confirm({
+          title: "Discard unsaved changes?",
+          content: "Switching organization will close this editor.",
+          okText: "Discard",
+          cancelText: "Keep editing",
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+    });
+    return () => {
+      unregister();
+      confirmation?.destroy();
+      resolvePending?.(false);
+    };
+  }, [registerOrganizationChangeGuard, dirty, saving, message, modal]);
   useEffect(() => {
     const key = `${resource.name}:${id ?? "new"}:${mode}`;
     if (initialized.current === key) return;

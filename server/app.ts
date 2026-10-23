@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { LosslessNumber, stringify } from "lossless-json";
 import {
   resourceMap,
   assetAssignmentRoutes,
@@ -37,7 +38,12 @@ import {
   outboxServices,
   type ServiceOutboxStatus,
 } from "../shared/service-outboxes";
-import { createAuthorization, parseRoleLevel } from "./authorization";
+import { createAuthorization } from "./authorization";
+import {
+  connectedSession,
+  organizationMemberships,
+  validateSelectedMembership,
+} from "./session-organizations";
 import { assetEquipmentHubs } from "./asset-equipment-hubs";
 import {
   ApiError,
@@ -77,6 +83,79 @@ export function createApp(
   const app = express();
   const upstream = createUpstream(config, transport);
   const authorization = createAuthorization(upstream);
+  const contextChanged = () =>
+    new ApiError(
+      409,
+      "Your organization context changed. Reload the session.",
+      undefined,
+      "organization_context_changed",
+    );
+  const switchPending = () =>
+    new ApiError(
+      409,
+      "An organization change is in progress. Try again shortly.",
+      undefined,
+      "organization_switch_pending",
+    );
+  const sessionInfo = (session: Session) => ({
+    identity: session.identity,
+    csrf: session.csrf,
+    expiresAt: session.expiresAt,
+    ...(session.organizationMemberships === undefined
+      ? {}
+      : {
+          organizationMemberships: session.organizationMemberships,
+          activeOrganizationId: session.activeOrganizationId,
+        }),
+    services: Object.fromEntries(
+      services.map((s) => [
+        s,
+        {
+          configured: !!config.origins[s],
+          writable: config.enabledWrites.has(s),
+        },
+      ]),
+    ),
+  });
+  const readMemberships = async (session: Session) => {
+    const { data } = await upstream(
+      "users",
+      "/v1/usersadmin/organizations",
+      session.token,
+    );
+    if (!data || typeof data !== "object" || Array.isArray(data))
+      throw new ApiError(
+        502,
+        "The service returned an invalid organization context.",
+      );
+    const memberships = organizationMemberships(
+      (data as Record<string, unknown>).organizations,
+      session.identity.id,
+    );
+    const activeOrganizationId =
+      session.activeOrganizationId === undefined
+        ? session.identity.level >= 90
+          ? null
+          : session.identity.organizationId
+        : session.activeOrganizationId;
+    validateSelectedMembership(
+      session.identity,
+      memberships,
+      activeOrganizationId,
+    );
+    return {
+      ...session,
+      organizationMemberships: memberships,
+      activeOrganizationId,
+    };
+  };
+  const disconnect = async (token: string) => {
+    try {
+      await upstream("users", "/v1/usersadmin/disconnect", token);
+    } catch {
+      /* No sensitive logging. */
+    }
+  };
   app.disable("x-powered-by");
   app.set("trust proxy", config.trustProxy);
   app.use(
@@ -149,46 +228,18 @@ export function createApp(
         },
       },
     );
-    const result = data as Record<string, unknown>;
-    if (
-      result?.status !== true ||
-      typeof result.token !== "string" ||
-      result.token === "null" ||
-      !/^[!-~]{1,4096}$/.test(result.token) ||
-      !Array.isArray(result.authorizations)
-    )
-      throw new ApiError(401, "The login or password is incorrect.");
-    const level = parseRoleLevel(result.usertypelevel);
-    if (level === null)
-      throw new ApiError(502, "The service returned an invalid account role.");
-    const identity: Identity = {
-      id: idValue(result.iduser),
-      name:
-        [result.firstname, result.lastname].filter(Boolean).join(" ") || login,
-      organizationId: String(result.idorganization ?? "0"),
-      userTypeId: String(result.idusertype ?? "0"),
-      level,
-      permissions: result.authorizations.filter(
-        (p): p is { entity: string; rights: string } =>
-          !!p &&
-          typeof p === "object" &&
-          typeof p.entity === "string" &&
-          typeof p.rights === "string",
-      ),
-      mustChangePassword: result.onetimepwd === true,
-    };
+    const connected = connectedSession(data, login);
     const previous = sessionId(req, config);
     if (previous) await store.delete(previous);
     const id = newSessionId();
     const session: Session = {
-      token: result.token,
-      identity,
+      ...connected,
       csrf: newSessionId(),
       expiresAt: Date.now() + 3540_000,
     };
     await store.set(id, session);
     setSessionCookie(res, config, id);
-    res.json({ identity, csrf: session.csrf, expiresAt: session.expiresAt });
+    res.json(sessionInfo(session));
   });
   app.post("/api/session/recover", loginLimiter, async (req, res) => {
     const login = text(req.body.login, 50).trim();
@@ -208,48 +259,195 @@ export function createApp(
     const id = sessionId(req, config);
     const session = id ? await store.get(id) : null;
     if (!session || session.expiresAt <= Date.now()) {
-      setSessionCookie(res, config);
       throw new ApiError(401, "Your session has expired. Sign in again.");
     }
     Object.assign(req, { session, sessionId: id });
-    if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    const path = req.originalUrl.split("?")[0];
+    if (session.switching && path !== "/api/session/logout") {
+      if (session.switching.expiresAt <= Date.now()) {
+        await store.compareAndSet(id!, session, null);
+        throw contextChanged();
+      }
+      throw switchPending();
+    }
+    const read = ["GET", "HEAD", "OPTIONS"].includes(req.method);
+    if (
+      !read ||
+      (path !== "/api/session" && req.headers["x-csrf-token"] !== undefined)
+    ) {
       const csrf = req.headers["x-csrf-token"];
       if (
         typeof csrf !== "string" ||
         csrf.length !== session.csrf.length ||
+        Buffer.byteLength(csrf) !== Buffer.byteLength(session.csrf) ||
         !timingSafeEqual(Buffer.from(csrf), Buffer.from(session.csrf))
       )
-        throw new ApiError(403, "The session check failed. Reload the page.");
+        throw new ApiError(
+          read ? 409 : 403,
+          "Your organization context changed. Reload the session.",
+          undefined,
+          "organization_context_changed",
+        );
     }
     next();
   });
-  app.get("/api/session", (req, res) => {
-    const { session } = req as AuthRequest;
-    res.json({
-      identity: session.identity,
-      csrf: session.csrf,
-      expiresAt: session.expiresAt,
-      services: Object.fromEntries(
-        services.map((s) => [
-          s,
-          {
-            configured: !!config.origins[s],
-            writable: config.enabledWrites.has(s),
-          },
-        ]),
-      ),
-    });
+  app.get("/api/session", async (req, res) => {
+    const r = req as AuthRequest;
+    let session = r.session;
+    if (session.organizationMemberships === undefined) {
+      try {
+        session = await readMemberships(session);
+        if (!(await store.compareAndSet(r.sessionId, r.session, session)))
+          throw contextChanged();
+      } catch (error) {
+        if (!(error instanceof ApiError) || ![404, 405].includes(error.status))
+          throw error;
+      }
+    }
+    res.json(sessionInfo(session));
+  });
+  app.get("/api/session/organizations", async (req, res) => {
+    if (Object.keys(req.query).length)
+      throw new ApiError(400, "Unsupported query parameters.");
+    const r = req as AuthRequest;
+    const session = await readMemberships(r.session);
+    if (!(await store.compareAndSet(r.sessionId, r.session, session)))
+      throw contextChanged();
+    res.json({ data: session.organizationMemberships });
+  });
+  app.post("/api/session/organization", async (req, res) => {
+    const r = req as AuthRequest;
+    if (
+      Object.keys(req.query).length ||
+      !req.body ||
+      Array.isArray(req.body) ||
+      Object.keys(req.body).length !== 1 ||
+      !("organizationId" in req.body)
+    )
+      throw new ApiError(400, "Choose an organization.");
+    const target = idValue(req.body.organizationId);
+    const claimed: Session = {
+      ...r.session,
+      switching: { nonce: newSessionId(), expiresAt: Date.now() + 30_000 },
+    };
+    if (!(await store.compareAndSet(r.sessionId, r.session, claimed)))
+      throw contextChanged();
+    let rotatedToken: string | undefined;
+    let committed = false;
+    try {
+      const authoritative = await readMemberships(claimed);
+      if (
+        !authoritative.organizationMemberships.some(
+          (member) => member.organizationId === target,
+        )
+      )
+        throw new ApiError(
+          403,
+          "You do not have an active membership in this organization.",
+        );
+      // Membership discovery can itself wait on a dependency. Do not start a
+      // token-rotating request after logout, replacement, or claim expiry.
+      const currentClaim = await store.get(r.sessionId);
+      if (
+        claimed.switching!.expiresAt <= Date.now() ||
+        currentClaim?.switching?.nonce !== claimed.switching!.nonce
+      )
+        throw contextChanged();
+      if (authoritative.activeOrganizationId === target) {
+        const { switching: _switching, ...unchanged } = authoritative;
+        if (!(await store.compareAndSet(r.sessionId, claimed, unchanged)))
+          throw contextChanged();
+        committed = true;
+        res.json(sessionInfo(unchanged));
+        return;
+      }
+      const { data } = await upstream(
+        "users",
+        "/v1/usersadmin/switchorganization",
+        claimed.token,
+        {
+          method: "POST",
+          body: stringify({ idorganization: new LosslessNumber(target) })!,
+        },
+      );
+      // Retain a syntactically valid returned token for best-effort orphan cleanup,
+      // even if the remainder of the response fails strict context validation.
+      const candidate =
+        data && typeof data === "object"
+          ? (data as Record<string, unknown>).token
+          : undefined;
+      if (
+        typeof candidate === "string" &&
+        candidate !== claimed.token &&
+        /^[!-~]{1,4096}$/.test(candidate)
+      )
+        rotatedToken = candidate;
+      const connected = connectedSession(data, claimed.identity.name, {
+        userId: claimed.identity.id,
+        organizationId: target,
+        ...(claimed.identity.level >= 90
+          ? {
+              platformLevel: claimed.identity.level,
+              platformUserTypeId: claimed.identity.userTypeId,
+            }
+          : {}),
+      });
+      if (
+        connected.token === claimed.token ||
+        claimed.switching!.expiresAt <= Date.now()
+      )
+        throw new ApiError(
+          502,
+          "The organization change could not be confirmed.",
+        );
+      const replacement: Session = {
+        ...connected,
+        csrf: newSessionId(),
+        expiresAt: claimed.expiresAt,
+      };
+      if (!(await store.compareAndSet(r.sessionId, claimed, replacement)))
+        throw contextChanged();
+      committed = true;
+      res.json(sessionInfo(replacement));
+    } catch (error) {
+      if (!committed) {
+        const definite =
+          error instanceof ApiError &&
+          [400, 403, 404].includes(error.status) &&
+          !rotatedToken;
+        await store.compareAndSet(
+          r.sessionId,
+          claimed,
+          definite ? r.session : null,
+        );
+        if (rotatedToken) {
+          const winner = await store.get(r.sessionId);
+          if (winner?.token !== rotatedToken) await disconnect(rotatedToken);
+        }
+      }
+      throw error;
+    }
   });
   app.post("/api/session/logout", async (req, res) => {
     const r = req as AuthRequest;
-    await store.delete(r.sessionId);
-    setSessionCookie(res, config);
-    // Local logout always succeeds, even when legacy revocation is temporarily unavailable.
-    try {
-      await upstream("users", "/v1/usersadmin/disconnect", r.session.token);
-    } catch {
-      /* No sensitive logging. */
+    // An already-started logout can delete its original session or its switch
+    // claim, but must never delete a newly rotated winning session.
+    let current = await store.get(r.sessionId);
+    let deleted = false;
+    for (let attempt = 0; current && attempt < 3; attempt++) {
+      if (current.token !== r.session.token || current.csrf !== r.session.csrf)
+        throw contextChanged();
+      if (await store.compareAndSet(r.sessionId, current, null)) {
+        deleted = true;
+        break;
+      }
+      current = await store.get(r.sessionId);
     }
+    if (!deleted) throw contextChanged();
+    // Local logout always succeeds, even when legacy revocation is temporarily unavailable.
+    // Keep the expired opaque browser cookie: a delayed logout response must
+    // never clear a newer login's cookie. The deleted server record is final.
+    await disconnect(r.session.token);
     res.json({ success: true });
   });
   app.post("/api/session/password", async (req, res) => {
@@ -266,10 +464,8 @@ export function createApp(
       ...r.session,
       identity: { ...r.session.identity, mustChangePassword: false },
     };
-    if (!(await store.update(r.sessionId, updated))) {
-      setSessionCookie(res, config);
-      throw new ApiError(401, "Your session has expired. Sign in again.");
-    }
+    if (!(await store.compareAndSet(r.sessionId, r.session, updated)))
+      throw contextChanged();
     res.json({ success: true });
   });
   function requirePermission(
@@ -821,8 +1017,13 @@ export function createApp(
     });
   }
   app.use(
-    (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-      const apiError =
+    async (
+      error: unknown,
+      req: Request,
+      res: Response,
+      _next: NextFunction,
+    ) => {
+      let apiError =
         error instanceof ApiError
           ? error
           : new ApiError(
@@ -831,6 +1032,27 @@ export function createApp(
                 ? "Invalid JSON request."
                 : "The request could not be completed.",
             );
+      // A business request may already have left this process when a switch
+      // starts. Its old-token 401 must not log out the newly selected context.
+      const r = req as Partial<AuthRequest>;
+      if (apiError.status === 401 && r.session && r.sessionId) {
+        try {
+          const current = await store.get(r.sessionId);
+          if (current?.switching && current.switching.expiresAt > Date.now())
+            apiError = switchPending();
+          else if (
+            current &&
+            (current.csrf !== r.session.csrf ||
+              current.token !== r.session.token)
+          )
+            apiError = contextChanged();
+        } catch {
+          apiError = new ApiError(
+            503,
+            "The session could not be verified. Try again.",
+          );
+        }
+      }
       res.status(apiError.status).json({
         message: apiError.message,
         errors: apiError.fields,

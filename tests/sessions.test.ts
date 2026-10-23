@@ -19,8 +19,8 @@ const newSession = (): Session => ({
   expiresAt: Date.now() + 60_000,
 });
 
-// Model Redis's atomic conditional SET and absolute key expiry, including a
-// command delayed in transit. The existence check happens when SET executes.
+// Model Redis's atomic raw-value CAS and absolute key expiry, including a
+// command delayed in transit. Its comparison happens when the command executes.
 class TestRedis {
   values = new Map<string, { value: string; expiresAt: number }>();
   beforeConditionalSet?: () => Promise<void>;
@@ -47,6 +47,19 @@ class TestRedis {
   }
   async del(id: string) {
     return Number(this.values.delete(id));
+  }
+  async eval(
+    _script: string,
+    options: { keys: string[]; arguments: string[] },
+  ) {
+    await this.beforeConditionalSet?.();
+    const [expected, replacement, expiry] = options.arguments;
+    const id = options.keys[0];
+    if ((await this.get(id)) !== expected || Number(expiry) <= Date.now())
+      return 0;
+    if (!replacement) return this.del(id);
+    this.values.set(id, { value: replacement, expiresAt: Number(expiry) });
+    return 1;
   }
   async ping() {
     return "PONG";
@@ -133,6 +146,59 @@ describe.each([
     await store.set("session-id", session);
     expect(await store.update("session-id", session)).toBe(true);
     await store.delete("session-id");
+    expect(await store.get("session-id")).toBeNull();
+  });
+
+  it("compares the complete snapshot and atomically rotates credentials once", async () => {
+    const store = createStore();
+    const original = newSession();
+    original.organizationMemberships = [
+      { organizationId: "7", userTypeId: "30", active: true },
+    ];
+    original.activeOrganizationId = "7";
+    await store.set("session-id", original);
+    for (const stale of [
+      { ...original, identity: { ...original.identity, name: "stale" } },
+      { ...original, activeOrganizationId: null },
+      { ...original, organizationMemberships: [] },
+    ])
+      expect(await store.compareAndSet("session-id", stale, null)).toBe(false);
+    const claim = {
+      ...original,
+      switching: { nonce: "claim", expiresAt: Date.now() + 30_000 },
+    };
+    expect(await store.compareAndSet("session-id", original, claim)).toBe(true);
+    expect(await store.update("session-id", original)).toBe(false);
+    const rotated = { ...original, token: "rotated", csrf: "rotated-csrf" };
+    expect(await store.compareAndSet("session-id", original, rotated)).toBe(
+      false,
+    );
+    expect(await store.compareAndSet("session-id", claim, rotated)).toBe(true);
+    expect(await store.compareAndSet("session-id", claim, null)).toBe(false);
+    expect(await store.get("session-id")).toEqual(rotated);
+  });
+
+  it("CAS cannot extend expiry, insert a missing session, or revive an expired one", async () => {
+    const store = createStore();
+    const original = newSession();
+    expect(await store.compareAndSet("session-id", original, original)).toBe(
+      false,
+    );
+    await store.set("session-id", original);
+    expect(
+      await store.compareAndSet("session-id", original, {
+        ...original,
+        expiresAt: original.expiresAt + 1,
+      }),
+    ).toBe(false);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(original.expiresAt + 1);
+    expect(
+      await store.compareAndSet("session-id", original, {
+        ...original,
+        token: "new",
+      }),
+    ).toBe(false);
     expect(await store.get("session-id")).toBeNull();
   });
 });
@@ -240,6 +306,35 @@ describe("Redis session encryption and atomic revocation", () => {
     expect(await store.update("session-id", session)).toBe(false);
     expect(await store.get("session-id")).toBeNull();
   });
+
+  it("a delayed identity update cannot overwrite a claim made by another replica", async () => {
+    const redis = new TestRedis();
+    const writer = new RedisSessions(redis, key);
+    const other = new RedisSessions(redis, key);
+    const original = newSession();
+    await writer.set("session-id", original);
+    let release!: () => void;
+    let arrived!: () => void;
+    const started = new Promise<void>((resolve) => (arrived = resolve));
+    redis.beforeConditionalSet = () => {
+      redis.beforeConditionalSet = undefined;
+      arrived();
+      return new Promise<void>((resolve) => (release = resolve));
+    };
+    const updating = writer.update("session-id", {
+      ...original,
+      identity: { ...original.identity, name: "stale password completion" },
+    });
+    await started;
+    const claim = {
+      ...original,
+      switching: { nonce: "other-replica", expiresAt: Date.now() + 30_000 },
+    };
+    expect(await other.compareAndSet("session-id", original, claim)).toBe(true);
+    release();
+    expect(await updating).toBe(false);
+    expect(await writer.get("session-id")).toEqual(claim);
+  });
 });
 
 it.skipIf(!process.env.TEST_REDIS_URL)(
@@ -274,6 +369,26 @@ it.skipIf(!process.env.TEST_REDIS_URL)(
         initialTtl,
       );
 
+      const claimed = {
+        ...session,
+        switching: { nonce: randomUUID(), expiresAt: Date.now() + 30_000 },
+      };
+      expect(await writer.compareAndSet(id, session, claimed)).toBe(true);
+      const rotated = {
+        ...session,
+        token: "rotated-private-upstream-token",
+        csrf: "rotated-private-csrf",
+      };
+      expect(await otherReplica.compareAndSet(id, session, rotated)).toBe(
+        false,
+      );
+      expect(await otherReplica.compareAndSet(id, claimed, rotated)).toBe(true);
+      expect(await writer.compareAndSet(id, claimed, null)).toBe(false);
+      expect(await writer.get(id)).toEqual(rotated);
+      expect(await writerClient.pTTL(storedKey)).toBeLessThanOrEqual(
+        initialTtl,
+      );
+
       let release!: () => void;
       let arrived!: () => void;
       const commandArrived = new Promise<void>(
@@ -285,14 +400,17 @@ it.skipIf(!process.env.TEST_REDIS_URL)(
           del: (name) => writerClient.del(name),
           ping: () => writerClient.ping(),
           set: async (name, value, setOptions) => {
+            return writerClient.set(name, value, setOptions);
+          },
+          eval: async (script, options) => {
             arrived();
             await new Promise<void>((resolve) => (release = resolve));
-            return writerClient.set(name, value, setOptions);
+            return writerClient.eval(script, options);
           },
         },
         key,
       );
-      const updating = delayedWriter.update(id, session);
+      const updating = delayedWriter.update(id, rotated);
       await commandArrived;
       await otherReplica.delete(id);
       release();

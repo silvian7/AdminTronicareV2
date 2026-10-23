@@ -103,6 +103,8 @@ async function signIn(page: Page, login: "A" | "B") {
   await expect(
     page.getByRole("button", { name: "Account menu" }),
   ).toContainText(`Synthetic ${login}`);
+  if (login === "A")
+    await page.getByRole("menuitem", { name: "Assets", exact: true }).click();
 }
 
 async function signOutFromAccount(page: Page) {

@@ -10,6 +10,7 @@ import {
   Typography,
   Alert,
   Drawer,
+  Spin,
 } from "antd";
 import {
   AppstoreOutlined,
@@ -33,6 +34,8 @@ import {
   type RecordData,
 } from "../shared/resources";
 import { useAdmin } from "./context";
+import { getSession } from "./api";
+import { OrganizationSelector } from "./components/organization-selector";
 
 const groupIcons: Record<string, React.ReactNode> = {
   "People & assets": <TeamOutlined />,
@@ -48,6 +51,10 @@ export function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobile, setMobile] = useState(false);
+  const [switchingOrganization, setSwitchingOrganization] = useState(false);
+  const membershipSelector = Array.isArray(
+    getSession()?.organizationMemberships,
+  );
   const organizations = useList<RecordData>({
     resource: "organizations",
     pagination: { mode: "off" },
@@ -105,6 +112,7 @@ export function Shell() {
         selectedKeys={[`/${location.pathname.split("/")[1]}`]}
         defaultOpenKeys={["People & assets", "Equipment"]}
         onClick={({ key }) => {
+          if (switchingOrganization) return;
           navigate(key);
           setMobile(false);
         }}
@@ -135,61 +143,81 @@ export function Shell() {
         {sidebar}
       </Drawer>
       <Layout>
-        <Layout.Header className="topbar">
-          <Space size="middle">
+        <Layout.Header
+          className={`topbar${membershipSelector ? " organization-topbar" : ""}`}
+        >
+          <Space
+            size="middle"
+            wrap={membershipSelector}
+            className="workspace-controls"
+          >
             <Button
               icon={<MenuOutlined />}
               onClick={() => setMobile(true)}
               className="mobile-menu"
               aria-label="Open navigation"
             />
-            <Typography.Text className="workspace-label">
-              Workspace
-            </Typography.Text>
-            <Select
-              aria-label="Organization"
-              className="organization-picker"
-              value={organization}
-              showSearch
-              optionFilterProp="label"
-              loading={organizations.query.isLoading}
-              disabled={identity.level < 90}
-              onChange={(id) => {
-                setOrganization(id);
-                navigate("/");
-              }}
-              options={[
-                ...(identity.level >= 90
-                  ? [
-                      { value: "", label: "All accessible organizations" },
-                      { value: "0", label: "Unassigned" },
-                    ]
-                  : []),
-                ...(organizations.result.data ?? [])
-                  .filter((r) => r.id !== "0" || identity.level < 90)
-                  .map((r) => ({
-                    value: r.id!,
-                    label:
-                      r.id === "0"
-                        ? "Unassigned"
-                        : translated(valueOf(r, "Tag")).trim() ||
-                          `Organization ${r.id}`,
-                  })),
-                ...(!organizations.result.data?.some(
-                  (r) => r.id === identity.organizationId,
-                ) && identity.level < 90
-                  ? [
-                      {
-                        value: identity.organizationId,
+            {membershipSelector && (
+              <OrganizationSelector
+                organizations={
+                  organizations.query.isError
+                    ? []
+                    : (organizations.result.data ?? [])
+                }
+                onBusyChange={setSwitchingOrganization}
+              />
+            )}
+            {(!membershipSelector || identity.level >= 90) && (
+              <>
+                <Typography.Text className="workspace-label">
+                  Workspace
+                </Typography.Text>
+                <Select
+                  aria-label="Organization"
+                  className="organization-picker"
+                  value={organization}
+                  showSearch
+                  optionFilterProp="label"
+                  loading={organizations.query.isLoading}
+                  disabled={identity.level < 90 || switchingOrganization}
+                  onChange={(id) => {
+                    setOrganization(id);
+                    navigate("/");
+                  }}
+                  options={[
+                    ...(identity.level >= 90
+                      ? [
+                          { value: "", label: "All accessible organizations" },
+                          { value: "0", label: "Unassigned" },
+                        ]
+                      : []),
+                    ...(organizations.result.data ?? [])
+                      .filter((r) => r.id !== "0" || identity.level < 90)
+                      .map((r) => ({
+                        value: r.id!,
                         label:
-                          identity.organizationId === "0"
+                          r.id === "0"
                             ? "Unassigned"
-                            : `Organization ${identity.organizationId}`,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
+                            : translated(valueOf(r, "Tag")).trim() ||
+                              `Organization ${r.id}`,
+                      })),
+                    ...(!organizations.result.data?.some(
+                      (r) => r.id === identity.organizationId,
+                    ) && identity.level < 90
+                      ? [
+                          {
+                            value: identity.organizationId,
+                            label:
+                              identity.organizationId === "0"
+                                ? "Unassigned"
+                                : `Organization ${identity.organizationId}`,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </>
+            )}
           </Space>
           <Dropdown
             menu={{
@@ -234,9 +262,15 @@ export function Shell() {
               action={<Link to="/account">Change password</Link>}
             />
           )}
-          <div key={organization}>
-            <Outlet />
-          </div>
+          <Spin spinning={switchingOrganization} tip="Switching organization…">
+            <div
+              key={organization}
+              inert={switchingOrganization}
+              aria-busy={switchingOrganization}
+            >
+              <Outlet />
+            </div>
+          </Spin>
         </Layout.Content>
         <Layout.Footer className="app-footer">
           Tronicare administration{" "}

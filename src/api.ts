@@ -1,10 +1,16 @@
 import type { AuthProvider, DataProvider, HttpError } from "@refinedev/core";
-import type { Identity, Service } from "../shared/resources";
+import type {
+  Identity,
+  OrganizationMembership,
+  Service,
+} from "../shared/resources";
 
 export interface SessionInfo {
   identity: Identity;
   csrf: string;
   expiresAt: number;
+  organizationMemberships?: OrganizationMembership[];
+  activeOrganizationId?: string | null;
   services?: Partial<
     Record<Service, { configured: boolean; writable: boolean }>
   >;
@@ -16,6 +22,17 @@ let signedOut = false;
 const pendingRequests = new Set<AbortController>();
 const sessionListeners = new Set<() => void>();
 const sessionRevisionKey = "tronicare-admin-session-revision";
+const organizationRevisionKey = "tronicare-admin-organization-revision";
+let organizationSwitch: {
+  organizationId: string;
+  promise: Promise<SessionInfo>;
+} | null = null;
+let contextReload: Promise<SessionInfo> | null = null;
+let discovery: { epoch: number; promise: Promise<SessionInfo> } | null = null;
+let membershipSnapshot: {
+  epoch: number;
+  data: OrganizationMembership[];
+} | null = null;
 export const getSession = () => session;
 export const getSessionEpoch = () => sessionEpoch;
 export const getSessionRevision = () => sessionRevision;
@@ -31,6 +48,8 @@ const sessionFingerprint = (value: SessionInfo | null) =>
     identity: value.identity,
     csrf: value.csrf,
     services: value.services,
+    organizationMemberships: value.organizationMemberships,
+    activeOrganizationId: value.activeOrganizationId,
   });
 function changeSession(
   next: SessionInfo | null,
@@ -43,6 +62,7 @@ function changeSession(
   session = next;
   signedOut = !next;
   if (!changed) return;
+  organizationSwitch = null;
   sessionEpoch += 1;
   // Retry and overlapping sign-in fences must not discard the login form.
   // Remount protected views only when the visible account boundary changes.
@@ -63,6 +83,8 @@ if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (event.key === sessionRevisionKey && event.newValue !== null)
       changeSession(null, true, false);
+    if (event.key === organizationRevisionKey && event.newValue !== null)
+      void refreshOrganizationSession().catch(() => {});
   });
   window.addEventListener("pagehide", (event) => {
     if (event.persisted) changeSession(null, true, false);
@@ -80,6 +102,15 @@ export async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  if (
+    organizationSwitch &&
+    ![
+      "/api/session/organization",
+      "/api/session",
+      "/api/session/logout",
+    ].includes(path)
+  )
+    throw new DOMException("The organization is changing.", "AbortError");
   const epoch = sessionEpoch;
   const controller = new AbortController();
   pendingRequests.add(controller);
@@ -103,7 +134,22 @@ export async function request<T>(
     // Reject it before it can populate a new account's cache or expire its session.
     assertSessionEpoch(epoch);
     if (!response.ok) {
-      if (response.status === 401) {
+      if (
+        [403, 409].includes(response.status) &&
+        [
+          "organization_context_changed",
+          "organization_switch_pending",
+        ].includes(body.code) &&
+        path !== "/api/session" &&
+        path !== "/api/session/organization"
+      ) {
+        void refreshOrganizationSession().catch(() => {});
+        throw new DOMException(
+          "The organization context changed.",
+          "AbortError",
+        );
+      }
+      if (response.status === 401 && path !== "/api/session/organization") {
         changeSession(null, true);
         if (typeof window !== "undefined")
           window.dispatchEvent(new Event("session-expired"));
@@ -112,8 +158,9 @@ export async function request<T>(
         message: body.message ?? "The request failed.",
         statusCode: response.status,
         errors: body.errors,
+        code: body.code,
         sessionEpoch,
-      } satisfies HttpError & { sessionEpoch: number };
+      } satisfies HttpError & { sessionEpoch: number; code?: string };
     }
     return body as T;
   } finally {
@@ -127,12 +174,191 @@ export async function loadSession(): Promise<SessionInfo> {
       message: "Sign in to continue.",
       statusCode: 401,
     } satisfies HttpError;
+  if (organizationSwitch && session) return session;
+  if (discovery?.epoch === sessionEpoch) return discovery.promise;
   const epoch = sessionEpoch;
   const initialDiscovery = !session && !signedOut;
-  const next = await request<SessionInfo>("/api/session");
+  const promise = (async () => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const next = await request<SessionInfo>("/api/session");
+        assertSessionEpoch(epoch);
+        changeSession(next, false, !initialDiscovery);
+        return next;
+      } catch (error) {
+        assertSessionEpoch(epoch);
+        if (
+          (error as { code?: string }).code !== "organization_switch_pending" ||
+          attempt >= 119
+        )
+          throw error;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        assertSessionEpoch(epoch);
+      }
+    }
+  })();
+  discovery = { epoch, promise };
+  try {
+    return await promise;
+  } finally {
+    if (discovery?.promise === promise) discovery = null;
+  }
+}
+
+export async function refreshOrganizationSession(): Promise<SessionInfo> {
+  if (contextReload) return contextReload;
+  changeSession(null, true, false);
+  signedOut = false;
+  const epoch = sessionEpoch;
+  const promise = loadSession();
+  contextReload = promise;
+  try {
+    return await promise;
+  } catch (error) {
+    if (sessionEpoch === epoch) {
+      changeSession(null, true, false);
+      if (typeof window !== "undefined")
+        window.dispatchEvent(new Event("session-expired"));
+    }
+    throw error;
+  } finally {
+    if (contextReload === promise) contextReload = null;
+  }
+}
+
+export async function loadOrganizationMemberships(): Promise<
+  OrganizationMembership[]
+> {
+  const epoch = sessionEpoch;
+  const response = await request<{ data: OrganizationMembership[] }>(
+    "/api/session/organizations",
+  );
   assertSessionEpoch(epoch);
-  changeSession(next, false, !initialDiscovery);
-  return next;
+  const validId = (value: unknown): value is string =>
+    typeof value === "string" &&
+    /^[1-9]\d{0,18}$/.test(value) &&
+    BigInt(value) <= 9223372036854775807n;
+  if (
+    !Array.isArray(response.data) ||
+    response.data.length > 256 ||
+    response.data.some(
+      (membership) =>
+        !membership ||
+        !validId(membership.organizationId) ||
+        !validId(membership.userTypeId) ||
+        typeof membership.active !== "boolean",
+    ) ||
+    new Set(response.data.map((membership) => membership.organizationId))
+      .size !== response.data.length
+  )
+    throw new Error("Organization memberships could not be verified.");
+  membershipSnapshot = { epoch, data: response.data };
+  return response.data;
+}
+
+export function switchOrganization(
+  organizationId: string,
+): Promise<SessionInfo> {
+  if (
+    !/^[1-9]\d{0,18}$/.test(organizationId) ||
+    BigInt(organizationId) > 9223372036854775807n
+  )
+    return Promise.reject({
+      message: "Choose an organization.",
+      statusCode: 400,
+    });
+  const current = session;
+  if (!current)
+    return Promise.reject({ message: "Sign in to continue.", statusCode: 401 });
+  if (organizationSwitch)
+    return organizationSwitch.organizationId === organizationId
+      ? organizationSwitch.promise
+      : Promise.reject({
+          message: "An organization switch is already in progress.",
+          statusCode: 409,
+        });
+  if (current.activeOrganizationId === organizationId)
+    return Promise.resolve(current);
+  if (
+    !(
+      membershipSnapshot?.epoch === sessionEpoch
+        ? membershipSnapshot.data
+        : current.organizationMemberships
+    )?.some(
+      (membership) =>
+        membership.active && membership.organizationId === organizationId,
+    )
+  )
+    return Promise.reject({
+      message: "You do not have an active membership in this organization.",
+      statusCode: 403,
+    });
+
+  // Fence old responses before the backend can revoke the current token. Keep
+  // the mounted cache intact until the switch succeeds or the caller retries.
+  sessionEpoch += 1;
+  for (const controller of pendingRequests) controller.abort();
+  pendingRequests.clear();
+  const epoch = sessionEpoch;
+  const operation = {
+    organizationId,
+    promise: null as unknown as Promise<SessionInfo>,
+  };
+  organizationSwitch = operation;
+  operation.promise = (async () => {
+    try {
+      const next = await request<SessionInfo>("/api/session/organization", {
+        method: "POST",
+        body: JSON.stringify({ organizationId }),
+      });
+      assertSessionEpoch(epoch);
+      if (
+        !next?.identity ||
+        next.identity.id !== current.identity.id ||
+        next.identity.organizationId !== organizationId ||
+        next.activeOrganizationId !== organizationId ||
+        typeof next.csrf !== "string" ||
+        !next.csrf ||
+        !Array.isArray(next.identity.permissions) ||
+        !Array.isArray(next.organizationMemberships)
+      )
+        throw new Error("The organization switch could not be confirmed.");
+      changeSession(next, false, false);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            organizationRevisionKey,
+            crypto.randomUUID(),
+          );
+        } catch {
+          // Stale context headers also trigger authoritative rediscovery.
+        }
+      }
+      return next;
+    } catch (error) {
+      if (sessionEpoch !== epoch) throw error;
+      const status = (error as HttpError).statusCode;
+      if (
+        (error as { code?: string }).code === "organization_context_changed" ||
+        ![400, 403, 404, 422].includes(status)
+      ) {
+        // A rotating operation cannot be replayed safely after a lost response.
+        // Discover the authoritative BFF session instead of reusing old rights.
+        organizationSwitch = null;
+        try {
+          const recovered = await refreshOrganizationSession();
+          if (recovered.activeOrganizationId === organizationId)
+            return recovered;
+        } catch {
+          // Rediscovery already cleared the uncertain context.
+        }
+      }
+      throw error;
+    } finally {
+      if (organizationSwitch === operation) organizationSwitch = null;
+    }
+  })();
+  return operation.promise;
 }
 export const authProvider: AuthProvider = {
   login: async (values: { login: string; password: string; mode: string }) => {
