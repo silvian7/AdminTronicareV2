@@ -72,6 +72,8 @@ import {
   ErrorNotice,
   AssetIdentity,
   AssetLastEvent,
+  HubAssetIdentity,
+  useSharedHubType,
   DeviceIdentity,
   FieldInput,
   FieldValue,
@@ -99,6 +101,8 @@ import {
   useNotificationReadiness,
 } from "../components/notification-readiness";
 import { useRecordRow } from "../components/record-row";
+import { HubLinkedAssets } from "../components/hub-linked-assets";
+import { linkedHubAssetIds } from "../../shared/hub-assets";
 import {
   millisecondsToSeconds,
   ruleDurationLabels,
@@ -296,6 +300,8 @@ function useRefreshRecordReferences(resource: string) {
         { resource: "devices", marker: "deviceReference" },
         { resource: "devicetypes", marker: "equipmentTypeReference" },
       );
+    if (resource === "hubs")
+      references.push({ resource: "devices", marker: "hubAssetCount" });
     if (resource === "rules")
       references.push(
         { resource: "sensors", marker: "sensorReference" },
@@ -466,7 +472,12 @@ export function ResourceList({ resource }: { resource: Resource }) {
                         {label && <Link to={path}>{label}</Link>}
                       </>
                     ) : (
-                      <Link to={path}>{recordTitle(row)}</Link>
+                      <Space>
+                        <Link to={path}>{recordTitle(row)}</Link>
+                        {resource.name === "hubs" && (
+                          <SharedGatewayIndicator row={row} typeOnly />
+                        )}
+                      </Space>
                     )}
                     <span>#{row.id}</span>
                   </div>
@@ -517,7 +528,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
               canonical(f.key) === "IDActionType") ||
             (resource.name === "rules" && canonical(f.key) === "IDRuleType")
           ),
-          render: (value: unknown) =>
+          render: (value: unknown, row: RecordData) =>
             resource.name === "usergroups" &&
             canonical(f.key) === "IDOrganization" ? (
               <ReferenceTag resource="organizations" value={value} />
@@ -527,6 +538,8 @@ export function ResourceList({ resource }: { resource: Resource }) {
             ) : resource.name === "assets" &&
               canonical(f.key) === "DhLastEvent" ? (
               <AssetLastEvent value={value} />
+            ) : resource.name === "hubs" && canonical(f.key) === "IDAsset" ? (
+              <HubAssetIdentity row={row} />
             ) : assetIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDAsset" ? (
               <AssetIdentity value={value} />
@@ -1726,6 +1739,26 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     { resource: "devices", filterName: "idhub", filterValue: id! },
     canReadHubDevices,
   );
+  const sharedHub = useSharedHubType(
+    resource.name === "hubs" &&
+      query.isSuccess &&
+      !query.isPlaceholderData &&
+      record?.id === id
+      ? (record ?? {})
+      : {},
+  );
+  const canReadHubAssets =
+    sharedHub &&
+    canReadHubDevices &&
+    can(resourceMap.assets, "show") &&
+    (!organization || organization === groupOrganization);
+  const hubAssetIds =
+    canReadHubAssets &&
+    hubDevices.query.isSuccess &&
+    !hubDevices.query.isPlaceholderData &&
+    record
+      ? linkedHubAssetIds(record, hubDevices.result.data)
+      : [];
   const canReadDeviceSensors =
     resource.name === "devices" &&
     can(resource, "show") &&
@@ -1793,9 +1826,64 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     "rules",
     "actions",
   ].includes(resource.name);
+  const ruleDetailGroups =
+    resource.name === "rules"
+      ? [
+          {
+            name: "Settings",
+            fields: [
+              "ValueDuree",
+              "ValueThreshold",
+              "TimeStart",
+              "TimeEnd",
+              "Time24h",
+              "Enabled",
+              "IsTemplate",
+              "ResetDelayMs",
+            ],
+          },
+          {
+            name: "Activity",
+            fields: [
+              "DhActivated",
+              "DhDeactivated",
+              "Output",
+              "DhTimeout",
+              "TimeoutStarted",
+              "TimeoutElapsed",
+              "TimeoutCanceled",
+              "Canceled",
+              "DhCanceled",
+              "ResetPending",
+              "DhReset",
+            ],
+          },
+        ].map((group) => ({
+          name: group.name,
+          fields: group.fields.flatMap((name) =>
+            detailFields.filter((field) => canonical(field.key) === name),
+          ),
+        }))
+      : [];
+  const rulePanelFields = new Set(
+    ruleDetailGroups.flatMap((group) => group.fields.map((field) => field.key)),
+  );
   const detailGroups = groupedDetails
-    ? groupFields(detailFields, resource.primaryKey)
+    ? groupFields(
+        detailFields.filter((field) => !rulePanelFields.has(field.key)),
+        resource.primaryKey,
+      )
     : [{ name: "Details", fields: detailFields }];
+  if (ruleDetailGroups.length) {
+    const configurationIndex = detailGroups.findIndex(
+      (group) => group.name === "Configuration",
+    );
+    detailGroups.splice(
+      configurationIndex < 0 ? detailGroups.length : configurationIndex,
+      0,
+      ...ruleDetailGroups.filter((group) => group.fields.length),
+    );
+  }
   const tabs: NonNullable<TabsProps["items"]> = [
     {
       key: "details",
@@ -1825,7 +1913,10 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                       : resource.name === "rules" &&
                           ruleDurationLabels[canonical(f.key)]
                         ? ruleDurationLabels[canonical(f.key)]
-                        : fieldLabel(f.key),
+                        : resource.name === "rules" &&
+                            canonical(f.key) === "DhCanceled"
+                          ? "Canceled at"
+                          : fieldLabel(f.key),
               children:
                 ["assets", "users", "usergroups", "devices", "hubs"].includes(
                   resource.name,
@@ -1869,13 +1960,20 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     value={record?.[f.key]}
                     showId
                   />
-                ) : ["actions", "rules", "devices", "hubs"].includes(
-                    resource.name,
-                  ) && canonical(f.key) === "IDAsset" ? (
-                  <AssetIdentity
-                    value={record?.[f.key]}
-                    showId={resource.name !== "hubs"}
+                ) : resource.name === "hubs" &&
+                  canonical(f.key) === "IDAsset" ? (
+                  <HubAssetIdentity
+                    row={
+                      record && record.id === id && !query.isPlaceholderData
+                        ? record
+                        : {}
+                    }
+                    linkedDevices={hubDevices}
+                    showId={false}
                   />
+                ) : ["actions", "rules", "devices"].includes(resource.name) &&
+                  canonical(f.key) === "IDAsset" ? (
+                  <AssetIdentity value={record?.[f.key]} />
                 ) : (
                   <FieldValue
                     field={f}
@@ -1943,7 +2041,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         />
       ),
     });
-  if (resource.name === "hubs")
+  if (resource.name === "hubs") {
     tabs.push({
       key: "devices",
       label: countedTabLabel("Devices", hubDevices, canReadHubDevices),
@@ -1956,6 +2054,19 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         />
       ),
     });
+    if (sharedHub)
+      tabs.push({
+        key: "assets",
+        label: `Assets${hubAssetIds.length ? ` (${hubAssetIds.length}${hubDevices.result.limited ? "+" : ""})` : ""}`,
+        children: (
+          <HubLinkedAssets
+            key={`${id}:${organization}:${groupOrganization}`}
+            row={record ?? {}}
+            linkedDevices={hubDevices}
+          />
+        ),
+      });
+  }
   if (resource.name === "devices")
     tabs.push({
       key: "sensors",
@@ -2089,6 +2200,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   )
                     await deviceSensors.query.refetch();
                   await refreshRecordReferences();
+                  if (resource.name === "hubs")
+                    await queryClient.invalidateQueries({
+                      queryKey: [
+                        "hub-linked-assets",
+                        getSessionEpoch(),
+                        organization,
+                      ],
+                    });
                   if (resource.name === "users")
                     await queryClient.invalidateQueries({
                       queryKey: [

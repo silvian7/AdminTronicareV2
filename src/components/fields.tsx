@@ -28,6 +28,7 @@ import {
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { hubLastEventTime } from "../../shared/hub-status";
+import { linkedHubAssetIds } from "../../shared/hub-assets";
 import {
   millisecondsToSeconds,
   ruleDurationLabels,
@@ -486,16 +487,23 @@ function useReferenceRecord(
       : undefined;
   return { id, allowed, validId, record };
 }
-export function SharedGatewayIndicator({ row }: { row: RecordData }) {
+export function useSharedHubType(row: RecordData): boolean {
   const { record: type } = useReferenceRecord(
     "hubtypes",
     valueOf(row, "IDHubType"),
   );
-  if (
-    row._sharedGateway !== true &&
-    valueOf(type ?? {}, "IsSingleAsset") !== false
-  )
-    return null;
+  return valueOf(type ?? {}, "IsSingleAsset") === false;
+}
+
+export function SharedGatewayIndicator({
+  row,
+  typeOnly = false,
+}: {
+  row: RecordData;
+  typeOnly?: boolean;
+}) {
+  const shared = useSharedHubType(row);
+  if (!shared && (typeOnly || row._sharedGateway !== true)) return null;
   return (
     <Tooltip title="Shared gateway" trigger={["hover", "focus"]}>
       <span tabIndex={0} data-no-row-navigation>
@@ -547,6 +555,62 @@ export function AssetIdentity({
   showId?: boolean;
 }) {
   return <ReferenceIdentity resource="assets" value={value} showId={showId} />;
+}
+export function HubAssetIdentity({
+  row,
+  showId = true,
+  linkedDevices,
+}: {
+  row: RecordData;
+  showId?: boolean;
+  linkedDevices?: ReturnType<typeof useList<RecordData>>;
+}) {
+  const { organization, can } = useAdmin();
+  const shared = useSharedHubType(row);
+  const hubId = referenceId(row.id);
+  const hubOrganization = referenceId(valueOf(row, "IDOrganization"));
+  const allowed =
+    can(resourceMap.devices, "list") && can(resourceMap.assets, "show");
+  const enabled =
+    shared &&
+    allowed &&
+    validReferenceId(hubId) &&
+    (!organization || organization === hubOrganization) &&
+    (hubOrganization === "0" || validReferenceId(hubOrganization));
+  const ownDevices = useList<RecordData>({
+    resource: "devices",
+    filters: [{ field: "idhub", operator: "eq", value: hubId }],
+    pagination: { mode: "off" },
+    meta: { organization },
+    errorNotification: false,
+    queryOptions: {
+      enabled: enabled && !linkedDevices,
+      meta: { hubAssetCount: !linkedDevices, organization },
+    },
+  });
+  const { result, query } = linkedDevices ?? ownDevices;
+  if (!shared)
+    return <AssetIdentity value={valueOf(row, "IDAsset")} showId={showId} />;
+  if (!enabled || query.isError || query.isPlaceholderData || !query.isSuccess)
+    return (
+      <span className="muted" title="Linked asset count unavailable">
+        {enabled && query.isPending ? "…" : "—"}
+      </span>
+    );
+  const assets = linkedHubAssetIds(row, result.data);
+  return (
+    <span
+      className="numeric-value"
+      title={
+        result.limited
+          ? "Linked assets (the device list is limited)"
+          : "Linked assets"
+      }
+    >
+      ({assets.length}
+      {result.limited ? "+" : ""})
+    </span>
+  );
 }
 export function RuleIdentity({ value }: { value: unknown }) {
   return <ReferenceIdentity resource="rules" value={value} />;
