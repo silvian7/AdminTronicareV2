@@ -362,12 +362,18 @@ async function expectDraft(page: Page, reverse = false) {
   );
   await expect(page.getByLabel("Body Text", { exact: true })).toHaveValue(body);
   await expect(page.getByLabel("Level", { exact: true })).toHaveValue("4");
-  await expect(
-    page.getByRole("switch", { name: "Enabled", exact: true }),
-  ).not.toBeChecked();
-  await expect(
-    page.getByRole("switch", { name: "Enabled", exact: true }),
-  ).toBeEnabled();
+  if (reverse)
+    await expect(
+      page.getByRole("switch", { name: "Enabled", exact: true }),
+    ).toHaveCount(0);
+  else {
+    await expect(
+      page.getByRole("switch", { name: "Enabled", exact: true }),
+    ).not.toBeChecked();
+    await expect(
+      page.getByRole("switch", { name: "Enabled", exact: true }),
+    ).toBeEnabled();
+  }
   await expect(
     page.getByRole("switch", { name: "Is Template", exact: true }),
   ).toBeChecked({ checked: reverse });

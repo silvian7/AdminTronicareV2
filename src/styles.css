@@ -152,6 +152,19 @@ a {
   gap: 20px;
   margin: 12px 0 27px;
 }
+.page-heading-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.record-identity .template-indicator {
+  align-self: flex-start;
+  color: #722ed1;
+}
+.record-identity .template-indicator span {
+  color: inherit;
+}
 .eyebrow {
   color: #638191;
   font-size: 11px;

@@ -249,10 +249,7 @@ async function expectDraft(page: Page) {
   ).toHaveValue("01:45:30.007");
   await expect(
     page.getByRole("switch", { name: "Enabled", exact: true }),
-  ).not.toBeChecked();
-  await expect(
-    page.getByRole("switch", { name: "Enabled", exact: true }),
-  ).toBeEnabled();
+  ).toHaveCount(0);
   await expect(
     page.getByRole("switch", { name: "Is Template", exact: true }),
   ).toBeChecked();
@@ -364,7 +361,6 @@ test("failed creation retains the edited draft and permits retry without changin
   await page.goto(copyPath());
   await expectDraft(page);
   await page.getByLabel("Duration (seconds)", { exact: true }).fill("9.001");
-  await page.getByRole("switch", { name: "Enabled", exact: true }).click();
   await page.getByRole("button", { name: /Save rule$/ }).click();
   await expect(
     page.getByText("Synthetic rule creation failed.", { exact: true }),
@@ -377,7 +373,7 @@ test("failed creation retains the edited draft and permits retry without changin
   ).toHaveValue("9.001");
   await expect(
     page.getByRole("switch", { name: "Enabled", exact: true }),
-  ).toBeChecked();
+  ).toHaveCount(0);
   await expect(page.getByLabel("m_sTag (en)", { exact: true })).toHaveValue(
     "EXISTING-TAG",
   );
@@ -393,7 +389,7 @@ test("failed creation retains the edited draft and permits retry without changin
   ).toBe(true);
   expect(mock.mutations[1].body).toMatchObject({
     m_duValueDuree: "9001",
-    m_bEnabled: true,
+    m_bEnabled: false,
     m_bIsTemplate: true,
     m_sTag: tagJson,
     m_sLabel: labelJson,

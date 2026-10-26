@@ -14,6 +14,8 @@ import {
   Tooltip,
 } from "antd";
 import { ShareAltOutlined } from "@ant-design/icons";
+import { TemplateIndicator } from "./template-indicator";
+import { VirtualIndicator, VirtualRecordLabel } from "./virtual-indicator";
 import { Link } from "react-router";
 import {
   canonical,
@@ -91,7 +93,7 @@ export function ReferenceSelect({
       Number(level) < identity.level
     );
   });
-  const options = [
+  const options: { value: string; label: string; virtualTag?: unknown }[] = [
     ...(allowZero && resource !== "usertypes"
       ? [{ value: "0", label: "Unassigned" }]
       : []),
@@ -103,6 +105,7 @@ export function ReferenceSelect({
       return {
         value: row.id!,
         label: title ? `${title} · ${row.id}` : `ID ${row.id}`,
+        virtualTag: valueOf(row, "Tag"),
       };
     }),
     ...(value && value !== "0" && !rows.some((r) => r.id === value)
@@ -117,6 +120,18 @@ export function ReferenceSelect({
         onChange={onChange}
         disabled={disabled}
         options={options}
+        optionRender={(option) => (
+          <VirtualRecordLabel
+            label={option.label}
+            tag={option.data.virtualTag}
+          />
+        )}
+        labelRender={({ value: selected, label }) => (
+          <VirtualRecordLabel
+            label={label}
+            tag={options.find((option) => option.value === selected)?.virtualTag}
+          />
+        )}
         showSearch
         optionFilterProp="label"
         loading={query.isLoading}
@@ -530,6 +545,7 @@ function ReferenceIdentity({
     return <span className="muted">—</span>;
   return (
     <div className="record-identity">
+      {record && <VirtualIndicator value={valueOf(record, "Tag")} />}
       {record && (
         <>
           <Link to={`/${resource}/${id}`}>
@@ -541,6 +557,12 @@ function ReferenceIdentity({
         </>
       )}
       {(showId || !record) && <span>#{String(value)}</span>}
+      {resource === "rules" && record && (
+        <TemplateIndicator
+          resource="rules"
+          value={valueOf(record, "IsTemplate")}
+        />
+      )}
     </div>
   );
 }
@@ -634,6 +656,7 @@ export function DeviceIdentity({ value }: { value: unknown }) {
   const deviceLink = `/devices/${id}`;
   return (
     <div className="record-identity">
+      {device && <VirtualIndicator value={valueOf(device, "Tag")} />}
       {hasTag && (
         <Link to={deviceLink} title={`Device #${id}`}>
           {tag}
@@ -664,12 +687,17 @@ export function SensorTypeTag({ value }: { value: unknown }) {
   const tag = sensorType ? translated(valueOf(sensorType, "Tag")) : "";
   const label =
     typeof tag === "string" && tag.trim() ? tag : `#${String(value)}`;
-  return allowed && validId ? (
-    <Link to={`/sensors/${id}`} title={`Sensor #${id}`}>
-      {label}
-    </Link>
-  ) : (
-    <span>{label}</span>
+  return (
+    <Space size={6} wrap>
+      {allowed && validId ? (
+        <Link to={`/sensors/${id}`} title={`Sensor #${id}`}>
+          {label}
+        </Link>
+      ) : (
+        <span>{label}</span>
+      )}
+      {sensor && <VirtualIndicator value={valueOf(sensor, "Tag")} />}
+    </Space>
   );
 }
 export function SensorHistoryIdentity({ row }: { row: RecordData }) {
@@ -689,6 +717,7 @@ export function SensorHistoryIdentity({ row }: { row: RecordData }) {
     : [];
   return (
     <div className="record-identity">
+      <VirtualIndicator value={valueOf(row, "Tag")} />
       {names.map((name, index) =>
         canOpen ? (
           <Link
@@ -732,15 +761,20 @@ export function ReferenceTag({
         ? `${tag} (#${id})`
         : tag
       : `#${String(value)}`;
-  return allowed && validId ? (
-    <Link
-      to={`/${resource}/${id}`}
-      title={`${resourceMap[resource].singular} #${id}`}
-    >
-      {label}
-    </Link>
-  ) : (
-    <span>{label}</span>
+  return (
+    <Space size={6} wrap>
+      {allowed && validId ? (
+        <Link
+          to={`/${resource}/${id}`}
+          title={`${resourceMap[resource].singular} #${id}`}
+        >
+          {label}
+        </Link>
+      ) : (
+        <span>{label}</span>
+      )}
+      {record && <VirtualIndicator value={valueOf(record, "Tag")} />}
+    </Space>
   );
 }
 export function SensorCurrentValue({ row }: { row: RecordData }) {

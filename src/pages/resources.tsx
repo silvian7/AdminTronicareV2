@@ -115,6 +115,9 @@ import {
 } from "../../shared/rule-template";
 import { RuleTemplateSensor } from "../components/rule-template-sensor";
 import { ActionTemplateRule } from "../components/action-template-rule";
+import { TemplateIndicator } from "../components/template-indicator";
+import { VirtualIndicator } from "../components/virtual-indicator";
+import { isVirtualTag } from "../../shared/virtual";
 import {
   actionInstanceTemplateDraft,
   actionTemplateDraft,
@@ -186,17 +189,26 @@ function PageHeading({
   title,
   extra,
   subtitle,
+  badge,
 }: {
   resource: Resource;
   title: string;
   extra?: React.ReactNode;
   subtitle?: string;
+  badge?: React.ReactNode;
 }) {
   return (
     <div className="page-heading">
       <div>
         <span className="eyebrow">{resource.group.toUpperCase()}</span>
-        <h1>{title}</h1>
+        {badge ? (
+          <div className="page-heading-title">
+            <h1>{title}</h1>
+            {badge}
+          </div>
+        ) : (
+          <h1>{title}</h1>
+        )}
         {subtitle && <p>{subtitle}</p>}
       </div>
       <Space wrap>{extra}</Space>
@@ -210,6 +222,13 @@ function displayedField(resource: Resource, field: Field) {
       ["actions", "rules"].includes(resource.name) &&
       canonical(field.key) === "Level"
     )
+  );
+}
+function templateHidesField(resource: string, key: string) {
+  const name = canonical(key);
+  return (
+    (resource === "rules" && ["Enabled", "Output"].includes(name)) ||
+    (resource === "actions" && ["Enabled", "IDAsset"].includes(name))
   );
 }
 function groupFields(fields: Field[], primaryKey?: string) {
@@ -440,6 +459,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
   const [search, setSearch] = useState(activeSearch);
   useEffect(() => setSearch(activeSearch), [activeSearch]);
   const [filterDrafts, setFilterDrafts] = useState<Record<string, string>>({});
+  const templatesOnly =
+    ["rules", "actions"].includes(resource.name) &&
+    String(active("istemplate")) === "true";
   const appliedFilterValues = JSON.stringify(
     resource.query.map((field) => [field.key, String(active(field.key) ?? "")]),
   );
@@ -453,12 +475,16 @@ export function ResourceList({ resource }: { resource: Resource }) {
               key: "id",
               dataIndex: "id",
               width: 180,
-              render: (id: string) =>
-                resource.name === "devices" ? (
-                  <Link to={`/devices/${id}`}>{id}</Link>
-                ) : (
-                  id
-                ),
+              render: (id: string, row: RecordData) => (
+                <Space size={6} wrap>
+                  {resource.name === "devices" ? (
+                    <Link to={`/devices/${id}`}>{id}</Link>
+                  ) : (
+                    id
+                  )}
+                  <VirtualIndicator value={valueOf(row, "Tag")} />
+                </Space>
+              ),
             },
           ]
         : [
@@ -472,6 +498,11 @@ export function ResourceList({ resource }: { resource: Resource }) {
                   const tag = translated(valueOf(row, "Tag"));
                   return (
                     <div className="record-identity">
+                      <VirtualIndicator value={valueOf(row, "Tag")} />
+                      <TemplateIndicator
+                        resource="rules"
+                        value={valueOf(row, "IsTemplate")}
+                      />
                       {tag.trim() ? (
                         <>
                           <Link to={path}>{tag}</Link>
@@ -492,6 +523,13 @@ export function ResourceList({ resource }: { resource: Resource }) {
                 const label = translated(valueOf(row, "Label"));
                 return (
                   <div className="record-identity">
+                    <VirtualIndicator value={valueOf(row, "Tag")} />
+                    {resource.name === "actions" && (
+                      <TemplateIndicator
+                        resource="actions"
+                        value={valueOf(row, "IsTemplate")}
+                      />
+                    )}
                     {tag ? (
                       <>
                         <Link to={path}>{tag}</Link>
@@ -534,6 +572,10 @@ export function ResourceList({ resource }: { resource: Resource }) {
         : []),
       ...selectedColumns(resource)
         .filter((f) => !["Label", "Tag"].includes(canonical(f.key)))
+        .filter(
+          (field) =>
+            !templatesOnly || !templateHidesField(resource.name, field.key),
+        )
         .map((f) => ({
           title:
             (resource.name === "actions" &&
@@ -555,8 +597,16 @@ export function ResourceList({ resource }: { resource: Resource }) {
             (resource.name === "rules" && canonical(f.key) === "IDRuleType")
           ),
           render: (value: unknown, row: RecordData) =>
-            resource.name === "usergroups" &&
-            canonical(f.key) === "IDOrganization" ? (
+            valueOf(row, "IsTemplate") === true &&
+            templateHidesField(resource.name, f.key) ? (
+              <span className="muted">—</span>
+            ) : resource.name === "users" && canonical(f.key) === "Login" ? (
+              <Space size={6} wrap>
+                <FieldValue field={f} value={value} />
+                <VirtualIndicator value={valueOf(row, "Tag")} />
+              </Space>
+            ) : resource.name === "usergroups" &&
+              canonical(f.key) === "IDOrganization" ? (
               <ReferenceTag resource="organizations" value={value} />
             ) : organizationIdentityResources.has(resource.name) &&
               canonical(f.key) === "IDOrganization" ? (
@@ -615,6 +665,7 @@ export function ResourceList({ resource }: { resource: Resource }) {
     ],
     [
       resource,
+      templatesOnly,
       canViewDeviceSensors,
       statusNow,
       sorters,
@@ -1110,6 +1161,13 @@ function RelatedListContent({
                         typeof row._sharedGateway === "boolean" && (
                           <SharedGatewayIndicator row={row} />
                         )}
+                      {(resource === "rules" || resource === "actions") && (
+                        <TemplateIndicator
+                          resource={resource}
+                          value={valueOf(row, "IsTemplate")}
+                        />
+                      )}
+                      <VirtualIndicator value={valueOf(row, "Tag")} />
                     </Space>
                   ),
                 },
@@ -1135,9 +1193,18 @@ function RelatedListContent({
                   ? "Type"
                   : fieldLabel(f.key),
               dataIndex: f.key,
-              render: (v: unknown) =>
-                resource === "assets" &&
-                canonical(f.key) === "IDOrganization" ? (
+              render: (v: unknown, row: RecordData) =>
+                valueOf(row, "IsTemplate") === true &&
+                templateHidesField(resource, f.key) ? (
+                  <span className="muted">—</span>
+                ) : resource === "sensors" &&
+                  canonical(f.key) === "IDSensorType" ? (
+                  <Space size={6} wrap>
+                    <FieldValue field={f} value={v} />
+                    <VirtualIndicator value={valueOf(row, "Tag")} />
+                  </Space>
+                ) : resource === "assets" &&
+                  canonical(f.key) === "IDOrganization" ? (
                   <ReferenceTag resource="organizations" value={v} />
                 ) : assetIdentityResources.has(resource) &&
                   canonical(f.key) === "IDAsset" ? (
@@ -1845,6 +1912,10 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     (field) =>
       displayedField(resource, field) &&
       !(
+        valueOf(record ?? {}, "IsTemplate") === true &&
+        templateHidesField(resource.name, field.key)
+      ) &&
+      !(
         ["actions", "rules"].includes(resource.name) &&
         canonical(field.key) === "AssetTag"
       ),
@@ -2188,6 +2259,21 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       <PageHeading
         resource={resource}
         title={title}
+        badge={
+          ((resource.name === "rules" || resource.name === "actions") &&
+            valueOf(record ?? {}, "IsTemplate") === true) ||
+          isVirtualTag(valueOf(record ?? {}, "Tag")) ? (
+            <>
+              {(resource.name === "rules" || resource.name === "actions") && (
+                <TemplateIndicator
+                  resource={resource.name}
+                  value={valueOf(record ?? {}, "IsTemplate")}
+                />
+              )}
+              <VirtualIndicator value={valueOf(record ?? {}, "Tag")} />
+            </>
+          ) : undefined
+        }
         subtitle={
           resource.name === "assets"
             ? `Asset ID: ${record?.id ?? id}`
@@ -2421,6 +2507,11 @@ export function ResourceEditor({
   const [form] = Form.useForm();
   const destinationAsset = Form.useWatch("m_nIDAsset", form) as
     string | undefined;
+  const watchedTemplate = Form.useWatch("m_bIsTemplate", form) as unknown;
+  const tagField = [...resource.createFields, ...resource.updateFields].find(
+    (field) => canonical(field.key) === "Tag",
+  );
+  const watchedTag = Form.useWatch(tagField?.key ?? "__virtualTag", form) as unknown;
   const [checkingDestination, setCheckingDestination] = useState(false);
   const copySaveLocked = useRef<symbol | null>(null);
   const editorMounted = useRef(false);
@@ -2497,6 +2588,15 @@ export function ResourceEditor({
     !sourceRecord.query.isPlaceholderData &&
     sourceRecord.result?.id === sourceRecordId &&
     valueOf(sourceRecord.result, "IsTemplate") === !creatingTemplate;
+  const templateEditor =
+    ["rules", "actions"].includes(resource.name) &&
+    (copyingRecord
+      ? creatingTemplate
+      : typeof watchedTemplate === "boolean"
+        ? watchedTemplate
+        : mode === "edit"
+          ? valueOf(detail.result ?? {}, "IsTemplate") === true
+          : params.get("template") === "true");
   const fields = editableFields(resource, mode)
     .filter((f) => identity.level >= 90 || canonical(f.key) !== "Admin")
     .filter(
@@ -2710,7 +2810,12 @@ export function ResourceEditor({
         />
       );
   }
-  const groups = groupFields(fields);
+  const groups = groupFields(
+    fields.filter(
+      (field) =>
+        !templateEditor || !templateHidesField(resource.name, field.key),
+    ),
+  );
   return (
     <>
       <Breadcrumb
@@ -2721,6 +2826,19 @@ export function ResourceEditor({
       />
       <PageHeading
         resource={resource}
+        badge={
+          (templateEditor &&
+            (resource.name === "rules" || resource.name === "actions")) ||
+          isVirtualTag(watchedTag) ? (
+            <>
+              {templateEditor &&
+                (resource.name === "rules" || resource.name === "actions") && (
+                  <TemplateIndicator resource={resource.name} value={true} />
+                )}
+              <VirtualIndicator value={watchedTag} />
+            </>
+          ) : undefined
+        }
         title={
           creatingTemplate
             ? `Create template from ${resource.singular.toLowerCase()}`
@@ -2749,8 +2867,8 @@ export function ResourceEditor({
           message={
             creatingTemplate
               ? resource.name === "actions"
-                ? `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Review the recipient and message settings, then save the new reusable action template. Templates are disabled by default.`
-                : `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Review and save the new reusable template. Templates are disabled by default; configure actions after saving.`
+                ? `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Review the recipient and message settings, then save the new reusable action template.`
+                : `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Review and save the new reusable template, then configure its actions.`
               : resource.name === "actions"
                 ? `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Choose an asset and rule, then review the recipient and message settings before saving. New actions are disabled by default.`
                 : `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Choose an asset and sensor, then review and save the new rule. New rules are disabled by default; configure actions after saving.`
@@ -2783,6 +2901,8 @@ export function ResourceEditor({
           setError("");
           const changed: Record<string, unknown> = {};
           for (const field of fields) {
+            if (templateEditor && templateHidesField(resource.name, field.key))
+              continue;
             const duration =
               resource.name === "rules" &&
               ruleDurationLabels[canonical(field.key)];
@@ -2809,6 +2929,10 @@ export function ResourceEditor({
                 : stored;
             if (mode === "create" || value !== original)
               changed[field.key] = value;
+          }
+          if (templateEditor && mode === "create") {
+            changed.m_bEnabled = false;
+            if (resource.name === "actions") changed.m_nIDAsset = "0";
           }
           if (!Object.keys(changed).length) {
             message.info("There are no changes to save.");
