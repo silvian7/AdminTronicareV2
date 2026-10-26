@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { useList } from "@refinedev/core";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Skeleton, Table } from "antd";
+import { Alert, Skeleton, Space, Table } from "antd";
 import {
   resourceMap,
   translated,
@@ -13,6 +13,7 @@ import { getSessionEpoch, request } from "../api";
 import { useAdmin } from "../context";
 import { ErrorNotice, useSharedHubType } from "./fields";
 import { useRecordRow } from "./record-row";
+import { VirtualIndicator } from "./virtual-indicator";
 
 const pageSize = 10;
 const positiveId = (value: unknown): value is string =>
@@ -189,7 +190,12 @@ export function HubLinkedAssets({
         columns={[
           {
             title: "Tag",
-            render: (_, asset) => translated(valueOf(asset, "Tag")) || "—",
+            render: (_, asset) => (
+              <Space size={6} wrap>
+                <span>{translated(valueOf(asset, "Tag")) || "—"}</span>
+                <VirtualIndicator value={valueOf(asset, "Tag")} />
+              </Space>
+            ),
           },
           {
             title: "Label",

@@ -128,8 +128,10 @@ export function ReferenceSelect({
         )}
         labelRender={({ value: selected, label }) => (
           <VirtualRecordLabel
-            label={label}
-            tag={options.find((option) => option.value === selected)?.virtualTag}
+            label={label ?? String(selected)}
+            tag={
+              options.find((option) => option.value === selected)?.virtualTag
+            }
           />
         )}
         showSearch

@@ -158,6 +158,40 @@ a {
   flex-wrap: wrap;
   gap: 12px;
 }
+.record-identity .virtual-indicator {
+  align-self: flex-start;
+  color: #2f54eb;
+}
+.record-identity .virtual-indicator span {
+  color: inherit;
+}
+.virtual-indicator {
+  flex-shrink: 0;
+}
+.record-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+.record-option-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.virtual-bedoff-controls,
+.sensor-reading-simulation {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.virtual-bedoff-controls {
+  max-width: 100%;
+}
+.virtual-bedoff-controls .ant-alert {
+  width: 100%;
+}
 .record-identity .template-indicator {
   align-self: flex-start;
   color: #722ed1;

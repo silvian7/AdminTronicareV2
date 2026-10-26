@@ -8,6 +8,7 @@ import {
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { ErrorNotice } from "./fields";
+import { VirtualRecordLabel } from "./virtual-indicator";
 
 export function RuleTemplateSensor({
   id,
@@ -60,7 +61,20 @@ export function RuleTemplateSensor({
         options={rows.map((row) => ({
           value: row.id!,
           label: `${recordTitle(row)} · ${row.id}`,
+          virtualTag: valueOf(row, "Tag"),
         }))}
+        optionRender={(option) => (
+          <VirtualRecordLabel
+            label={option.label}
+            tag={option.data.virtualTag}
+          />
+        )}
+        labelRender={({ value: selected, label }) => (
+          <VirtualRecordLabel
+            label={label ?? String(selected)}
+            tag={valueOf(rows.find((row) => row.id === selected) ?? {}, "Tag")}
+          />
+        )}
         style={{ width: "100%" }}
       />
       {!allowed && (

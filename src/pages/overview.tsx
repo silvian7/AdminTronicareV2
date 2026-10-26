@@ -32,6 +32,7 @@ import {
 import { useAdmin } from "../context";
 import { AssetLastEvent, ErrorNotice } from "../components/fields";
 import { HubStatus } from "../components/hub-status";
+import { VirtualIndicator } from "../components/virtual-indicator";
 import { CoreOutboxes } from "../components/core-outboxes";
 import { ServiceOutboxes } from "../components/service-outboxes";
 import { useRecordRow } from "../components/record-row";
@@ -228,6 +229,7 @@ export function Overview() {
                   title: "Asset",
                   render: (_, row) => (
                     <div className="record-identity">
+                      <VirtualIndicator value={valueOf(row, "Tag")} />
                       <Link to={`/assets/${row.id}`}>{recordTitle(row)}</Link>
                       <span>#{row.id}</span>
                     </div>

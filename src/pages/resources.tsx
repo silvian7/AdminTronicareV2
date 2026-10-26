@@ -117,6 +117,7 @@ import { RuleTemplateSensor } from "../components/rule-template-sensor";
 import { ActionTemplateRule } from "../components/action-template-rule";
 import { TemplateIndicator } from "../components/template-indicator";
 import { VirtualIndicator } from "../components/virtual-indicator";
+import { VirtualBedoffControls } from "../components/virtual-bedoff";
 import { isVirtualTag } from "../../shared/virtual";
 import {
   actionInstanceTemplateDraft,
@@ -941,6 +942,7 @@ interface RelatedListProps {
   memberOrganization?: string;
   memberGroupLabel?: string;
   assetEquipmentHubs?: boolean;
+  sensorSimulation?: boolean;
 }
 
 function isMemberOrganizationId(value: unknown): value is string {
@@ -990,6 +992,7 @@ function RelatedListContent({
   filterValue,
   memberOrganization,
   memberGroupLabel,
+  sensorSimulation = false,
   linked,
 }: RelatedListProps & { linked: ResourceList }) {
   const { organization, can } = useAdmin();
@@ -1258,7 +1261,10 @@ function RelatedListContent({
                   title: "Last reported value",
                   key: "currentValue",
                   render: (_: unknown, row: RecordData) => (
-                    <SensorCurrentValue row={row} />
+                    <div className="sensor-reading-simulation">
+                      <SensorCurrentValue row={row} />
+                      {sensorSimulation && <VirtualBedoffControls row={row} />}
+                    </div>
                   ),
                 },
                 {
@@ -1993,110 +1999,126 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     {
       key: "details",
       label: "Details",
-      children: detailGroups.map((group) => {
-        const descriptions = (
-          <Descriptions
-            key={group.name}
-            bordered
-            column={{ xs: 1, sm: 1, md: 2 }}
-            items={group.fields.map((f) => ({
-              key: f.key,
-              styles:
-                ["rules", "actions"].includes(resource.name) &&
-                f.key === resource.primaryKey
-                  ? { content: { whiteSpace: "nowrap" as const } }
-                  : undefined,
-              label:
-                f.key === resource.primaryKey
-                  ? "ID"
-                  : resource.name === "sensors" &&
-                      canonical(f.key) === "DhLastEvent"
-                    ? "Last reading"
-                    : resource.name === "rules" &&
-                        ruleScheduleLabels[canonical(f.key)]
-                      ? ruleScheduleLabels[canonical(f.key)]
-                      : resource.name === "rules" &&
-                          ruleDurationLabels[canonical(f.key)]
-                        ? ruleDurationLabels[canonical(f.key)]
-                        : resource.name === "rules" &&
-                            canonical(f.key) === "DhCanceled"
-                          ? "Canceled at"
-                          : fieldLabel(f.key),
-              children:
-                ["assets", "users", "usergroups", "devices", "hubs"].includes(
-                  resource.name,
-                ) && canonical(f.key) === "IDOrganization" ? (
-                  <ReferenceTag
-                    resource="organizations"
-                    value={record?.[f.key]}
-                    showId={resource.name === "usergroups"}
-                  />
-                ) : resource.name === "users" &&
-                  canonical(f.key) === "IDUserType" ? (
-                  <ReferenceTag resource="usertypes" value={record?.[f.key]} />
-                ) : resource.name === "users" && f.key.startsWith("m_dh") ? (
-                  <UserDateTime value={record?.[f.key]} />
-                ) : resource.name === "rules" &&
-                  ruleScheduleLabels[canonical(f.key)] ? (
-                  <RuleScheduleTime value={record?.[f.key]} />
-                ) : resource.name === "rules" &&
-                  ruleDurationLabels[canonical(f.key)] ? (
-                  <RuleDurationSeconds value={record?.[f.key]} />
-                ) : resource.name === "rules" &&
-                  canonical(f.key) === "DhReset" &&
-                  valueOf(record ?? {}, "ResetPending") !== true ? (
-                  <span className="muted">—</span>
-                ) : resource.name === "assets" &&
-                  canonical(f.key) === "DhLastEvent" ? (
-                  <AssetLastEvent value={record?.[f.key]} />
-                ) : resource.name === "sensors" &&
-                  canonical(f.key) === "DhLastEvent" ? (
-                  <SensorLastReading row={record ?? {}} />
-                ) : resource.name === "rules" &&
-                  canonical(f.key) === "IDSensor" ? (
-                  <SensorTypeTag value={record?.[f.key]} />
-                ) : resource.name === "actions" &&
-                  canonical(f.key) === "IDRule" ? (
-                  <RuleIdentity value={record?.[f.key]} />
-                ) : resource.name === "sensors" &&
-                  canonical(f.key) === "IDAsset" ? (
-                  <ReferenceTag
-                    resource="assets"
-                    value={record?.[f.key]}
-                    showId
-                  />
-                ) : resource.name === "hubs" &&
-                  canonical(f.key) === "IDAsset" ? (
-                  <HubAssetIdentity
-                    row={
-                      record && record.id === id && !query.isPlaceholderData
-                        ? record
-                        : {}
-                    }
-                    linkedDevices={hubDevices}
-                    showId={false}
-                  />
-                ) : ["actions", "rules", "devices"].includes(resource.name) &&
-                  canonical(f.key) === "IDAsset" ? (
-                  <AssetIdentity value={record?.[f.key]} />
-                ) : (
-                  <FieldValue
-                    field={f}
-                    value={record?.[f.key]}
-                    primary={f.key === resource.primaryKey}
-                  />
-                ),
-            }))}
+      children: [
+        resource.name === "sensors" && (
+          <VirtualBedoffControls
+            key={`simulation:${id}:${organization}:${getSessionEpoch()}`}
+            row={
+              record && record.id === id && !query.isPlaceholderData
+                ? record
+                : {}
+            }
+            card
           />
-        );
-        return groupedDetails ? (
-          <Card className="form-section" title={group.name} key={group.name}>
-            {descriptions}
-          </Card>
-        ) : (
-          descriptions
-        );
-      }),
+        ),
+        ...detailGroups.map((group) => {
+          const descriptions = (
+            <Descriptions
+              key={group.name}
+              bordered
+              column={{ xs: 1, sm: 1, md: 2 }}
+              items={group.fields.map((f) => ({
+                key: f.key,
+                styles:
+                  ["rules", "actions"].includes(resource.name) &&
+                  f.key === resource.primaryKey
+                    ? { content: { whiteSpace: "nowrap" as const } }
+                    : undefined,
+                label:
+                  f.key === resource.primaryKey
+                    ? "ID"
+                    : resource.name === "sensors" &&
+                        canonical(f.key) === "DhLastEvent"
+                      ? "Last reading"
+                      : resource.name === "rules" &&
+                          ruleScheduleLabels[canonical(f.key)]
+                        ? ruleScheduleLabels[canonical(f.key)]
+                        : resource.name === "rules" &&
+                            ruleDurationLabels[canonical(f.key)]
+                          ? ruleDurationLabels[canonical(f.key)]
+                          : resource.name === "rules" &&
+                              canonical(f.key) === "DhCanceled"
+                            ? "Canceled at"
+                            : fieldLabel(f.key),
+                children:
+                  ["assets", "users", "usergroups", "devices", "hubs"].includes(
+                    resource.name,
+                  ) && canonical(f.key) === "IDOrganization" ? (
+                    <ReferenceTag
+                      resource="organizations"
+                      value={record?.[f.key]}
+                      showId={resource.name === "usergroups"}
+                    />
+                  ) : resource.name === "users" &&
+                    canonical(f.key) === "IDUserType" ? (
+                    <ReferenceTag
+                      resource="usertypes"
+                      value={record?.[f.key]}
+                    />
+                  ) : resource.name === "users" && f.key.startsWith("m_dh") ? (
+                    <UserDateTime value={record?.[f.key]} />
+                  ) : resource.name === "rules" &&
+                    ruleScheduleLabels[canonical(f.key)] ? (
+                    <RuleScheduleTime value={record?.[f.key]} />
+                  ) : resource.name === "rules" &&
+                    ruleDurationLabels[canonical(f.key)] ? (
+                    <RuleDurationSeconds value={record?.[f.key]} />
+                  ) : resource.name === "rules" &&
+                    canonical(f.key) === "DhReset" &&
+                    valueOf(record ?? {}, "ResetPending") !== true ? (
+                    <span className="muted">—</span>
+                  ) : resource.name === "assets" &&
+                    canonical(f.key) === "DhLastEvent" ? (
+                    <AssetLastEvent value={record?.[f.key]} />
+                  ) : resource.name === "sensors" &&
+                    canonical(f.key) === "DhLastEvent" ? (
+                    <SensorLastReading row={record ?? {}} />
+                  ) : resource.name === "rules" &&
+                    canonical(f.key) === "IDSensor" ? (
+                    <SensorTypeTag value={record?.[f.key]} />
+                  ) : resource.name === "actions" &&
+                    canonical(f.key) === "IDRule" ? (
+                    <RuleIdentity value={record?.[f.key]} />
+                  ) : resource.name === "sensors" &&
+                    canonical(f.key) === "IDAsset" ? (
+                    <ReferenceTag
+                      resource="assets"
+                      value={record?.[f.key]}
+                      showId
+                    />
+                  ) : resource.name === "hubs" &&
+                    canonical(f.key) === "IDAsset" ? (
+                    <HubAssetIdentity
+                      row={
+                        record && record.id === id && !query.isPlaceholderData
+                          ? record
+                          : {}
+                      }
+                      linkedDevices={hubDevices}
+                      showId={false}
+                    />
+                  ) : ["actions", "rules", "devices"].includes(resource.name) &&
+                    canonical(f.key) === "IDAsset" ? (
+                    <AssetIdentity value={record?.[f.key]} />
+                  ) : (
+                    <FieldValue
+                      field={f}
+                      value={record?.[f.key]}
+                      primary={f.key === resource.primaryKey}
+                    />
+                  ),
+              }))}
+            />
+          );
+          return groupedDetails ? (
+            <Card className="form-section" title={group.name} key={group.name}>
+              {descriptions}
+            </Card>
+          ) : (
+            descriptions
+          );
+        }),
+      ],
     },
   ];
   if (resource.name === "assets")
@@ -2195,6 +2217,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
           filterName="iddevice"
           filterValue={id!}
           linked={deviceSensors}
+          sensorSimulation
         />
       ),
     });
@@ -2511,7 +2534,10 @@ export function ResourceEditor({
   const tagField = [...resource.createFields, ...resource.updateFields].find(
     (field) => canonical(field.key) === "Tag",
   );
-  const watchedTag = Form.useWatch(tagField?.key ?? "__virtualTag", form) as unknown;
+  const watchedTag = Form.useWatch(
+    tagField?.key ?? "__virtualTag",
+    form,
+  ) as unknown;
   const [checkingDestination, setCheckingDestination] = useState(false);
   const copySaveLocked = useRef<symbol | null>(null);
   const editorMounted = useRef(false);

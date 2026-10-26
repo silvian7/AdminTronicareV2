@@ -46,6 +46,12 @@ import {
 } from "./session-organizations";
 import { assetEquipmentHubs } from "./asset-equipment-hubs";
 import {
+  operationId,
+  virtualEventBody,
+  virtualEventCapability,
+  virtualEventResult,
+} from "./virtual-sensor-events";
+import {
   ApiError,
   publicRecord,
   writeBody,
@@ -493,6 +499,72 @@ export function createApp(
     if (!resource) throw new ApiError(404, "Resource not found.");
     return resource;
   };
+  const virtualEventRequest = (req: Request, mutation: boolean) => {
+    const r = requirePermission(req, resourceMap.sensors, "show");
+    if (mutation) requirePermission(req, resourceMap.sensors, "edit");
+    if (r.session.identity.level < 90 || r.session.identity.mustChangePassword)
+      throw new ApiError(
+        403,
+        "Virtual sensor controls require platform administration.",
+      );
+    if (Object.keys(req.query).length)
+      throw new ApiError(
+        400,
+        "Simulation controls accept no query parameters.",
+      );
+    return r;
+  };
+  const simulationLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 30,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: {
+      message: "Too many simulation requests. Wait a moment and try again.",
+    },
+  });
+  app.get("/api/sensors/:id/virtual-events", async (req, res) => {
+    const r = virtualEventRequest(req, false);
+    const id = idValue(req.params.id);
+    const { data } = await upstream(
+      "core",
+      `/v1/sensors/${id}/virtual-events`,
+      r.session.token,
+    );
+    res.json({ data: virtualEventCapability(data, id) });
+  });
+  app.post(
+    "/api/sensors/:id/virtual-events",
+    simulationLimiter,
+    async (req, res) => {
+      const r = virtualEventRequest(req, true);
+      const id = idValue(req.params.id);
+      const body = virtualEventBody(req.body);
+      const { data } = await upstream(
+        "core",
+        `/v1/sensors/${id}/virtual-events`,
+        r.session.token,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      );
+      res.json({
+        data: virtualEventResult(data, id, body.operationId, body.value),
+      });
+    },
+  );
+  app.get("/api/sensors/:id/virtual-events/:operationId", async (req, res) => {
+    const r = virtualEventRequest(req, false);
+    const id = idValue(req.params.id);
+    const operation = operationId(req.params.operationId);
+    const { data } = await upstream(
+      "core",
+      `/v1/sensors/${id}/virtual-events/${operation}`,
+      r.session.token,
+    );
+    res.json({ data: virtualEventResult(data, id, operation) });
+  });
   app.get("/api/users/notification-readiness", async (req, res) => {
     const r = requirePermission(req, resourceMap.users, "list");
     if (r.session.identity.mustChangePassword)
