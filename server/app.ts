@@ -38,7 +38,7 @@ import {
   outboxServices,
   type ServiceOutboxStatus,
 } from "../shared/service-outboxes";
-import { createAuthorization } from "./authorization";
+import { createAuthorization, parseRoleLevel } from "./authorization";
 import {
   connectedSession,
   organizationMemberships,
@@ -505,6 +505,179 @@ export function createApp(
       data: await notificationReadiness(ids, r.session.token, upstream),
     });
   });
+  const membershipRequest = (req: Request, mutation: boolean) => {
+    const r = requirePermission(
+      req,
+      resourceMap.users,
+      mutation ? "edit" : "show",
+    );
+    if (Object.keys(req.query).length)
+      throw new ApiError(400, "Unsupported membership query parameters.");
+    const userId = idValue(req.params.userId);
+    const organizationId = mutation
+      ? idValue(req.params.organizationId)
+      : undefined;
+    if (
+      mutation &&
+      r.session.identity.level < 90 &&
+      organizationId !== r.session.identity.organizationId
+    )
+      throw new ApiError(403, "Choose your current organization.");
+    return { r, userId, organizationId };
+  };
+  const noMembershipBody = (req: Request) => {
+    if (
+      req.body !== undefined ||
+      req.headers["transfer-encoding"] !== undefined ||
+      (req.headers["content-length"] !== undefined &&
+        req.headers["content-length"] !== "0")
+    )
+      throw new ApiError(
+        400,
+        "This membership request does not accept a body.",
+      );
+  };
+  const endOriginSession = async (r: AuthRequest) => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await store.get(r.sessionId);
+      if (
+        !current ||
+        current.token !== r.session.token ||
+        current.csrf !== r.session.csrf
+      )
+        return;
+      if (await store.compareAndSet(r.sessionId, current, null)) return;
+    }
+    throw contextChanged();
+  };
+  app.get("/api/users/:userId/organizations", async (req, res) => {
+    const { r, userId } = membershipRequest(req, false);
+    noMembershipBody(req);
+    const { data } = await upstream(
+      "users",
+      `/v1/users/${userId}/organizations`,
+      r.session.token,
+    );
+    const memberships = organizationMemberships(data, userId, {
+      includeInactive: true,
+    });
+    if (
+      r.session.identity.level < 90 &&
+      userId !== r.session.identity.id &&
+      memberships.some(
+        (member) => member.organizationId !== r.session.identity.organizationId,
+      )
+    )
+      throw new ApiError(
+        502,
+        "The service returned an invalid membership scope.",
+      );
+    res.json({ data: memberships });
+  });
+  const changeOrganizationMembership = async (req: Request, res: Response) => {
+    const { r, userId, organizationId } = membershipRequest(req, true);
+    let userTypeId: string | undefined;
+    if (req.method === "PUT") {
+      if (
+        !req.body ||
+        Array.isArray(req.body) ||
+        Object.keys(req.body).length !== 1 ||
+        !("userTypeId" in req.body)
+      )
+        throw new ApiError(400, "Choose the membership role.");
+      userTypeId = idValue(req.body.userTypeId);
+      const role = await authorization.read(r.session, "usertypes", userTypeId);
+      const level = parseRoleLevel(valueOf(role, "Level"));
+      if (level === null)
+        throw new ApiError(
+          502,
+          "The service returned an invalid membership role.",
+        );
+      if (
+        level >= 90 ||
+        (r.session.identity.level < 90 && level >= r.session.identity.level)
+      )
+        throw new ApiError(
+          403,
+          "Choose a permitted organization role below your own level.",
+        );
+    } else noMembershipBody(req);
+    const activeOrganizationId =
+      r.session.activeOrganizationId === undefined
+        ? r.session.identity.level < 90
+          ? r.session.identity.organizationId
+          : null
+        : r.session.activeOrganizationId;
+    const endsSession =
+      userId === r.session.identity.id &&
+      organizationId === activeOrganizationId;
+    let result: unknown;
+    try {
+      const { data } = await upstream(
+        "users",
+        `/v1/users/${userId}/organizations/${organizationId}`,
+        r.session.token,
+        {
+          method: req.method,
+          ...(userTypeId
+            ? {
+                body: stringify({
+                  idusertype: new LosslessNumber(userTypeId),
+                  active: true,
+                })!,
+              }
+            : {}),
+        },
+      );
+      if (userTypeId) {
+        const [membership] = organizationMemberships([data], userId, {
+          includeInactive: true,
+        });
+        if (
+          membership.organizationId !== organizationId ||
+          membership.userTypeId !== userTypeId ||
+          !membership.active
+        )
+          throw new ApiError(
+            502,
+            "The service returned an invalid membership change.",
+          );
+        result = membership;
+      }
+    } catch (error) {
+      // The backend retires every token selected into the changed organization.
+      // An uncertain result must not retain our possibly revoked credentials.
+      if (
+        endsSession &&
+        !(
+          error instanceof ApiError &&
+          [400, 403, 404, 422].includes(error.status)
+        )
+      ) {
+        await endOriginSession(r);
+        throw new ApiError(
+          401,
+          "Your organization membership may have changed. Sign in again.",
+          undefined,
+          "organization_membership_session_ended",
+        );
+      }
+      throw error;
+    }
+    if (endsSession) await endOriginSession(r);
+    res.json({
+      ...(userTypeId ? { data: result } : { success: true }),
+      ...(endsSession ? { sessionEnded: true } : {}),
+    });
+  };
+  app.put(
+    "/api/users/:userId/organizations/:organizationId",
+    changeOrganizationMembership,
+  );
+  app.delete(
+    "/api/users/:userId/organizations/:organizationId",
+    changeOrganizationMembership,
+  );
   app.get("/api/assets/:assetId/equipment-hubs", async (req, res) => {
     const r = requirePermission(req, resourceMap.assets, "show");
     requirePermission(req, resourceMap.hubs, "list");

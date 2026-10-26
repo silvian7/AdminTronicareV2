@@ -102,6 +102,10 @@ import {
 } from "../components/notification-readiness";
 import { useRecordRow } from "../components/record-row";
 import { HubLinkedAssets } from "../components/hub-linked-assets";
+import {
+  UserOrganizations,
+  useUserOrganizations,
+} from "../components/user-organizations";
 import { linkedHubAssetIds } from "../../shared/hub-assets";
 import {
   millisecondsToSeconds,
@@ -1710,6 +1714,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
     },
     canReadUserMemberships,
   );
+  const userOrganizations = useUserOrganizations(
+    id ?? "",
+    resource.name === "users" &&
+      can(resource, "show") &&
+      query.isSuccess &&
+      !query.isPlaceholderData &&
+      record?.id === id,
+  );
   const canReadOrganizationLists =
     resource.name === "organizations" &&
     can(resource, "show") &&
@@ -2016,7 +2028,19 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         <AssetEquipmentTabs key={`${id}:${organization}`} assetId={id!} />
       ),
     });
-  if (resource.name === "users")
+  if (resource.name === "users") {
+    tabs.push({
+      key: "organizations",
+      label: `Organizations${userOrganizations.isSuccess && userOrganizations.data.data.length ? ` (${userOrganizations.data.data.length})` : ""}`,
+      children:
+        record && record.id === id ? (
+          <UserOrganizations
+            key={`${id}:${organization}`}
+            user={record}
+            memberships={userOrganizations}
+          />
+        ) : null,
+    });
     tabs.push({
       key: "groups",
       label: countedTabLabel(
@@ -2026,6 +2050,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       ),
       children: <Memberships userId={id!} linked={userMemberships} />,
     });
+  }
   if (resource.name === "usergroups")
     tabs.push({
       key: "users",
@@ -2209,13 +2234,18 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                       ],
                     });
                   if (resource.name === "users")
-                    await queryClient.invalidateQueries({
-                      queryKey: [
-                        "notification-readiness",
-                        getSessionEpoch(),
-                        organization,
-                      ],
-                    });
+                    await Promise.all([
+                      queryClient.invalidateQueries({
+                        queryKey: [
+                          "notification-readiness",
+                          getSessionEpoch(),
+                          organization,
+                        ],
+                      }),
+                      queryClient.invalidateQueries({
+                        queryKey: ["user-organizations", getSessionEpoch(), id],
+                      }),
+                    ]);
                 }}
               >
                 Refresh

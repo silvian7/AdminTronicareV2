@@ -21,6 +21,7 @@ const identifier = (value: unknown, zero = false): string => {
 export function organizationMemberships(
   value: unknown,
   userId: string,
+  options: { includeInactive?: boolean } = {},
 ): OrganizationMembership[] {
   if (!Array.isArray(value) || value.length > 256) throw invalid();
   const seen = new Set<string>();
@@ -36,7 +37,8 @@ export function organizationMemberships(
     )
       throw invalid();
     seen.add(organizationId);
-    if (entry.active) result.push({ organizationId, userTypeId, active: true });
+    if (entry.active || options.includeInactive)
+      result.push({ organizationId, userTypeId, active: entry.active });
   }
   return result.sort((a, b) =>
     BigInt(a.organizationId) < BigInt(b.organizationId) ? -1 : 1,
