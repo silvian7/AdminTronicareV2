@@ -28,6 +28,7 @@ import {
   Select,
   Skeleton,
   Space,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -38,6 +39,7 @@ import {
   ArrowLeftOutlined,
   DeleteOutlined,
   EditOutlined,
+  CopyOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -108,6 +110,16 @@ import {
 } from "../components/user-organizations";
 import { linkedHubAssetIds } from "../../shared/hub-assets";
 import {
+  ruleInstanceTemplateDraft,
+  ruleTemplateDraft,
+} from "../../shared/rule-template";
+import { RuleTemplateSensor } from "../components/rule-template-sensor";
+import { ActionTemplateRule } from "../components/action-template-rule";
+import {
+  actionInstanceTemplateDraft,
+  actionTemplateDraft,
+} from "../../shared/action-template";
+import {
   millisecondsToSeconds,
   ruleDurationLabels,
   secondsToMilliseconds,
@@ -117,6 +129,16 @@ import {
   ruleScheduleLabels,
   utcTimeToLocal,
 } from "../../shared/rule-schedule";
+
+function CopiedRuleTemplateInput({ template }: { template: boolean }) {
+  return (
+    <Switch
+      disabled
+      checked={template}
+      aria-label={fieldLabel("m_bIsTemplate")}
+    />
+  );
+}
 
 function validateRuleDuration(field: Field, value: unknown): Promise<void> {
   if (value === undefined || value === null || value === "")
@@ -1668,7 +1690,7 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
   const [params, setParams] = useSearchParams();
   const viewingDeviceSensors =
     resource.name === "devices" && params.get("tab") === "sensors";
-  const { organization, can } = useAdmin();
+  const { organization, can, identity } = useAdmin();
   const refreshRecordReferences = useRefreshRecordReferences(resource.name);
   const navigate = useNavigate();
   const { modal, message } = App.useApp();
@@ -2263,6 +2285,43 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     View sensors
                   </Button>
                 )}
+              {["rules", "actions"].includes(resource.name) &&
+                query.isSuccess &&
+                !query.isPlaceholderData &&
+                record &&
+                record?.id === id &&
+                valueOf(record, "IsTemplate") === true &&
+                can(resource, "create") && (
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() =>
+                      navigate(
+                        `/${resource.name}/new?fromTemplate=${encodeURIComponent(id!)}`,
+                      )
+                    }
+                  >
+                    Create from template
+                  </Button>
+                )}
+              {["rules", "actions"].includes(resource.name) &&
+                query.isSuccess &&
+                !query.isPlaceholderData &&
+                record &&
+                record.id === id &&
+                valueOf(record, "IsTemplate") === false &&
+                identity.level >= 90 &&
+                can(resource, "create") && (
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() =>
+                      navigate(
+                        `/${resource.name}/new?${resource.name === "actions" ? "fromAction" : "fromRule"}=${encodeURIComponent(id!)}`,
+                      )
+                    }
+                  >
+                    Create template from {resource.singular.toLowerCase()}
+                  </Button>
+                )}
               {can(resource, "edit") && (
                 <Button
                   type="primary"
@@ -2341,7 +2400,44 @@ export function ResourceEditor({
   const navigate = useNavigate();
   const { message, modal } = App.useApp();
   const [params] = useSearchParams();
+  const copySupported =
+    ["rules", "actions"].includes(resource.name) && mode === "create";
+  const reverseParameter =
+    resource.name === "actions" ? "fromAction" : "fromRule";
+  const reservedParameters = ["fromTemplate", "fromRule", "fromAction"].filter(
+    (name) => params.has(name),
+  );
+  const copyingTemplate = copySupported && params.has("fromTemplate");
+  const creatingTemplate = copySupported && params.has(reverseParameter);
+  const copyingRecord = copySupported && reservedParameters.length > 0;
+  const sourceParameter = creatingTemplate ? reverseParameter : "fromTemplate";
+  const sourceRecordId = params.get(sourceParameter) ?? "";
+  const validSourceRecordId =
+    reservedParameters.length === 1 &&
+    reservedParameters[0] === sourceParameter &&
+    params.getAll(sourceParameter).length === 1 &&
+    /^[1-9]\d{0,18}$/.test(sourceRecordId) &&
+    BigInt(sourceRecordId) <= 9223372036854775807n;
   const [form] = Form.useForm();
+  const destinationAsset = Form.useWatch("m_nIDAsset", form) as
+    string | undefined;
+  const [checkingDestination, setCheckingDestination] = useState(false);
+  const copySaveLocked = useRef<symbol | null>(null);
+  const editorMounted = useRef(false);
+  const editorEpoch = getSessionEpoch();
+  const editorScope = `${resource.name}:${id ?? "new"}:${mode}:${copyingRecord ? `${sourceParameter}:${sourceRecordId}` : ""}:${organization}:${editorEpoch}`;
+  const currentEditorScope = useRef(editorScope);
+  currentEditorScope.current = editorScope;
+  useEffect(() => {
+    copySaveLocked.current = null;
+    setCheckingDestination(false);
+  }, [editorScope]);
+  useEffect(() => {
+    editorMounted.current = true;
+    return () => {
+      editorMounted.current = false;
+    };
+  }, []);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [scheduleReference, setScheduleReference] = useState(() => new Date());
@@ -2351,7 +2447,8 @@ export function ResourceEditor({
     ({ currentLocation, nextLocation }) =>
       dirty &&
       !saved.current &&
-      currentLocation.pathname !== nextLocation.pathname,
+      (currentLocation.pathname !== nextLocation.pathname ||
+        (copyingRecord && currentLocation.search !== nextLocation.search)),
   );
   useEffect(() => {
     if (blocker.state !== "blocked") return;
@@ -2377,10 +2474,53 @@ export function ResourceEditor({
     },
     errorNotification: false,
   });
-  const fields = editableFields(resource, mode).filter(
-    (f) => identity.level >= 90 || canonical(f.key) !== "Admin",
-  );
-  const saving = create.mutation.isPending || update.mutation.isPending;
+  const sourceRecord = useOne<RecordData>({
+    resource: resource.name,
+    id: validSourceRecordId ? sourceRecordId : "0",
+    meta: { organization },
+    queryOptions: {
+      enabled:
+        copyingRecord &&
+        validSourceRecordId &&
+        can(resource, "show") &&
+        can(resource, "create") &&
+        (!creatingTemplate || identity.level >= 90),
+      retry: false,
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: false,
+    },
+    errorNotification: false,
+  });
+  const validSourceRecord =
+    sourceRecord.query.isSuccess &&
+    !sourceRecord.query.isPlaceholderData &&
+    sourceRecord.result?.id === sourceRecordId &&
+    valueOf(sourceRecord.result, "IsTemplate") === !creatingTemplate;
+  const fields = editableFields(resource, mode)
+    .filter((f) => identity.level >= 90 || canonical(f.key) !== "Admin")
+    .filter(
+      (field) =>
+        !creatingTemplate ||
+        ![
+          "IDAsset",
+          resource.name === "actions" ? "IDRule" : "IDSensor",
+        ].includes(canonical(field.key)),
+    )
+    .map((field) =>
+      copyingRecord &&
+      [
+        "IDAsset",
+        resource.name === "actions" ? "IDRule" : "IDSensor",
+        resource.name === "actions" ? "IDActionType" : "IDRuleType",
+      ].includes(canonical(field.key))
+        ? { ...field, required: true, minimum: "1" }
+        : field,
+    );
+  const saving =
+    create.mutation.isPending ||
+    update.mutation.isPending ||
+    checkingDestination;
   useEffect(() => {
     let confirmation: { destroy: () => void } | undefined;
     let resolvePending: ((discard: boolean) => void) | undefined;
@@ -2409,12 +2549,21 @@ export function ResourceEditor({
     };
   }, [registerOrganizationChangeGuard, dirty, saving, message, modal]);
   useEffect(() => {
-    const key = `${resource.name}:${id ?? "new"}:${mode}`;
+    const key = `${resource.name}:${id ?? "new"}:${mode}:${copyingRecord ? `${sourceParameter}:${sourceRecordId}` : ""}`;
     if (initialized.current === key) return;
     if (!can(resource, mode) || (mode === "edit" && !can(resource, "show")))
       return;
     if (detail.query.error) return;
     if (mode === "edit" && !detail.result) return;
+    if (
+      copyingRecord &&
+      (!validSourceRecordId ||
+        !validSourceRecord ||
+        sourceRecord.query.isFetching ||
+        !can(resource, "show") ||
+        (creatingTemplate && identity.level < 90))
+    )
+      return;
     initialized.current = key;
     saved.current = false;
     form.resetFields();
@@ -2424,9 +2573,26 @@ export function ResourceEditor({
       originalRuleSchedule.current = {};
     }
     const initial: Record<string, unknown> = {};
-    if (mode === "edit")
+    if (mode === "edit" || copyingRecord) {
+      const source = copyingRecord
+        ? resource.name === "actions"
+          ? creatingTemplate
+            ? actionInstanceTemplateDraft(sourceRecord.result!)
+            : actionTemplateDraft(sourceRecord.result!)
+          : creatingTemplate
+            ? ruleInstanceTemplateDraft(sourceRecord.result!)
+            : ruleTemplateDraft(sourceRecord.result!)
+        : undefined;
       for (const f of fields) {
-        const value = detail.result?.[responseKey(resource, f.key)];
+        let value = copyingRecord
+          ? source?.[f.key]
+          : detail.result?.[responseKey(resource, f.key)];
+        if (
+          copyingRecord &&
+          ruleScheduleLabels[canonical(f.key)] &&
+          (value === null || value === "")
+        )
+          value = "00:00:00";
         if (value !== undefined)
           initial[f.key] =
             resource.name === "rules" && ruleScheduleLabels[canonical(f.key)]
@@ -2438,7 +2604,7 @@ export function ResourceEditor({
         if (resource.name === "rules" && ruleScheduleLabels[canonical(f.key)])
           originalRuleSchedule.current[f.key] = value;
       }
-    else
+    } else
       for (const f of fields) {
         if (canonical(f.key) === "IDOrganization" && organization)
           initial[f.key] = organization;
@@ -2451,7 +2617,24 @@ export function ResourceEditor({
     form.setFieldsValue(initial);
     setDirty(false);
     setError("");
-  }, [detail.result, resource, id, mode, form, organization, params, fields]);
+  }, [
+    detail.result,
+    resource,
+    id,
+    mode,
+    form,
+    organization,
+    params,
+    fields,
+    copyingRecord,
+    creatingTemplate,
+    sourceParameter,
+    sourceRecordId,
+    validSourceRecordId,
+    validSourceRecord,
+    sourceRecord.result,
+    sourceRecord.query.isFetching,
+  ]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (dirty) {
@@ -2469,7 +2652,11 @@ export function ResourceEditor({
       );
     go();
   };
-  if (!can(resource, mode) || (mode === "edit" && !can(resource, "show")))
+  if (
+    !can(resource, mode) ||
+    ((mode === "edit" || copyingRecord) && !can(resource, "show")) ||
+    (creatingTemplate && identity.level < 90)
+  )
     return (
       <Result
         status="403"
@@ -2484,6 +2671,45 @@ export function ResourceEditor({
         retry={() => detail.query.refetch()}
       />
     );
+  if (copyingRecord) {
+    if (!validSourceRecordId)
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message={
+            creatingTemplate
+              ? `Invalid source ${resource.singular.toLowerCase()} ID.`
+              : `Invalid template ${resource.singular.toLowerCase()} ID.`
+          }
+        />
+      );
+    if (sourceRecord.query.error)
+      return (
+        <ErrorNotice
+          error={sourceRecord.query.error}
+          retry={() => void sourceRecord.query.refetch()}
+        />
+      );
+    if (sourceRecord.query.isLoading || sourceRecord.query.isFetching)
+      return (
+        <Card>
+          <Skeleton active />
+        </Card>
+      );
+    if (!validSourceRecord)
+      return (
+        <Alert
+          type="error"
+          showIcon
+          message={
+            creatingTemplate
+              ? `Choose ${resource.name === "actions" ? "an action" : "a rule"} that is not flagged as a template.`
+              : `Choose ${resource.name === "actions" ? "an action" : "a rule"} flagged as a template.`
+          }
+        />
+      );
+  }
   const groups = groupFields(fields);
   return (
     <>
@@ -2495,7 +2721,13 @@ export function ResourceEditor({
       />
       <PageHeading
         resource={resource}
-        title={`${mode === "create" ? "Add" : "Edit"} ${resource.singular.toLowerCase()}`}
+        title={
+          creatingTemplate
+            ? `Create template from ${resource.singular.toLowerCase()}`
+            : copyingRecord
+              ? `Create ${resource.singular.toLowerCase()} from template`
+              : `${mode === "create" ? "Add" : "Edit"} ${resource.singular.toLowerCase()}`
+        }
         extra={
           <Button icon={<ArrowLeftOutlined />} onClick={leave}>
             Back
@@ -2509,12 +2741,45 @@ export function ResourceEditor({
       {error && (
         <Alert className="page-alert" type="error" showIcon message={error} />
       )}
+      {copyingRecord && (
+        <Alert
+          className="page-alert"
+          type="info"
+          showIcon
+          message={
+            creatingTemplate
+              ? resource.name === "actions"
+                ? `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Review the recipient and message settings, then save the new reusable action template. Templates are disabled by default.`
+                : `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Review and save the new reusable template. Templates are disabled by default; configure actions after saving.`
+              : resource.name === "actions"
+                ? `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Choose an asset and rule, then review the recipient and message settings before saving. New actions are disabled by default.`
+                : `Settings copied from ${recordTitle(sourceRecord.result!)} (#${sourceRecordId}). Choose an asset and sensor, then review and save the new rule. New rules are disabled by default; configure actions after saving.`
+          }
+        />
+      )}
       <Form
         form={form}
         layout="vertical"
         requiredMark={false}
-        onValuesChange={() => setDirty(true)}
+        disabled={saving}
+        onValuesChange={(changed) => {
+          setDirty(true);
+          if (copyingTemplate && "m_nIDAsset" in changed)
+            form.setFieldValue(
+              resource.name === "actions" ? "m_nIDRule" : "m_nIDSensor",
+              undefined,
+            );
+        }}
         onFinish={async (values) => {
+          if (copyingRecord && (copySaveLocked.current || !validSourceRecord))
+            return;
+          const epoch = editorEpoch;
+          const operation = Symbol();
+          const currentCopy = () =>
+            editorMounted.current &&
+            currentEditorScope.current === editorScope &&
+            getSessionEpoch() === epoch;
+          if (copyingRecord && !currentCopy()) return;
           setError("");
           const changed: Record<string, unknown> = {};
           for (const field of fields) {
@@ -2550,6 +2815,92 @@ export function ResourceEditor({
             return;
           }
           try {
+            if (copyingRecord) {
+              copySaveLocked.current = operation;
+              setCheckingDestination(true);
+            }
+            if (copyingTemplate && resource.name === "rules") {
+              const assetId = String(values.m_nIDAsset ?? "");
+              const sensorId = String(values.m_nIDSensor ?? "");
+              const [asset, sensor] = await Promise.all([
+                request<{ data: RecordData }>(
+                  `/api/resources/assets/${encodeURIComponent(assetId)}`,
+                ),
+                request<{ data: RecordData }>(
+                  `/api/resources/sensors/${encodeURIComponent(sensorId)}`,
+                ),
+              ]);
+              if (!currentCopy()) return;
+              if (
+                asset.data.id !== assetId ||
+                sensor.data.id !== sensorId ||
+                valueOf(sensor.data, "IDAsset") !== assetId
+              )
+                throw {
+                  message: "Choose a sensor belonging to the selected asset.",
+                  errors: {
+                    m_nIDSensor:
+                      "Choose a sensor belonging to the selected asset.",
+                  },
+                };
+              changed.m_bIsTemplate = false;
+            }
+            if (copyingTemplate && resource.name === "actions") {
+              const assetId = String(values.m_nIDAsset ?? "");
+              const ruleId = String(values.m_nIDRule ?? "");
+              const [asset, rule] = await Promise.all([
+                request<{ data: RecordData }>(
+                  `/api/resources/assets/${encodeURIComponent(assetId)}`,
+                ),
+                request<{ data: RecordData }>(
+                  `/api/resources/rules/${encodeURIComponent(ruleId)}`,
+                ),
+              ]);
+              if (!currentCopy()) return;
+              const sensorId = valueOf(rule.data, "IDSensor");
+              if (
+                asset.data.id !== assetId ||
+                rule.data.id !== ruleId ||
+                valueOf(rule.data, "IDAsset") !== assetId ||
+                valueOf(rule.data, "IsTemplate") !== false ||
+                typeof sensorId !== "string" ||
+                !/^[1-9]\d{0,18}$/.test(sensorId) ||
+                BigInt(sensorId) > 9223372036854775807n
+              )
+                throw {
+                  message:
+                    "Choose a non-template rule belonging to the selected asset with a valid sensor.",
+                  errors: {
+                    m_nIDRule:
+                      "Choose a non-template rule belonging to the selected asset with a valid sensor.",
+                  },
+                };
+              const sensor = await request<{ data: RecordData }>(
+                `/api/resources/sensors/${encodeURIComponent(sensorId)}`,
+              );
+              if (!currentCopy()) return;
+              if (
+                sensor.data.id !== sensorId ||
+                valueOf(sensor.data, "IDAsset") !== assetId
+              )
+                throw {
+                  message:
+                    "The rule's sensor must belong to the selected asset.",
+                  errors: {
+                    m_nIDRule:
+                      "The rule's sensor must belong to the selected asset.",
+                  },
+                };
+              changed.m_bIsTemplate = false;
+            }
+            if (creatingTemplate) {
+              changed.m_bIsTemplate = true;
+              changed.m_nIDAsset = "0";
+              changed[
+                resource.name === "actions" ? "m_nIDRule" : "m_nIDSensor"
+              ] = "0";
+            }
+            if (copyingRecord && !currentCopy()) return;
             const result =
               mode === "create"
                 ? await create.mutateAsync({
@@ -2565,11 +2916,17 @@ export function ResourceEditor({
                     successNotification: false,
                     errorNotification: false,
                   });
+            if (copyingRecord && !currentCopy()) return;
             saved.current = true;
             setDirty(false);
             message.success(`${resource.singular} saved.`);
             navigate(`/${resource.name}/${result.data.id}`);
           } catch (e) {
+            if (
+              copyingRecord &&
+              (!currentCopy() || (e as Error).name === "AbortError")
+            )
+              return;
             const err = e as HttpError;
             setError(err.message);
             if (err.errors)
@@ -2581,6 +2938,10 @@ export function ResourceEditor({
                     : [String(errors)],
                 })),
               );
+          } finally {
+            if (copySaveLocked.current === operation)
+              copySaveLocked.current = null;
+            if (!copyingRecord || currentCopy()) setCheckingDestination(false);
           }
         }}
       >
@@ -2665,6 +3026,27 @@ export function ResourceEditor({
                                 },
                               ]
                             : []),
+                          ...(copyingRecord &&
+                          [
+                            "IDAsset",
+                            "IDSensor",
+                            "IDRule",
+                            "IDActionType",
+                            "IDRuleType",
+                          ].includes(canonical(field.key))
+                            ? [
+                                {
+                                  validator: (_: unknown, value: unknown) =>
+                                    typeof value === "string" &&
+                                    /^[1-9]\d{0,18}$/.test(value) &&
+                                    BigInt(value) <= 9223372036854775807n
+                                      ? Promise.resolve()
+                                      : Promise.reject(
+                                          new Error("Choose a valid record."),
+                                        ),
+                                },
+                              ]
+                            : []),
                           ...(resource.name === "rules" &&
                           ruleScheduleLabels[canonical(field.key)]
                             ? [
@@ -2696,7 +3078,39 @@ export function ResourceEditor({
                             : []),
                         ]}
                       >
-                        <FieldInput field={field} resource={resource.name} />
+                        {copyingTemplate &&
+                        resource.name === "actions" &&
+                        canonical(field.key) === "IDRule" ? (
+                          <ActionTemplateRule
+                            id={field.key}
+                            assetId={destinationAsset}
+                            disabled={saving}
+                          />
+                        ) : copyingTemplate &&
+                          canonical(field.key) === "IDSensor" ? (
+                          <RuleTemplateSensor
+                            id={field.key}
+                            assetId={destinationAsset}
+                            disabled={saving}
+                          />
+                        ) : copyingRecord &&
+                          ["IDAsset", "IDRuleType", "IDActionType"].includes(
+                            canonical(field.key),
+                          ) ? (
+                          <ReferenceSelect
+                            id={field.key}
+                            resource={referenceResource[canonical(field.key)]}
+                            allowZero={false}
+                            disabled={saving}
+                          />
+                        ) : copyingRecord &&
+                          canonical(field.key) === "IsTemplate" ? (
+                          <CopiedRuleTemplateInput
+                            template={creatingTemplate}
+                          />
+                        ) : (
+                          <FieldInput field={field} resource={resource.name} />
+                        )}
                       </Form.Item>
                     </Col>
                   ))}
