@@ -379,7 +379,12 @@ export function VirtualBedoffControls({
               ? "Telemetry accepted. Readings update after processing."
               : shownReceipt.status === "rejected"
                 ? "Telemetry was rejected. The sensor reading is unchanged."
-                : "Telemetry queued. Processing is not confirmed."
+                : "Telemetry stored and queued. Processing is not confirmed."
+          }
+          description={
+            shownReceipt.status === "queued"
+              ? "Wait a moment, then use Retry simulation if needed."
+              : undefined
           }
         />
       )}

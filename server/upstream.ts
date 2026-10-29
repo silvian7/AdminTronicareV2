@@ -88,7 +88,7 @@ export function createUpstream(config: Config, transport: Transport = fetch) {
         404: "This record could not be found.",
         409: "This change conflicts with the current record or its dependencies. Refresh and try again.",
         422: "The service rejected one or more values. Check the form.",
-        503: "This service is not ready for the operation. Writes may be paused during migration.",
+        503: "This service is temporarily unavailable. Please try again.",
       };
       throw new ApiError(
         response.status >= 500 ? 503 : response.status,

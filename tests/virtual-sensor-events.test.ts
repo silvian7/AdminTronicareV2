@@ -219,6 +219,11 @@ describe("virtual bedoff event gateway", () => {
       const { calls, post } = await setup({ errorStatus });
       const response = await post();
       expect(response.status).toBe(errorStatus);
+      if (errorStatus === 503)
+        expect(response.body).toMatchObject({
+          message: "This service is temporarily unavailable. Please try again.",
+          code: "upstream_503",
+        });
       expect(JSON.stringify(response.body)).not.toContain(
         "must not be exposed",
       );

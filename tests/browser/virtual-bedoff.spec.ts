@@ -438,7 +438,7 @@ test("queued telemetry polls within a bound and checks the same event without an
   await page.goto(`/sensors/${sensorId}`);
   await button(page, true).click();
   await expect(controls(page)).toContainText(
-    "Telemetry queued. Processing is not confirmed.",
+    "Telemetry stored and queued. Processing is not confirmed.",
   );
   await expectCurrent(page, false);
   const retry = controls(page).getByRole("button", {
@@ -493,11 +493,23 @@ test("explicit retry dispatches a still-queued event once using its original UUI
   });
   await expect(retry).toBeVisible({ timeout: 10000 });
   const original = mock.posts[0];
+  await expectCurrent(page, false);
+  await expect(controls(page)).toContainText(
+    "Wait a moment, then use Retry simulation if needed.",
+  );
+  await expect(controls(page)).not.toContainText("Telemetry accepted.");
+  expect(mock.posts).toHaveLength(1);
+  expect(
+    mock.reads.filter((url) => url.pathname.includes("/virtual-events/")),
+  ).toHaveLength(3);
   mock.acceptRetryPost();
   await retry.click();
   await expectCurrent(page, true);
   await expect(button(page, false)).toBeEnabled();
   expect(mock.posts).toEqual([original, original]);
+  expect(
+    mock.reads.filter((url) => url.pathname.includes("/virtual-events/")),
+  ).toHaveLength(4);
 });
 
 test("a non-string receipt status remains unconfirmed without polling or changing the reading", async ({
