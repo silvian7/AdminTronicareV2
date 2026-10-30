@@ -628,3 +628,48 @@ probes passed, database/source-column identity checks passed, report presence
 confirmed, missing binding prerequisites and elevated supplied role identified,
 Git secret exclusions and diff checks passed. No signed-in caregiver report
 response or live graph parity is claimed.
+
+## Caregiver row-to-report graphs — 30 October 2026
+
+Caregiver overview table rows and tablet cards now open the exact latest known,
+same-subject completed report when report access is available. Resident-name
+links use the same destination. Missing, denied, unavailable or invalid report
+metadata opens the subject detail, preserving its existing honest empty/denied
+state and fresh backend authorization rather than choosing another subject's
+report. IDs remain decimal strings.
+
+Extracted the existing guarded row handlers to `navigationRow` in
+`src/components/record-row.ts` and reused them for caregiver rows/cards in
+`src/care/pages.tsx`. Existing Administration permission checks remain in
+`useRecordRow`. Both surfaces support Enter/Space and preserve nested controls,
+modified clicks, selected text and portal-event guards. Tablet cards have a
+visible hover/focus treatment and an accessible navigation label.
+
+Reused the existing report page and shared ingester preparation: bed presence,
+heart rate, respiration, movement flags and optional vendor HRV. The Excel
+export's four-week breathing-event graph is already available under Trends.
+Bed Temperature needs a separate verified history source and is still
+unavailable; this change does not invent that source or recalculate metrics.
+
+The current local API configuration still has no report DSN. Previous read-only
+VPS5 connectivity checks established that reports exist, but did not apply the
+missing binding migration or provision a reader. No production database changes
+or broader grants were authorized or applied by this navigation request. Live
+report availability and graph parity therefore remain unverified.
+
+Checks completed: production build/typecheck, formatting and diff checks passed.
+All 39 synthetic browser checks passed on the first run: 18 caregiver overview
+(including six new activation/fallback cases), ten report-graph cases and 11
+existing Administration row-navigation regressions. These cover exact 64-bit
+subject/report identity, rendered coordinated graphs, desktop/tablet activation,
+Enter/Space, nested links, modified clicks, text selection and no-report/denied/
+unconfigured/wrong-parent fallbacks without report reads or mutations. The new
+tablet-card screenshot was visually inspected without clipping. The isolated
+preview was stopped after verification.
+
+Local Admin was rebuilt/recreated with both Compose files and is healthy. Served
+JS/CSS match the rebuilt image; caregiver overview/deep SPA routes return 200,
+anonymous protected routes remain 401, Standard-role restrictions and local
+caregiver routing remain configured, and technical service routing is unchanged.
+The Core API and existing authorization services retain their expected health/
+anonymous-auth responses. No signed-in live report or graph was inspected.

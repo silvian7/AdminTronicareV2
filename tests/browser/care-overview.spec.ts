@@ -6,6 +6,8 @@ import {
 } from "./care-fixtures";
 
 test.use({ locale: "en-US", timezoneId: "Europe/Brussels" });
+const coordinatedGraphs =
+  "Bed presence, heart rate, respiration and movement over time";
 
 test("original bed pictograms and Asset event-age discs remain distinct", async ({
   page,
@@ -333,6 +335,201 @@ test("search and pagination request bounded server pages without per-row reads",
   ).toBe(true);
   expect(fixture.unexpected).toEqual([]);
 });
+
+test("desktop resident rows open the exact latest graphs while selection, modifiers and nested links retain their behavior", async ({
+  page,
+}) => {
+  const fixture = await installCareFixtures(page, {
+    subjects: syntheticCareSubjects(1),
+  });
+  const subject = fixture.subjects[0];
+  const report = subject.latestReport!;
+  const target = `/care/subjects/${subject.id}/reports/${report.id}`;
+  const row = page.locator(`tr[data-row-key="${subject.id}"]`);
+  const graph = page.getByRole("img", { name: coordinatedGraphs, exact: true });
+  await page.goto("/care");
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute("tabindex", "0");
+  expect(await row.getAttribute("role")).toBeNull();
+  await row.dispatchEvent("click", { button: 0, ctrlKey: true });
+  await row.dispatchEvent("click", { button: 1 });
+  await expect(page).toHaveURL(/\/care$/);
+  const label = row.getByText(subject.label, { exact: true });
+  await label.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  await row.dispatchEvent("click", { button: 0 });
+  await expect(page).toHaveURL(/\/care$/);
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await label.click();
+  await expect(page).toHaveURL(target);
+  await expect(graph).toBeVisible();
+  expect(
+    fixture.calls.some(
+      (call) =>
+        call.path ===
+        `/api/care/subjects/${subject.id}/reports/${report.id}/series`,
+    ),
+  ).toBe(true);
+
+  await page.getByRole("link", { name: /Back to overview$/ }).click();
+  const nestedReport = row.getByRole("link", { name: /Open completed report/ });
+  await expect(nestedReport).toHaveAttribute("href", target);
+  await nestedReport.focus();
+  await nestedReport.press("Space");
+  await expect(page).toHaveURL(/\/care$/);
+  await nestedReport.press("Enter");
+  await expect(page).toHaveURL(target);
+  await expect(graph).toBeVisible();
+
+  await page.getByRole("link", { name: /Back to overview$/ }).click();
+  await row.focus();
+  await row.press("Space");
+  await expect(page).toHaveURL(target);
+  await expect(graph).toBeVisible();
+  expect(
+    fixture.calls
+      .filter((call) => call.path.includes("/reports/"))
+      .every(
+        (call) =>
+          call.path ===
+            `/api/care/subjects/${subject.id}/reports/${report.id}` ||
+          call.path ===
+            `/api/care/subjects/${subject.id}/reports/${report.id}/series`,
+      ),
+  ).toBe(true);
+  expect(fixture.calls.filter((call) => call.method !== "GET")).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test("tablet resident cards open latest report graphs from plain card content and keyboard activation", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const fixture = await installCareFixtures(page, {
+    subjects: syntheticCareSubjects(1),
+  });
+  const subject = fixture.subjects[0];
+  const target = `/care/subjects/${subject.id}/reports/${subject.latestReport!.id}`;
+  const card = page
+    .locator(".care-subject-card")
+    .filter({ hasText: subject.tag });
+  await page.goto("/care");
+  await expect(card).toHaveAttribute("role", "group");
+  await expect(card).toHaveAttribute("tabindex", "0");
+  await expect(card).toHaveAttribute(
+    "aria-label",
+    `Open completed report for ${subject.tag}`,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("care-clickable-resident-card.png"),
+    animations: "disabled",
+  });
+  await card
+    .getByRole("heading", { name: "Bed observation", exact: true })
+    .click();
+  await expect(page).toHaveURL(target);
+  await expect(
+    page.getByRole("img", { name: coordinatedGraphs, exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: /Back to overview$/ }).click();
+  await card.focus();
+  await card.press("Enter");
+  await expect(page).toHaveURL(target);
+  await expect(
+    page.getByRole("img", { name: coordinatedGraphs, exact: true }),
+  ).toBeVisible();
+  expect(fixture.calls.filter((call) => call.method !== "GET")).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+for (const scenario of [
+  {
+    name: "no eligible report",
+    tablet: false,
+    reportsAvailable: true,
+    denied: false,
+    latest: "none",
+    message: "No eligible completed report is available.",
+  },
+  {
+    name: "denied reports",
+    tablet: true,
+    reportsAvailable: true,
+    denied: true,
+    latest: "valid",
+    message: "Measurement and report access is not enabled for this account.",
+  },
+  {
+    name: "unconfigured reports",
+    tablet: false,
+    reportsAvailable: false,
+    denied: false,
+    latest: "valid",
+    message: "Stored reports are currently unavailable. Refresh to try again.",
+  },
+  {
+    name: "a latest report belonging to another subject",
+    tablet: false,
+    reportsAvailable: true,
+    denied: false,
+    latest: "wrong-parent",
+    message: "No eligible completed report is available.",
+  },
+] as const) {
+  test(`resident activation with ${scenario.name} opens the subject's honest unavailable view`, async ({
+    page,
+  }) => {
+    if (scenario.tablet)
+      await page.setViewportSize({ width: 768, height: 1024 });
+    const subjects = syntheticCareSubjects(1);
+    const subject = subjects[0];
+    if (scenario.latest === "none") subject.latestReport = null;
+    if (scenario.latest === "wrong-parent")
+      subject.latestReport!.subjectId = "9223372036854775805";
+    const fixture = await installCareFixtures(page, {
+      subjects,
+      reportsAvailable: scenario.reportsAvailable,
+      reportAccess: scenario.denied ? "denied" : "allowed",
+    });
+    await page.goto("/care");
+    if (scenario.tablet) {
+      const card = page
+        .locator(".care-subject-card")
+        .filter({ hasText: subject.tag });
+      await expect(card).toHaveAttribute(
+        "aria-label",
+        `Open asset ${subject.tag}`,
+      );
+      await card
+        .getByRole("heading", { name: "Bed observation", exact: true })
+        .click();
+    } else {
+      await page
+        .locator(`tr[data-row-key="${subject.id}"]`)
+        .getByText(subject.label, { exact: true })
+        .click();
+    }
+    await expect(page).toHaveURL(`/care/subjects/${subject.id}`);
+    await expect(
+      page.getByText(scenario.message, {
+        exact: scenario.latest !== "none" && scenario.latest !== "wrong-parent",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Report graphs", exact: true }),
+    ).toHaveCount(0);
+    expect(fixture.calls.some((call) => call.path.includes("/reports/"))).toBe(
+      false,
+    );
+    expect(fixture.calls.filter((call) => call.method !== "GET")).toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
 
 test("direct report URL and reload preserve exact subject/report identities", async ({
   page,

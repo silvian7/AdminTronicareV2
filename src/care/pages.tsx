@@ -33,6 +33,7 @@ import "./pages.css";
 import { ReportNavigation } from "./report-navigation";
 import { BedPictogram } from "../components/bed-pictogram";
 import { HubStatus } from "../components/hub-status";
+import { navigationRow } from "../components/record-row";
 const ReportGraphs = lazy(() => import("./report-graphs"));
 
 function useStatusTime() {
@@ -207,6 +208,7 @@ function pageNumber(value: string | null, fallback: number, maximum: number) {
 }
 
 export function CareOverview() {
+  const navigate = useNavigate();
   const statusNow = useStatusTime();
   const { identity, organization } = useAdmin();
   const [params, setParams] = useSearchParams();
@@ -226,6 +228,30 @@ export function CareOverview() {
   const rows = response?.data ?? [];
   const denied = response?.reportAccess === "denied";
   const available = response?.reportsAvailable === true;
+  const reportFor = (subject: CareSubject) =>
+    available && !denied && knownReport(subject.latestReport, subject.id)
+      ? subject.latestReport
+      : null;
+  const destination = (subject: CareSubject) =>
+    careSubjectUrl(subject.id, reportFor(subject)?.id);
+  const rowLabel = (subject: CareSubject) =>
+    reportFor(subject)
+      ? `Open completed report for ${subjectName(subject)}`
+      : `Open asset ${subjectName(subject)}`;
+  const subjectRow = (subject: CareSubject) =>
+    validCareId(subject.id)
+      ? navigationRow<HTMLTableRowElement>(
+          () => navigate(destination(subject)),
+          rowLabel(subject),
+        )
+      : {};
+  const subjectCard = (subject: CareSubject) =>
+    validCareId(subject.id)
+      ? navigationRow<HTMLDivElement>(
+          () => navigate(destination(subject)),
+          rowLabel(subject),
+        )
+      : {};
   function setFilters(q: string, nextPage: number, nextSize: number) {
     const next = new URLSearchParams(params);
     if (q.trim()) next.set("q", q.trim());
@@ -241,7 +267,7 @@ export function CareOverview() {
       <div className="care-asset-identity">
         <div className="care-asset-title">
           <HubStatus value={subject.lastEventAt} now={statusNow} />
-          <Link to={careSubjectUrl(subject.id)}>{name}</Link>
+          <Link to={destination(subject)}>{name}</Link>
         </div>
         {label && label !== name && (
           <Typography.Text type="secondary">{label}</Typography.Text>
@@ -341,11 +367,17 @@ export function CareOverview() {
                   dataSource={rows}
                   rowKey="id"
                   pagination={false}
+                  onRow={subjectRow}
                 />
               </div>
               <div className="care-subject-cards">
                 {rows.map((subject) => (
-                  <Card key={subject.id} className="care-subject-card">
+                  <Card
+                    key={subject.id}
+                    {...subjectCard(subject)}
+                    role="group"
+                    className="care-subject-card"
+                  >
                     {assetIdentity(subject)}
                     <h2>Bed observation</h2>
                     <BedObservation subject={subject} />

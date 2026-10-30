@@ -148,6 +148,13 @@
 .care-subject-cards {
   display: none;
 }
+.care-subject-card[tabindex="0"] {
+  cursor: pointer;
+}
+.care-subject-card[tabindex="0"]:hover {
+  border-color: #087f8c;
+  background: #f5fafb;
+}
 .care-pagination {
   align-self: flex-end;
   row-gap: 12px;
