@@ -196,7 +196,13 @@ export default function CareTrendsPage() {
     const result = new Map<string, CareMetric>();
     for (const day of data?.days ?? [])
       for (const metric of day.report?.metrics ?? [])
-        if (!result.has(metric.key)) result.set(metric.key, metric);
+        if (!result.has(metric.key)) {
+          const label = metric.label.replace(/^vendor\s+/i, "");
+          result.set(metric.key, {
+            ...metric,
+            label: label.charAt(0).toUpperCase() + label.slice(1),
+          });
+        }
     return [...result.values()];
   }, [data]);
   const metric =
@@ -221,15 +227,6 @@ export default function CareTrendsPage() {
   );
   return (
     <div className="care-page care-trends">
-      <div className="care-detail-links">
-        <Link
-          className="care-back-link"
-          to={validCareId(subjectId) ? careSubjectUrl(subjectId) : "/care"}
-        >
-          Back to asset
-        </Link>
-        <Link to="/care">Overview</Link>
-      </div>
       <div className="care-page-heading">
         <div>
           <h1>Historical trends</h1>
@@ -241,16 +238,6 @@ export default function CareTrendsPage() {
             </p>
           )}
         </div>
-        <Button
-          disabled={!validCareId(subjectId)}
-          loading={subjectQuery.isFetching || query.isFetching}
-          onClick={() => {
-            if (validCareId(subjectId)) void subjectQuery.refetch();
-            if (allowed && rangeValid) void query.refetch();
-          }}
-        >
-          Refresh trends
-        </Button>
       </div>
       {!validCareId(subjectId) || !rangeValid ? (
         <Alert
@@ -497,10 +484,10 @@ export default function CareTrendsPage() {
                 title={<h2 className="care-card-heading">Breathing history</h2>}
               >
                 <p>
-                  Vendor recorded apnea/hypopnea events per report. Each
-                  separate source uses its latest eligible completed report
-                  start and the ingester's exclusive 28-day cutoff,
-                  independently of the trend dates selected above.
+                  Recorded apnea/hypopnea events per report. Each separate
+                  source uses its latest eligible completed report start and the
+                  ingester's exclusive 28-day cutoff, independently of the trend
+                  dates selected above.
                 </p>
                 {!breath ? (
                   <Empty description="Breathing history is unavailable." />

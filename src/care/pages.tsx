@@ -163,12 +163,6 @@ function LatestReport({
   return (
     <div className="care-latest-report">
       <Period period={report.period} />
-      <Link
-        to={careSubjectUrl(subject.id, report.id)}
-        aria-label={`Open completed report for ${subjectName(subject)}`}
-      >
-        Open report
-      </Link>
     </div>
   );
 }

@@ -167,7 +167,7 @@ export function BreathHistoryPlot({
           const index = (raw as { dataIndex?: number }).dataIndex;
           const point = index === undefined ? undefined : points[index];
           return point
-            ? `${careDate(point.period.reportDate)}\nVendor recorded events: ${point.value} events/report\n${careDateTime(point.period.start)} → ${careDateTime(point.period.endExclusive)} (exclusive)`
+            ? `${careDate(point.period.reportDate)}\nRecorded events: ${point.value} events/report\n${careDateTime(point.period.start)} → ${careDateTime(point.period.endExclusive)} (exclusive)`
             : "";
         },
       },

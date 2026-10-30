@@ -7,7 +7,7 @@ import {
 
 test.use({ locale: "en-US", timezoneId: "America/New_York" });
 const coordinatedGraphs =
-  "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
+  "Bed presence, heart rate, respiration, movement and HRV over time";
 
 test("original bed pictograms and Asset event-age discs remain distinct", async ({
   page,
@@ -129,6 +129,12 @@ test("overview shows resident identities, accessible bed images and dated observ
   await expect(
     page.getByRole("columnheader", { name: "Resident", exact: true }),
   ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Caregiver navigation", exact: true })
+      .getByRole("link", { name: "Overview", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Overview", { exact: true })).toHaveCount(0);
   await expect(page.locator(".care-context")).toContainText(
     syntheticCareOrganizationTag("1"),
   );
@@ -159,7 +165,9 @@ test("overview shows resident identities, accessible bed images and dated observ
   await expect(first.locator(".care-bed-observation time")).toBeVisible();
   await expect(
     first.getByRole("link", { name: /Open completed report/ }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(first.locator(".care-latest-report time")).toHaveCount(2);
+  await expect(page.getByText("Open report", { exact: true })).toHaveCount(0);
   const second = page
     .getByRole("row")
     .filter({ hasText: fixture.subjects[1].tag });
@@ -386,12 +394,15 @@ test("desktop resident rows open the exact latest graphs while selection, modifi
     .getByRole("navigation", { name: "Caregiver navigation", exact: true })
     .getByRole("link", { name: "Overview", exact: true })
     .click();
-  const nestedReport = row.getByRole("link", { name: /Open completed report/ });
-  await expect(nestedReport).toHaveAttribute("href", target);
-  await nestedReport.focus();
-  await nestedReport.press("Space");
+  const nestedIdentity = row.getByRole("link", {
+    name: subject.tag,
+    exact: true,
+  });
+  await expect(nestedIdentity).toHaveAttribute("href", target);
+  await nestedIdentity.focus();
+  await nestedIdentity.press("Space");
   await expect(page).toHaveURL(/\/care$/);
-  await nestedReport.press("Enter");
+  await nestedIdentity.press("Enter");
   await expect(page).toHaveURL(target);
   await expect(graph).toBeVisible();
 
@@ -437,6 +448,11 @@ test("tablet resident cards open latest report graphs from plain card content an
     "aria-label",
     `Open completed report for ${subject.tag}`,
   );
+  await expect(
+    card.getByRole("link", { name: /Open completed report/ }),
+  ).toHaveCount(0);
+  await expect(card.getByText("Open report", { exact: true })).toHaveCount(0);
+  await expect(card.locator(".care-latest-report time")).toHaveCount(2);
   await page.screenshot({
     path: testInfo.outputPath("care-clickable-resident-card.png"),
     animations: "disabled",

@@ -138,7 +138,7 @@ function optionFor(data: CareSeries, hrv: VendorHrv | null): EChartsCoreOption {
           const inBin =
             Date.parse(bin.at) <= pointer &&
             pointer < Date.parse(bin.endExclusive);
-          text += `\nVendor HRV sample: ${sampleTime(bin.at)}\nVendor HRV: ${numeric(bin.value)}${bin.value === null ? "" : " ms"}${inBin ? "" : "\nNearest HRV sample; not a reading at the cursor."}`;
+          text += `\nHRV sample: ${sampleTime(bin.at)}\nHRV: ${numeric(bin.value)}${bin.value === null ? "" : " ms"}${inBin ? "" : "\nNearest HRV sample; not a reading at the cursor."}`;
         }
         return text;
       },
@@ -236,7 +236,7 @@ function optionFor(data: CareSeries, hrv: VendorHrv | null): EChartsCoreOption {
         })),
       },
       {
-        name: "Vendor HRV",
+        name: "HRV",
         type: "line",
         xAxisIndex: 4,
         yAxisIndex: 4,
@@ -385,36 +385,32 @@ function GraphView({ data }: { data: CareSeries }) {
         .
       </p>
       <div className="care-graph-figure care-graph-with-hrv">
-        {[
-          "Bed presence",
-          "Heart rate",
-          "Respiration",
-          "Movement",
-          "Vendor HRV",
-        ].map((title, index) => (
-          <h3
-            key={title}
-            className={`care-graph-panel-title care-graph-panel-${index}`}
-          >
-            {title}
-            <small>
-              {
-                [
-                  "Observed intervals",
-                  "beats/min",
-                  "breaths/min",
-                  "Status-34 event flag",
-                  hrv ? "ms · five-minute samples" : "Not available",
-                ][index]
-              }
-            </small>
-          </h3>
-        ))}
+        {["Bed presence", "Heart rate", "Respiration", "Movement", "HRV"].map(
+          (title, index) => (
+            <h3
+              key={title}
+              className={`care-graph-panel-title care-graph-panel-${index}`}
+            >
+              {title}
+              <small>
+                {
+                  [
+                    "Observed intervals",
+                    "beats/min",
+                    "breaths/min",
+                    "Status-34 event flag",
+                    hrv ? "ms · five-minute samples" : "Not available",
+                  ][index]
+                }
+              </small>
+            </h3>
+          ),
+        )}
         <div
           ref={element}
           className="care-report-chart"
           role="img"
-          aria-label="Bed presence, heart rate, respiration, movement and Vendor HRV over time"
+          aria-label="Bed presence, heart rate, respiration, movement and HRV over time"
         />
       </div>
       <div className="care-graph-legend" aria-label="Graph legend">
@@ -433,9 +429,8 @@ function GraphView({ data }: { data: CareSeries }) {
       </div>
       <p className="care-note">
         Scroll or pinch to zoom; drag to pan. All visible panels share the same
-        time window. Missing readings remain gaps. Movement shows the vendor
-        status-34 event flag, not a movement count or continuous activity
-        measurement.
+        time window. Missing readings remain gaps. Movement shows the status-34
+        event flag, not a movement count or continuous activity measurement.
       </p>
     </>
   );

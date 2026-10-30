@@ -39,6 +39,16 @@ test("seven-day trends distinguish available, incomplete, missing and recorded z
   await expect(
     page.getByRole("img", { name: "Daily report trend", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Refresh trends$/ }),
+  ).toHaveCount(0);
+  const trendsPage = page.locator(".care-trends");
+  await expect(
+    trendsPage.getByRole("link", { name: "Overview", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    trendsPage.getByRole("link", { name: "Back to asset", exact: true }),
+  ).toHaveCount(0);
   await expect
     .poll(() =>
       fixture.calls.some(
@@ -60,9 +70,14 @@ test("seven-day trends distinguish available, incomplete, missing and recorded z
   });
   await metric.focus();
   await metric.press("ArrowDown");
+  await expect(
+    page
+      .locator(".ant-select-dropdown:visible .ant-select-item-option")
+      .filter({ hasText: /\bVendor\b/i }),
+  ).toHaveCount(0);
   await page
     .locator(".ant-select-dropdown:visible .ant-select-item-option")
-    .filter({ hasText: "Vendor apnea/hypopnea events" })
+    .filter({ hasText: "Apnea/hypopnea events" })
     .click();
   await expect(
     dayRow(page, "2026-10-27").getByRole("cell", { name: "0", exact: true }),
@@ -70,6 +85,7 @@ test("seven-day trends distinguish available, incomplete, missing and recorded z
   await expect(dayRow(page, "2026-10-24")).toContainText("Not available");
   await metric.press("Escape");
   await expect(page.locator(".ant-select-dropdown:visible")).toHaveCount(0);
+  expect(await page.getByRole("main").innerText()).not.toMatch(/\bVendor\b/i);
   await page.screenshot({
     path: testInfo.outputPath("care-trends-desktop.png"),
     fullPage: true,
@@ -259,7 +275,7 @@ test("a different subject cannot reuse another subject's trend response", async 
     ),
   });
   await page
-    .getByRole("main")
+    .getByRole("navigation", { name: "Caregiver navigation", exact: true })
     .getByRole("link", { name: "Overview", exact: true })
     .click();
   await page.getByRole("link", { name: target.tag, exact: true }).click();

@@ -30,6 +30,7 @@ export function CareLayout() {
   const [busy, setBusy] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const onOverview = /^\/care\/?$/.test(location.pathname);
   const selectedSubject = /^\/care\/subjects\/([1-9]\d*)(?:\/|$)/.exec(
     location.pathname,
   )?.[1];
@@ -101,12 +102,7 @@ export function CareLayout() {
           </span>
         </Link>
         <nav aria-label="Caregiver navigation">
-          <Link
-            to="/care"
-            aria-current={location.pathname === "/care" ? "page" : undefined}
-          >
-            Overview
-          </Link>
+          {!onOverview && <Link to="/care">Overview</Link>}
           {validCareId(selectedSubject) && (
             <>
               <Link

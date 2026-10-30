@@ -3,7 +3,7 @@ import { installCareFixtures, syntheticCareSeries } from "./care-fixtures";
 
 test.use({ timezoneId: "America/New_York" });
 const chartName =
-  "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
+  "Bed presence, heart rate, respiration, movement and HRV over time";
 
 async function openReport(page: Page) {
   const fixture = await installCareFixtures(page);
@@ -152,13 +152,13 @@ test("five coordinated panels remain visible while inspection and bed-exit secti
     "Heart rate",
     "Respiration",
     "Movement",
-    "Vendor HRV",
+    "HRV",
   ]) {
     await expect(
       graphs.getByRole("heading", { name: new RegExp(`^${title}`) }),
     ).toBeVisible();
   }
-  for (const name of ["Sample values", "Vendor HRV sample values", "Bed exits"])
+  for (const name of ["Sample values", "HRV sample values", "Bed exits"])
     await expect(graphs.getByRole("region", { name, exact: true })).toHaveCount(
       0,
     );
@@ -256,9 +256,9 @@ test("empty measurements remain unavailable without zero curves or invented exit
     }),
   ).toBeVisible();
   await expect(page.getByRole("img", { name: chartName })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /^Vendor HRV/ }),
-  ).toContainText("Not available");
+  await expect(page.getByRole("heading", { name: /^HRV/ })).toContainText(
+    "Not available",
+  );
   await expect(
     page.getByRole("button", { name: /^Inspect bed exit at/ }),
   ).toHaveCount(0);
@@ -346,7 +346,7 @@ test("desktop and tablet graph layouts resize without clipping and preserve visi
   expect(fixture.unexpected).toEqual([]);
 });
 
-test("vendor HRV is always visible and shares zoom without an inspection section", async ({
+test("HRV is always visible and shares zoom without an inspection section", async ({
   page,
 }, testInfo) => {
   const { fixture, report, graphs } = await openReport(page);
@@ -360,22 +360,24 @@ test("vendor HRV is always visible and shares zoom without an inspection section
   const seriesCalls = fixture.calls.filter((call) =>
     call.path.endsWith("/series"),
   ).length;
+  await expect(graphs.getByRole("heading", { name: /^HRV/ })).toBeVisible();
   await expect(
     graphs.getByRole("heading", { name: /^Vendor HRV/ }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  expect(await graphs.innerText()).not.toMatch(/\bVendor\b/i);
   await expect(
     graphs.getByRole("img", {
-      name: "Bed presence, heart rate, respiration, movement and Vendor HRV over time",
+      name: "Bed presence, heart rate, respiration, movement and HRV over time",
       exact: true,
     }),
   ).toBeVisible();
   await expect.poll(() => bounds(graphs)).toEqual(before);
-  await expect(
-    graphs.getByRole("heading", { name: /^Vendor HRV/ }),
-  ).toContainText("ms");
+  await expect(graphs.getByRole("heading", { name: /^HRV/ })).toContainText(
+    "ms",
+  );
   await expect(
     graphs.getByRole("region", {
-      name: "Vendor HRV sample values",
+      name: "HRV sample values",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -397,7 +399,7 @@ test("vendor HRV is always visible and shares zoom without an inspection section
     path: testInfo.outputPath("care-vendor-hrv-tablet.png"),
   });
   await expect(
-    graphs.getByRole("checkbox", { name: "Show Vendor HRV", exact: true }),
+    graphs.getByRole("checkbox", { name: "Show HRV", exact: true }),
   ).toHaveCount(0);
   await expect(
     graphs.getByRole("img", { name: chartName, exact: true }),

@@ -1007,3 +1007,40 @@ confirmed desktop inline placement, tablet wrapping, keyboard order and no
 clipping. Formatting, diff checks and the production build/typecheck passed;
 local Admin was rebuilt/restarted healthy and served-bundle/authentication checks
 passed. No report-query behavior or data changed.
+
+## Remove repeated overview navigation text — 30 October 2026
+
+Hidden the Overview navigation link on `/care` and `/care/` in
+`src/care/layout.tsx`; other caregiver pages retain that return link. Removed
+the Open report link from `LatestReport` in `src/care/pages.tsx`, covering both
+desktop rows and tablet cards. Reporting periods, resident-name links and
+click/keyboard navigation on rows/cards remain.
+
+Formatting, diff checks and the production container build/typecheck passed.
+Local Admin was rebuilt/restarted healthy; health, SPA/deep-link, anonymous
+authentication boundaries and served-image checks passed. Five affected existing
+browser cases passed against synthetic fixtures using the exact container-built
+assets: overview text/link absence, desktop/tablet row navigation and keyboard
+guards, report-header return navigation, and report neighbors/history/reload.
+The tablet screenshot was reviewed for readability and clipping. Temporary
+synthetic preview was stopped after verification.
+
+## Simplify HRV and Trends labels and controls — 30 October 2026
+
+Renamed the graph's Vendor HRV display to HRV in `src/care/report-graphs.tsx`,
+including the panel heading, series name, tooltip and accessible chart label.
+Removed vendor wording from the graph movement note, breathing-history note and
+tooltip. In `src/care/trends.tsx`, metric display labels omit the Vendor prefix
+and capitalize their first letter; selector, heading, table and chart reuse those
+display labels. API metadata, metric keys, source definitions and values remain
+unchanged. Removed Refresh trends and the page-level Overview/Back to asset
+links above the Trends heading.
+
+Formatting, diff checks and the production container build/typecheck passed.
+Local Admin was rebuilt/restarted healthy; health, SPA/deep-link, authentication
+boundaries, served-image hashes and HRV display checks passed. Five affected
+existing browser cases passed against synthetic fixtures using the exact final
+container assets. Checks cover HRV and metric naming, removed Trends controls,
+desktop row/header navigation and cross-subject isolation. Reviewed HRV tablet
+and Trends desktop captures for correct text and contained layout. Temporary
+synthetic preview was stopped after verification.

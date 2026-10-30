@@ -9,9 +9,9 @@ import {
 test.use({ timezoneId: "America/New_York" });
 
 const fourPanels =
-  "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
+  "Bed presence, heart rate, respiration, movement and HRV over time";
 const fivePanels =
-  "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
+  "Bed presence, heart rate, respiration, movement and HRV over time";
 const graphRegion = (page: Page) =>
   page.getByRole("region", { name: "Report graphs", exact: true });
 
@@ -183,9 +183,9 @@ test("Brussels DST labels distinguish repeated local times while UTC report boun
       Date.parse(report.period.start),
       Date.parse(report.period.endExclusive),
     ]);
-  await expect(
-    graphs.getByRole("heading", { name: /^Vendor HRV/ }),
-  ).toContainText("Not available");
+  await expect(graphs.getByRole("heading", { name: /^HRV/ })).toContainText(
+    "Not available",
+  );
   await expect(page).toHaveURL(new RegExp(`/reports/${report.id}$`));
   await page.reload();
   await expect(graphs.getByRole("img", { name: fourPanels })).toBeVisible();
@@ -280,13 +280,11 @@ test("maximum bounded series remains operable with 5000 points, 5000 intervals a
   await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect.poll(() => visibleBounds(graphs)).not.toEqual(fullBounds);
   await graphs.getByRole("button", { name: "Pan later", exact: true }).click();
-  for (const name of ["Sample values", "Vendor HRV sample values", "Bed exits"])
+  for (const name of ["Sample values", "HRV sample values", "Bed exits"])
     await expect(graphs.getByRole("region", { name, exact: true })).toHaveCount(
       0,
     );
-  await expect(
-    graphs.getByRole("heading", { name: /^Vendor HRV/ }),
-  ).toBeVisible();
+  await expect(graphs.getByRole("heading", { name: /^HRV/ })).toBeVisible();
   await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
   await expect.poll(() => visibleBounds(graphs)).toEqual(fullBounds);
   expect(
@@ -417,7 +415,7 @@ for (const field of ["points", "bedPresence"] as const) {
     ).toBeVisible();
     await expect(graphs.getByRole("img", { name: fourPanels })).toHaveCount(0);
     await expect(
-      graphs.getByRole("checkbox", { name: "Show Vendor HRV", exact: true }),
+      graphs.getByRole("checkbox", { name: "Show HRV", exact: true }),
     ).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);
   });
