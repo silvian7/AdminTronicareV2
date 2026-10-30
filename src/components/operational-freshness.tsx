@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { focusManager } from "@tanstack/react-query";
 import { Typography } from "antd";
+import {
+  DISPLAY_TIME_ZONE,
+  formatDisplayDateTime,
+} from "../../shared/date-time";
 
 interface OperationalQuery {
   refetch(options: { cancelRefetch: false }): Promise<unknown>;
@@ -48,11 +52,8 @@ export function LastRefreshed({
     >
       Last refreshed:{" "}
       {date ? (
-        <time
-          dateTime={date.toISOString()}
-          title={Intl.DateTimeFormat().resolvedOptions().timeZone}
-        >
-          {date.toLocaleString(undefined, { hourCycle: "h23" })}
+        <time dateTime={date.toISOString()} title={DISPLAY_TIME_ZONE}>
+          {formatDisplayDateTime(date)}
         </time>
       ) : (
         "Not yet available"

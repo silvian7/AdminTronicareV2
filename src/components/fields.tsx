@@ -29,6 +29,11 @@ import {
   type RecordData,
 } from "../../shared/resources";
 import { useAdmin } from "../context";
+import {
+  DISPLAY_TIME_ZONE,
+  formatDisplayClock,
+  formatDisplayDateTime,
+} from "../../shared/date-time";
 import { hubLastEventTime } from "../../shared/hub-status";
 import { sensorLastReadingTime } from "../../shared/sensor-reading";
 import { linkedHubAssetIds } from "../../shared/hub-assets";
@@ -415,19 +420,22 @@ export function FieldValue({
     return <pre className="record-value">{JSON.stringify(value, null, 2)}</pre>;
   if (field.type === "integer")
     return <span className="numeric-value">{String(value)}</span>;
+  if (name.startsWith("Dt") || name === "DateNaissance") {
+    const raw = String(value);
+    const parts = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return <span>{parts ? `${parts[3]}/${parts[2]}/${parts[1]}` : raw}</span>;
+  }
   if (/^(Dh|Created|Modified|LastLogin|LastLogout)/.test(name)) {
     const raw = String(value);
-    let date: Date | undefined;
-    if (!/local datetime/i.test(field.description ?? ""))
-      date = new Date(
-        raw +
-          (raw.includes("T") && !/Z$|[+-]\d{2}:\d{2}$/.test(raw) ? "Z" : ""),
-      );
+    // These legacy fields are wall-clock values, rather than UTC instants.
+    const localParts = /local datetime/i.test(field.description ?? "")
+      ? raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}:\d{2}:\d{2})(\.\d+)?$/)
+      : null;
     return (
-      <span title={raw}>
-        {date && !isNaN(date.getTime())
-          ? date.toLocaleString(undefined, { hourCycle: "h23" })
-          : raw.replace("T", " ")}
+      <span title={DISPLAY_TIME_ZONE}>
+        {localParts
+          ? `${localParts[3]}/${localParts[2]}/${localParts[1]}, ${localParts[4]}${localParts[5] ?? ""}`
+          : formatDisplayDateTime(raw)}
       </span>
     );
   }
@@ -790,9 +798,9 @@ function LocalEventTime({ timestamp }: { timestamp: number | null }) {
     <time
       className="numeric-value"
       dateTime={date.toISOString()}
-      title={Intl.DateTimeFormat().resolvedOptions().timeZone}
+      title={DISPLAY_TIME_ZONE}
     >
-      {date.toLocaleString(undefined, { hourCycle: "h23" })}
+      {formatDisplayDateTime(date)}
     </time>
   );
 }
@@ -816,22 +824,16 @@ export function RuleDurationSeconds({ value }: { value: unknown }) {
 export function RuleScheduleTime({ value }: { value: unknown }) {
   const date = utcScheduleDate(value, new Date());
   if (!date) return <span className="muted">—</span>;
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const localDate = date.toLocaleString(undefined, {
-    hourCycle: "h23",
+  const localDate = formatDisplayDateTime(date, {
     timeZoneName: "shortOffset",
   });
   return (
     <time
       className="numeric-value"
       dateTime={date.toISOString()}
-      title={`${timezone}: ${localDate}; ${String(value).trim()} UTC on ${date.toISOString().slice(0, 10)} (today's UTC date)`}
+      title={`${DISPLAY_TIME_ZONE}: ${localDate}`}
     >
-      {date.toLocaleTimeString(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hourCycle: "h23",
+      {formatDisplayClock(date, {
         ...(date.getUTCMilliseconds() ? { fractionalSecondDigits: 3 } : {}),
       })}
     </time>

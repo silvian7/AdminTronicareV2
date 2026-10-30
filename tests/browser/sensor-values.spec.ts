@@ -485,7 +485,7 @@ test("old sensor readings remain reported values with their event time on the li
   await expect(page.locator("time")).toHaveText("02/01/2020, 04:04:05");
 });
 
-test.describe("sensor event time follows a different browser timezone", () => {
+test.describe("sensor event time stays in Brussels in a different browser timezone", () => {
   test.use({ timezoneId: "America/New_York" });
 
   test("offset, compact and genuine epoch timestamps display local time and preserve the absolute event time", async ({
@@ -515,15 +515,15 @@ test.describe("sensor event time follows a different browser timezone", () => {
       ),
     ).toBe("America/New_York");
     for (const [id, display, iso] of [
-      ["61", "08/10/2026, 02:10:11", "2026-10-08T06:10:11.000Z"],
-      ["62", "08/10/2026, 02:10:12", "2026-10-08T06:10:12.000Z"],
-      ["63", "31/12/1969, 19:00:00", "1970-01-01T00:00:00.000Z"],
+      ["61", "08/10/2026, 08:10:11", "2026-10-08T06:10:11.000Z"],
+      ["62", "08/10/2026, 08:10:12", "2026-10-08T06:10:12.000Z"],
+      ["63", "01/01/1970, 01:00:00", "1970-01-01T00:00:00.000Z"],
     ]) {
       const cell = await lastReadingCell(page, id);
       await expect(cell).toHaveText(display);
       await expect(cell.locator("time")).toHaveAttribute(
         "title",
-        /America\/New_York/,
+        /Europe\/Brussels/,
       );
       const dateTime = await cell.locator("time").getAttribute("datetime");
       expect(new Date(dateTime!).toISOString()).toBe(iso);
@@ -591,9 +591,9 @@ test.describe("local times use a 24-hour clock even in a 12-hour browser locale"
     });
     await descendToSensors(page);
     for (const [id, display, instant] of [
-      ["61", "1/15/2026, 13:34:56", "2026-01-15T12:34:56.000Z"],
-      ["62", "7/15/2026, 14:34:56", "2026-07-15T12:34:56.000Z"],
-      ["63", "1/16/2026, 00:04:05", "2026-01-15T23:04:05.000Z"],
+      ["61", "15/01/2026, 13:34:56", "2026-01-15T12:34:56.000Z"],
+      ["62", "15/07/2026, 14:34:56", "2026-07-15T12:34:56.000Z"],
+      ["63", "16/01/2026, 00:04:05", "2026-01-15T23:04:05.000Z"],
     ]) {
       const cell = await lastReadingCell(page, id);
       await expect(cell).toHaveText(display);
@@ -607,10 +607,10 @@ test.describe("local times use a 24-hour clock even in a 12-hour browser locale"
       .getByRole("cell", { name: "61", exact: true })
       .click();
     await expect(page).toHaveURL("/sensors/61");
-    for (const [label, display, raw] of [
-      ["Created", "1/15/2026, 13:45:56", created],
-      ["Modified", "1/16/2026, 00:04:05", modified],
-      ["Last reading", "1/15/2026, 13:34:56", "2026-01-15T12:34:56Z"],
+    for (const [label, display] of [
+      ["Created", "15/01/2026, 13:45:56"],
+      ["Modified", "16/01/2026, 00:04:05"],
+      ["Last reading", "15/01/2026, 13:34:56"],
     ]) {
       const content = page
         .locator(".ant-descriptions-item-label")
@@ -625,7 +625,7 @@ test.describe("local times use a 24-hour clock even in a 12-hour browser locale"
       else
         await expect(content.locator("span[title]")).toHaveAttribute(
           "title",
-          raw,
+          "Europe/Brussels",
         );
     }
   });

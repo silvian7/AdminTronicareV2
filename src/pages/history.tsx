@@ -14,6 +14,18 @@ import {
 import { resourceMap, valueOf, type RecordData } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { useRecordRow } from "../components/record-row";
+import { parseBrusselsDateTimeInput } from "../../shared/date-time";
+
+const brusselsDateTimeRule = {
+  validator: (_: unknown, value: string | undefined) =>
+    !value || parseBrusselsDateTimeInput(value)
+      ? Promise.resolve()
+      : Promise.reject(
+          new Error(
+            "Enter a valid Brussels date and time. Avoid times skipped or repeated by daylight saving changes.",
+          ),
+        ),
+};
 
 interface HistoryResponse {
   data: RecordData[];
@@ -124,8 +136,11 @@ export function SensorHistory() {
               [target === "sensor" ? "idsensor" : "idasset"]: values.id,
               filter: values.filter,
             };
-            if (values.start) query.dhstart = `${values.start}:00Z`;
-            if (values.end) query.dhend = `${values.end}:00Z`;
+            const start =
+              values.start && parseBrusselsDateTimeInput(values.start);
+            const end = values.end && parseBrusselsDateTimeInput(values.end);
+            if (start) query.dhstart = start;
+            if (end) query.dhend = end;
             setBaseQuery(query);
             setParams({
               [target === "sensor" ? "idsensor" : "idasset"]: values.id,
@@ -159,11 +174,19 @@ export function SensorHistory() {
                 allowZero={false}
               />
             </Form.Item>
-            <Form.Item name="start" label="From (UTC)">
-              <Input type="datetime-local" />
+            <Form.Item
+              name="start"
+              label="From (Brussels)"
+              rules={[brusselsDateTimeRule]}
+            >
+              <Input type="datetime-local" step="1" />
             </Form.Item>
-            <Form.Item name="end" label="Until (UTC)">
-              <Input type="datetime-local" />
+            <Form.Item
+              name="end"
+              label="Until (Brussels)"
+              rules={[brusselsDateTimeRule]}
+            >
+              <Input type="datetime-local" step="1" />
             </Form.Item>
             <Form.Item name="filter" label="Readings">
               <Radio.Group

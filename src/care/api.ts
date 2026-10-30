@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { getSessionEpoch, request } from "../api";
 import { useAdmin } from "../context";
+import {
+  DISPLAY_TIME_ZONE,
+  formatDisplayDateTime,
+} from "../../shared/date-time";
 import type {
   CareReportDetail,
   CareReports,
@@ -19,19 +23,8 @@ export const validCareId = (id: string | undefined): id is string =>
 export function careSubjectUrl(subjectId: string, reportId?: string) {
   return `/care/subjects/${encodeURIComponent(subjectId)}${reportId ? `/reports/${encodeURIComponent(reportId)}` : ""}`;
 }
-const displayDateTime = new Intl.DateTimeFormat("en-GB", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hourCycle: "h23",
-  timeZoneName: "short",
-});
 export function careDateTime(value: string | null | undefined) {
-  if (!value || !Number.isFinite(Date.parse(value))) return "Not available";
-  return displayDateTime.format(new Date(value));
+  return formatDisplayDateTime(value, { timeZoneName: "short" });
 }
 export function careDate(value: string | null | undefined) {
   return validCareDate(value)
@@ -39,7 +32,7 @@ export function careDate(value: string | null | undefined) {
     : "Not available";
 }
 export function careDisplayTimezone() {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return DISPLAY_TIME_ZONE;
 }
 function useCareScope() {
   const { identity, organization } = useAdmin();

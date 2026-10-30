@@ -4,6 +4,7 @@ import { LineChart, ScatterChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { CareMetric, CareTrends } from "../../shared/care";
+import { formatDisplayDate } from "../../shared/date-time";
 import { careDate, careDateTime } from "./api";
 
 use([LineChart, ScatterChart, GridComponent, TooltipComponent, CanvasRenderer]);
@@ -88,7 +89,7 @@ export function DailyTrendPlot({
           const value = day.report?.metrics.find(
             (item) => item.key === metric.key,
           )?.value;
-          return `${careDate(day.date)} (UTC report date)\n${metric.label}: ${value == null ? "Not available" : `${value} ${metric.unit}`}\n${day.report ? `${careDateTime(day.report.period.start)} → ${careDateTime(day.report.period.endExclusive)} (exclusive)` : day.status === "incomplete" ? "Incomplete report" : "No eligible completed report"}`;
+          return `${careDate(day.date)}\n${metric.label}: ${value == null ? "Not available" : `${value} ${metric.unit}`}\n${day.report ? `${careDateTime(day.report.period.start)} → ${careDateTime(day.report.period.endExclusive)} (exclusive)` : day.status === "incomplete" ? "Incomplete report" : "No eligible completed report"}`;
         },
       },
       series: [
@@ -148,8 +149,7 @@ export function BreathHistoryPlot({
         max: Date.parse(group.endInclusive),
         axisLabel: {
           hideOverlap: true,
-          formatter: (value: number) =>
-            careDate(new Date(value).toISOString().slice(0, 10)),
+          formatter: (value: number) => formatDisplayDate(value),
         },
       },
       yAxis: {

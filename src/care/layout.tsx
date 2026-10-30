@@ -153,11 +153,11 @@ export function CareLayout() {
             organizations={organizationRows}
             onBusyChange={setBusy}
             showLabel={false}
+            showIds={false}
           />
         ) : (
           <Typography.Text>
-            {activeOrganizationTag ||
-              `Organization #${identity.organizationId}`}
+            {activeOrganizationTag || "Organization"}
           </Typography.Text>
         )}
         {identity.level >= 90 && !identity.caregiverReadOnly && (
@@ -175,8 +175,7 @@ export function CareLayout() {
                 .map((row) => ({
                   value: row.id!,
                   label:
-                    translated(valueOf(row, "Tag")).trim() ||
-                    `Organization #${row.id}`,
+                    translated(valueOf(row, "Tag")).trim() || "Organization",
                 })),
             ]}
             onChange={(id) => {

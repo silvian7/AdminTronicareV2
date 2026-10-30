@@ -1,7 +1,8 @@
-import { Alert, Button, Card, Input, Select, Space, Typography } from "antd";
+import { Alert, Button, Card, Select, Space, Typography } from "antd";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router";
 import type { CareReportDetail, CareSubject } from "../../shared/care";
+import { brusselsDateInput } from "../../shared/date-time";
 import {
   careDateOffset,
   careDate,
@@ -25,10 +26,10 @@ export function ReportNavigation({
     requestedDate ??
     report?.period.reportDate ??
     subject.latestReport?.period.reportDate ??
-    new Date().toISOString().slice(0, 10);
+    brusselsDateInput(new Date());
   const selectedDay = validCareDate(candidate)
     ? candidate
-    : new Date().toISOString().slice(0, 10);
+    : brusselsDateInput(new Date());
   const latestDay = subject.latestReport?.period.reportDate;
   const distance = validCareDate(latestDay)
     ? (Date.parse(latestDay) - Date.parse(selectedDay)) / 86400000
@@ -53,21 +54,13 @@ export function ReportNavigation({
   const open = (id: string) => navigate(careSubjectUrl(subject.id, id));
   return (
     <Card title={<h2 className="care-card-heading">Choose a report</h2>}>
-      <Space wrap size="middle" className="care-report-navigation">
-        <Button
-          icon={<LeftOutlined aria-hidden="true" />}
-          disabled={index < 0 || index >= reports.length - 1}
-          onClick={() => open(reports[index + 1].id)}
-        >
-          Previous report
-        </Button>
-        <Button
-          icon={<RightOutlined aria-hidden="true" />}
-          disabled={index <= 0}
-          onClick={() => open(reports[index - 1].id)}
-        >
-          Next report
-        </Button>
+      <Space
+        wrap
+        align="end"
+        size="middle"
+        className="care-report-navigation"
+        style={{ display: "flex", marginBottom: 16 }}
+      >
         <label>
           Reporting period
           <Select
@@ -83,32 +76,30 @@ export function ReportNavigation({
             onChange={open}
           />
         </label>
-        <label>
-          Report date (UTC)
-          <Input
-            type="date"
-            aria-label="Report date"
-            value={requestedDate ?? report?.period.reportDate ?? selectedDay}
-            min="1970-01-01"
-            max="9999-12-31"
-            onChange={(event) => {
-              const value = event.target.value;
-              if (validCareDate(value))
-                navigate(`${careSubjectUrl(subject.id)}?date=${value}`);
-            }}
-          />
-        </label>
         <Button
           disabled={!subject.latestReport}
           onClick={() => subject.latestReport && open(subject.latestReport.id)}
         >
           Latest report
         </Button>
+        <Button
+          icon={<LeftOutlined aria-hidden="true" />}
+          disabled={index < 0 || index >= reports.length - 1}
+          onClick={() => open(reports[index + 1].id)}
+        >
+          Previous report
+        </Button>
+        <Button
+          icon={<RightOutlined aria-hidden="true" />}
+          disabled={index <= 0}
+          onClick={() => open(reports[index - 1].id)}
+        >
+          Next report
+        </Button>
       </Space>
       <Typography.Paragraph className="care-note">
-        Report dates follow the original UTC convention. The selector lists
-        completed reports from the 31 days through {careDate(anchor)}. Previous
-        and next move within this window; choose a date to search other history.
+        The selector lists completed reports from the 31 days through{" "}
+        {careDate(anchor)}. Previous and next move within this window.
       </Typography.Paragraph>
       {query.isError && (
         <Alert
@@ -127,7 +118,7 @@ export function ReportNavigation({
         <Alert
           type="info"
           showIcon
-          message="Only the first 100 eligible reports in this date range are listed. Choose a date to narrow the search."
+          message="Only the first 100 eligible reports in this reporting window are listed."
         />
       )}
     </Card>

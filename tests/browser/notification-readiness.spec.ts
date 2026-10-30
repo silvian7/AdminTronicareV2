@@ -199,6 +199,11 @@ test("registered details show count/time without claiming delivery and refresh c
     "datetime",
     "2026-10-20T09:00:00+00:00",
   );
+  await expect(card.locator("time")).toHaveText("20/10/2026, 11:00:00");
+  await expect(card.locator("time")).toHaveAttribute(
+    "title",
+    "Europe/Brussels",
+  );
   await expect(
     card.getByText(
       /does not confirm phone notification permissions or guarantee delivery/,

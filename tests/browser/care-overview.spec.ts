@@ -5,9 +5,9 @@ import {
   syntheticCareSubjects,
 } from "./care-fixtures";
 
-test.use({ locale: "en-US", timezoneId: "Europe/Brussels" });
+test.use({ locale: "en-US", timezoneId: "America/New_York" });
 const coordinatedGraphs =
-  "Bed presence, heart rate, respiration and movement over time";
+  "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
 
 test("original bed pictograms and Asset event-age discs remain distinct", async ({
   page,
@@ -74,7 +74,10 @@ test("original bed pictograms and Asset event-age discs remain distinct", async 
   await expect(
     page.locator(".care-page-heading .hub-status-dot"),
   ).toHaveAttribute("data-status", "yellow");
-  await expect(page.locator(".care-bed-pictogram")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Latest observation", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".care-bed-pictogram")).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
 });
 
@@ -86,8 +89,11 @@ test("caregiver sign-in opens the read-only overview", async ({ page }) => {
   await page.getByRole("button", { name: /Sign in$/ }).click();
   await expect(page).toHaveURL(/\/care$/);
   await expect(
-    page.getByRole("heading", { name: "Overview", exact: true }),
+    page.getByRole("searchbox", { name: "Search assets", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Overview", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "Administration", exact: true }),
   ).toHaveCount(0);
@@ -376,7 +382,10 @@ test("desktop resident rows open the exact latest graphs while selection, modifi
     ),
   ).toBe(true);
 
-  await page.getByRole("link", { name: /Back to overview$/ }).click();
+  await page
+    .getByRole("navigation", { name: "Caregiver navigation", exact: true })
+    .getByRole("link", { name: "Overview", exact: true })
+    .click();
   const nestedReport = row.getByRole("link", { name: /Open completed report/ });
   await expect(nestedReport).toHaveAttribute("href", target);
   await nestedReport.focus();
@@ -386,7 +395,10 @@ test("desktop resident rows open the exact latest graphs while selection, modifi
   await expect(page).toHaveURL(target);
   await expect(graph).toBeVisible();
 
-  await page.getByRole("link", { name: /Back to overview$/ }).click();
+  await page
+    .getByRole("navigation", { name: "Caregiver navigation", exact: true })
+    .getByRole("link", { name: "Overview", exact: true })
+    .click();
   await row.focus();
   await row.press("Space");
   await expect(page).toHaveURL(target);
@@ -436,7 +448,10 @@ test("tablet resident cards open latest report graphs from plain card content an
   await expect(
     page.getByRole("img", { name: coordinatedGraphs, exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: /Back to overview$/ }).click();
+  await page
+    .getByRole("navigation", { name: "Caregiver navigation", exact: true })
+    .getByRole("link", { name: "Overview", exact: true })
+    .click();
   await card.focus();
   await card.press("Enter");
   await expect(page).toHaveURL(target);
@@ -542,17 +557,37 @@ test("direct report URL and reload preserve exact subject/report identities", as
   await expect(
     page.getByRole("heading", { name: subject.tag, exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Report summary", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Reporting convention: UTC\./)).toBeVisible();
   await expect(
-    page.locator('time[datetime="2026-10-27T05:00:00.000Z"]'),
+    page.getByRole("heading", { name: "Reporting period", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Report summary", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Asset ID", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Organization ID", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText(subject.id, { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText(/Dates and times shown in Europe\/Brussels\./),
+  ).toBeVisible();
+  await expect(
+    page.locator('.care-period time[datetime="2026-10-27T05:00:00.000Z"]'),
   ).toContainText("06:00");
   await expect(
-    page.getByText("Vendor report duration", { exact: true }),
+    page.getByRole("img", { name: coordinatedGraphs }),
   ).toBeVisible();
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`${url}$`));
-  await expect(page.getByText("Report summary", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Reporting period", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: coordinatedGraphs }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Report summary", exact: true }),
+  ).toHaveCount(0);
   expect(
     fixture.calls
       .filter((call) => call.path.includes("/reports/"))
@@ -577,8 +612,11 @@ test("explicit denied report never falls back to the latest report", async ({
   await page.goto(`/care/subjects/${subject.id}/reports/${denied}`);
   await expect(page.getByText(/Synthetic report not found/)).toBeVisible();
   await expect(
-    page.getByText("Vendor report duration", { exact: true }),
+    page.getByRole("heading", { name: "Reporting period", exact: true }),
   ).toHaveCount(0);
+  await expect(page.getByRole("img", { name: coordinatedGraphs })).toHaveCount(
+    0,
+  );
   const reportCalls = fixture.calls.filter((call) =>
     call.path.includes("/reports/"),
   );
@@ -603,7 +641,10 @@ test("denied subject stops report fetching", async ({ page }) => {
   expect(fixture.calls.some((call) => call.path.includes("/reports/"))).toBe(
     false,
   );
-  await expect(page.getByText("Report summary", { exact: true })).toHaveCount(
+  await expect(
+    page.getByRole("heading", { name: "Reporting period", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("img", { name: coordinatedGraphs })).toHaveCount(
     0,
   );
   expect(fixture.unexpected).toEqual([]);
@@ -616,7 +657,7 @@ test("caregiver technical deep link redirects before administrator resource read
   await page.goto("/assets/new");
   await expect(page).toHaveURL(/\/care$/);
   await expect(
-    page.getByRole("heading", { name: "Overview", exact: true }),
+    page.getByRole("searchbox", { name: "Search assets", exact: true }),
   ).toBeVisible();
   expect(
     fixture.calls.some((call) => call.path.startsWith("/api/resources/")),

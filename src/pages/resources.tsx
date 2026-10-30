@@ -133,6 +133,7 @@ import {
   ruleScheduleLabels,
   utcTimeToLocal,
 } from "../../shared/rule-schedule";
+import { DISPLAY_TIME_ZONE } from "../../shared/date-time";
 
 function CopiedRuleTemplateInput({ template }: { template: boolean }) {
   return (
@@ -3113,7 +3114,7 @@ export function ResourceEditor({
                     <Alert
                       className="page-alert"
                       type="info"
-                      message={`Times use your browser's local timezone (${Intl.DateTimeFormat().resolvedOptions().timeZone}), using UTC date ${scheduleReference.toISOString().slice(0, 10)} for daylight saving adjustments. They are saved in UTC; all-day mode ignores the daily time window.`}
+                      message={`Times use Brussels local time (${DISPLAY_TIME_ZONE}), including daylight saving adjustments. They are saved in UTC; all-day mode ignores the daily time window.`}
                     />
                   )}
                 <Row gutter={24}>

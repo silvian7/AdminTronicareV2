@@ -6,7 +6,6 @@ import {
   boundSeries,
   graphRange,
   nearestSample,
-  utcInput,
   vendorHrv,
 } from "../src/care/report-graph-data";
 
@@ -258,23 +257,62 @@ describe("care report graph semantics", () => {
     );
   });
 
-  it("interprets the explicitly UTC range fields without a DST or local timezone shift", () => {
-    expect(utcInput(report.period.start)).toBe("2026-10-25T05:00:00.000");
+  it("converts Brussels range fields to exact UTC wire instants within the report", () => {
     expect(
-      graphRange("2026-10-25T05:00:00.001", "2026-10-25T06:00", report.period),
+      graphRange("2026-10-25T06:00:00.001", "2026-10-25T07:00", report.period),
     ).toEqual({
       start: "2026-10-25T05:00:00.001Z",
       end: "2026-10-25T06:00:00.000Z",
       maxPoints: 5000,
     });
     expect(
-      graphRange("2026-10-25T05:00", "2026-10-25T05:00", report.period),
+      graphRange("2026-10-25T06:00", "2026-10-25T06:00", report.period),
     ).toBeNull();
     expect(
-      graphRange("2026-10-25T04:59", "2026-10-25T06:00", report.period),
+      graphRange("2026-10-25T05:59", "2026-10-25T07:00", report.period),
     ).toBeNull();
     expect(
-      graphRange("2026-02-30T05:00", "2026-10-25T06:00", report.period),
+      graphRange("2026-02-30T06:00", "2026-10-25T07:00", report.period),
     ).toBeNull();
+  });
+
+  it("preserves either unchanged repeated Brussels hour from the current UTC request", () => {
+    const period = { ...report.period, start: "2026-10-24T05:00:00.000Z" };
+    for (const start of [
+      "2026-10-25T00:30:00.123Z",
+      "2026-10-25T01:30:00.123Z",
+    ]) {
+      const previous = { start, end: "2026-10-25T02:30:00.000Z" };
+      expect(
+        graphRange(
+          "2026-10-25T02:30:00.123",
+          "2026-10-25T03:30",
+          period,
+          previous,
+        ),
+      ).toEqual({
+        ...previous,
+        maxPoints: 5000,
+      });
+      expect(
+        graphRange("2026-10-25T02:45", "2026-10-25T03:30", period, previous),
+      ).toBeNull();
+    }
+  });
+
+  it("rejects skipped Brussels times and converts valid summer boundaries", () => {
+    const period = {
+      ...report.period,
+      start: "2026-03-28T05:00:00.000Z",
+      endExclusive: "2026-03-29T05:00:00.000Z",
+    };
+    expect(
+      graphRange("2026-03-29T02:30", "2026-03-29T04:00", period),
+    ).toBeNull();
+    expect(graphRange("2026-03-29T03:30", "2026-03-29T04:00", period)).toEqual({
+      start: "2026-03-29T01:30:00.000Z",
+      end: "2026-03-29T02:00:00.000Z",
+      maxPoints: 5000,
+    });
   });
 });

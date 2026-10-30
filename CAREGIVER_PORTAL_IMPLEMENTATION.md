@@ -4,9 +4,10 @@ Scope: prompts 1–6 in prompts/caregiver_portal.txt, completed without running 
 optional deployment prompt. Those stages performed no live application API/DB
 operation, migration, vendor request, ingestion job or commit. The user subsequently
 authorized the local Admin rebuild and isolated local caregiver API/database setup
-recorded below. These follow-ups did not deploy or migrate a shared backend.
-The later explicitly requested VPS5 report access used read-only transactions;
-its connection and prerequisite checks are recorded at the end of this note.
+recorded below. Those initial local follow-ups did not deploy or migrate a shared
+backend. Later VPS5 report access began with read-only preflight; the user then
+explicitly approved the report migration, dedicated reader and local connection.
+That approved setup and its remaining historical-data boundary are recorded below.
 Synthetic data exists only in labelled tests.
 
 ## Stage gates
@@ -699,3 +700,310 @@ capture enables later whole reporting periods only; existing historical reports
 also require independently verified assignment evidence, which the current
 raw/report/run/summary schema does not contain. Current monitored-system links
 and the Excel current-binding join are not such evidence.
+
+## Approved VPS5 report setup — 30 October 2026
+
+The user explicitly approved the prepared database setup. Verified the VPS5
+host/database, PostgreSQL version, source schema/ownership, inactive writer
+transactions, committed migration source and backup capacity. Created a protected
+current database archive and verified its table of contents, complete decoding
+without executing its SQL, and checksum before any DDL. The archive and original
+extension ACL receipt remain in the protected server backup directory; private
+operator receipts and generated credentials remain under ignored `.local`.
+
+The supplied login could read reports but lacked schema-owner/role-management
+authority. The verified SSH database operator applied the committed ingester
+`sql/20261029_portal_binding_events.sql` as the existing source owner and created
+the reader in one atomic transaction. Lock and statement deadlines were bounded.
+Capture starts at database NOW; source-row fingerprints matched before/after.
+The event table, interval view, three indexes and four enabled capture/immutability
+guards were verified. Current source bindings match the latest captured events;
+capture functions retain their pinned search path and are not publicly executable.
+
+Privilege-validation failures rolled back fully before correction: sequence
+privilege checks needed CASE protection against planner predicate reordering;
+the existing TimescaleDB procedure
+`_timescaledb_functions.cagg_migrate_update_watermark(integer)` was executable
+through PUBLIC and could write. The scoped remedy preserved EXECUTE for every
+preexisting role before revoking PUBLIC on that one exact routine. Role-set drift
+aborts setup; original ACL metadata was preserved. The new reader has no role
+memberships and cannot invoke that routine. All preexisting roles retain access.
+Future roles now need explicit access; extension upgrades/new-role provisioning
+must recheck this override. No other extension ACL was changed.
+
+Created `care_portal_reader` with only the required CONNECT/schema usage and
+SELECT grants on `daily_report`, `raw_sleep` and the interval view, four-connection
+limit, read-only transaction default and query/idle deadlines. Fourteen live
+reader checks passed: TLS, exact target/role, no elevated attributes, membership,
+ownership, schema/database CREATE, table/column writes, sequence use/update,
+executable definer routines, or direct source/event-table reads. Installed only
+its separate `CORE_CARE_REPORTS_DATABASE_URL` in the ignored local API secret and
+`CORE_CARE_REPORTS_SCHEMA=public` in its public configuration. Existing Core
+authority, session secrets, technical routing and ingestion schedules are unchanged.
+
+Restarted only the local caregiver API; it is healthy. Five actual report adapter
+queries passed with impossible subject/organization IDs (zero protected rows),
+and the actual availability projection returned true instead of dependency
+unavailable. Local Core reader restrictions, Admin SPA/assets/health and anonymous
+authentication boundaries also passed. No frontend/backend source changes or
+additional synthetic-suite reruns were needed for this configuration-only step.
+No real signed-in report/graph parity is claimed.
+
+After the user reported that the list was still empty, a read-only existence
+probe confirmed stored reports are present, no eligible completed report exists,
+and every stored period starts before capture. For unchanged bindings, the first
+whole vendor period ends on 1 November 2026 at 05:00 UTC / 06:00 Brussels time;
+it becomes available after normal ingestion. Older reports remain unavailable
+until independently verified historical mappings are supplied. Requested the
+affected Resident/asset and an authoritative source of assignment dates. No
+capture was backdated and no stored report, cursor or assignment was rewritten.
+
+## Scoped historical report check — 30 October 2026
+
+The user supplied a target asset. A bounded TLS/read-only check confirmed an
+active report-system mapping with positive organization capture, matching raw
+packets and valid parsed reports. All matching report periods predate capture.
+Installation dates are populated and no source removal is recorded, but those
+mutable fields do not prove uninterrupted historical ownership. Target IDs,
+vendor identifiers and period metadata remain only in a private ignored evidence
+file; no payload or clinical metric was read or printed.
+
+The bounded service review found current hierarchy rows and digest-only mutation
+audits, not a reconstructable complete reassignment timeline. Sensor history can
+corroborate individual asset observations but lacks complete historical hub,
+organization and vendor-report linkage. Verified retained import artifacts could
+corroborate a dated baseline if supplied. Requested the independently verified
+date from which the target's current device continuously belonged to the same
+resident and organization. No historical attestation was inferred, no capture was
+backdated, and no further database/runtime changes were made in this check.
+
+## Confirmed historical access and legacy UTC — 30 October 2026
+
+The user explicitly confirmed that the requested asset's current report device
+has continuously belonged to the same resident and organization "from beginning".
+Recorded that confirmation and its exact scope privately. The historical start
+is conservatively bounded to the earliest already-stored matched completed
+report for that one confirmed stream; installation dates were not substituted
+for evidence and no other asset was attested.
+
+Added ingester `sql/20261030_portal_binding_attestations.sql`: owner-only immutable
+attestation/revocation records, operation UUID, confirmation digest, exact first
+capture and asset/org/vendor snapshot, database actor/clock, and guarded bounded
+registration. It rejects source drift, later captured changes, invalid/pre-report
+starts, duplicate active evidence and non-READ-COMMITTED registration. The view
+computes later boundaries from original events before extending only the
+confirmed initial interval. Revocation restores its original start; reassignment
+back never extends a later interval. The view identity/owner/ACL and the reader's
+existing SELECT-only surface are preserved. Generic evidence rules are documented
+in ingester `docs/analysis/caregiver_portal_reuse.md`.
+
+After a fresh protected backup and verified complete archive decode, applied
+the migration and one scoped attestation in a bounded owner transaction, first
+validated with rollback. Source/report/raw/event fingerprints remained identical;
+no report, metric, cursor, assignment or capture recording time was rewritten.
+The private confirmation/snapshot, original view metadata and operation receipt
+remain in restricted backup/operator artifacts. The API reader has no new table
+or validation-function access. All 61 isolated PostgreSQL 18 checks passed
+(42 new historical-evidence cases and 19 prospective cases), including revocation,
+later reassignment, permissions and view identity preservation. Scoped Ruff,
+formatting, Ty and diff checks passed.
+
+Live verification then exposed a separate legacy storage compatibility issue:
+VPS5 daily-report session start/end and update timestamps are timezone-naive UTC,
+while raw-packet/provenance timestamps are timezone-aware. The ingester's parser
+and stored packet boundaries establish their UTC convention. Core's
+`PostgresCareReports._read` now attaches UTC only to naive `session_start_at`,
+`session_end_at`, `update_at` and computed `end_exclusive`. Existing aware offsets,
+raw timestamps, all other fields and strict global ISO/analytics validation remain
+unchanged. No database type or timestamp value was altered.
+
+Fourteen new offline timestamp-boundary cases plus existing caregiver detail,
+series, trends and analytical parity checks passed: 88 total, with scoped Ruff,
+formatting and mypy passing. Rebuilt/restarted only the local caregiver API from
+the current working tree; it is healthy. The actual dedicated-reader queries now
+load the confirmed asset's latest historical report, match its stored payload and
+prepare bed intervals, signal samples and vendor HRV within graph limits. Wrong
+asset/org report lookups remain denied, and the reader still cannot access the
+new evidence tables/function. Probes emit only outcome flags, no clinical values.
+Signed-in browser rendering was not inspected; the user can refresh the existing
+resident view. Other assets' unconfirmed pre-capture history remains excluded.
+
+## Report display and Brussels time — 30 October 2026
+
+Hidden the Report summary card, standalone vital/HRV Inspect sections, Bed exits
+list and displayed Asset/Organization IDs in the caregiver portal. Resident and
+organization tags/labels remain, including ID-free fallback labels. Report IDs
+and the internal route/API identities are unchanged. Vendor HRV is always the
+fifth synchronized graph; absent or unsupported readings show Not available
+without manufactured samples. Chart tooltips, bed-interval interaction and
+shared zoom/pan remain available.
+
+`shared/date-time.ts` provides bounded cached Brussels formatters and local
+range-input conversion. Admin fields, status/notification timestamps, schedules,
+history filters, caregiver observations, reporting periods, provenance and chart
+labels use Europe/Brussels regardless of the browser timezone, with DD/MM/YYYY
+dates and 24-hour times. Local edits are converted to UTC; unchanged repeated-hour
+report boundaries preserve their original instant/milliseconds, and ambiguous or
+skipped edits are rejected. Daily rule schedules retain their UTC-day anchoring
+and existing overlap behavior. Date-only report identifiers, birth dates and pause
+dates remain calendar values; report windows, metrics, API/storage timestamps and
+ingestion schedules are unchanged. The default report/trend date uses the Brussels
+calendar date, including when UTC and the browser are still on the previous day.
+
+The initial summary-only change passed 11 affected existing browser cases.
+The combined display changes passed 52 focused date/schedule/graph unit cases,
+production build/typecheck, formatting and diff checks. Six caregiver overview/
+trends cases and nine Admin cases passed using synthetic fixtures, including
+New York-browser Brussels rendering, local midnight, summer/winter UTC conversion,
+and the absence of displayed IDs. All 17 report/hardening browser cases also
+passed, including both autumn-fold offsets, preserved exact UTC range requests,
+ambiguous-edit rejection, always-visible/unavailable HRV, hidden inspectors/exits,
+and bounded maximum series on tablet. Desktop/tablet screenshots were reviewed
+for clipping. These checks use synthetic fixtures, not real account sessions.
+
+Rebuilt/recreated only local Admin with the existing caregiver Compose overlay.
+The container is healthy; localhost SPA/deep links, anonymous authentication
+boundaries and served entry/graph bundle hashes passed. The served bundles contain
+Brussels range labels and the HRV panel, with summary/inspector/exit headings
+absent. No backend/database or production deployment was changed in this UI step.
+
+## Hide Report information — 30 October 2026
+
+Removed the caregiver Report information card and its generation, received,
+processed and vendor-update metadata from `src/care/pages.tsx`. Reporting period
+and graphs remain. Existing browser checks have no dependency on that card, so
+no test changes were needed for this display-only removal. Formatting, diff
+checks and the container production build/typecheck passed. Rebuilt/restarted
+local Admin; health, SPA/deep links, anonymous authentication boundaries and served
+bundle hashes passed, with Report information absent from the served entry.
+
+## Use reporting selectors for graphs — 30 October 2026
+
+Removed the graph-specific start/end fields, Load range and Full reporting period
+buttons, their state and related instructions from `src/care/report-graphs.tsx`.
+Graphs request the selected report's full period through the existing default
+series endpoint. Report/date/previous/next selectors remain, as do coordinated
+chart zoom, pan, reset and tooltips. Error and reduced-sampling notices no longer
+direct users to the removed fields; 422 responses offer another report or retry.
+Backend contracts, limits and report-boundary validation are unchanged.
+
+Updated existing report/hardening browser checks and removed one obsolete
+form-only case. All six affected cases passed against synthetic fixtures,
+including report selection, full-period requests without range query parameters,
+DST labels/reload, HRV, maximum series, zoom without extra reads and error retry.
+The tablet screenshot was reviewed for clipping. Formatting, diff checks and
+host/container production builds/typechecks passed. Rebuilt/restarted local
+Admin; health, deep links, authentication boundaries and served-bundle checks
+passed, with graph range controls absent and reporting selectors present.
+
+## Hide Report date — 30 October 2026
+
+Removed the Report date field from `src/care/report-navigation.tsx` and updated
+instructions that referred to it. Reporting period and previous/next/latest report
+navigation remain. Existing dated deep links continue to resolve normally.
+Two affected existing browser cases passed against synthetic fixtures using the
+exact container-built assets, covering dropdown selection, legacy date links and
+reload, missing-day behavior, full-period graphs and the hidden field. Formatting,
+diff checks and the container production build/typecheck passed. Local Admin was
+rebuilt/restarted healthy; SPA/deep links, authentication boundaries and served
+bundle hashes passed, including Report date absent and Reporting period present.
+
+## Remove Latest observation card — 30 October 2026
+
+Removed the Latest observation card and its explanatory paragraph from caregiver
+detail in `src/care/pages.tsx`. The overview's bed pictograms, timestamps and status
+discs remain, as do report selection and graphs. Formatting, diff checks and the
+container production build/typecheck passed. Rebuilt/restarted local Admin
+healthy; SPA/deep links, authentication boundaries and served-bundle hashes passed,
+with Latest observation absent from the served entry.
+The one affected existing browser case passed against synthetic fixtures using
+the container-built assets, confirming desktop/tablet overview observations and
+event-age colors remain while the detail card/pictogram are absent.
+
+## Report controls and display polish — 30 October 2026
+
+Rearranged `src/care/report-navigation.tsx` into two rows: Reporting period and
+Latest report first, then Previous report and Next report. DOM/keyboard order
+follows that layout. Brussels date/time formatters now show CET in winter and
+CEST in summer, including tooltips and the repeated autumn hour; UTC instants
+and stored values are unchanged. Removed the graphs card's introductory sentence.
+
+Moved the chart zoom slider from the bottom to the top, before Bed presence, in
+`src/care/report-graphs.tsx`; matching grid/title offsets in `report-graphs.css`
+leave room for the slider while retaining the chart height and linked zoom/pan.
+Five focused date-format cases passed for short/offset labels and DST boundaries.
+Formatting, diff checks and production container build/typecheck passed. Local
+Admin was rebuilt/restarted healthy; served entry/graph hashes, SPA/deep links,
+authentication boundaries and hidden-introduction checks passed.
+Eight affected existing browser cases passed against synthetic fixtures using
+the container-built assets: three caregiver navigation/DST cases and five Admin
+zone-label cases. A temporary 1440/768px layout check verified row bounds and
+actual Tab order, absence of the introduction, and zoom/reset preserving UTC
+bounds without extra reads. Reviewed desktop/tablet screenshots: slider above
+Bed presence, all five panels readable, no overlap or clipping.
+
+## Populate overview reports for all mapped residents — 30 October 2026
+
+The user clarified that every resident's Latest completed report cell should be
+populated. Read-only source review found no blank-cell or overview truncation
+bug: each visible asset uses the batched latest-report query over all eligible
+history, with the normal asset/organization checks. A value-free live database
+audit found 13 current mapped residents with stored completed reports, one with
+eligible history and 12 whose reports predate assignment capture.
+
+Prepared an exact private 12-stream/12-resident scope across three organizations.
+The user explicitly confirmed all 12 devices have continuously belonged to their
+current resident and organization since their first stored report. Recorded the
+actual question/answer against the frozen scope digest. A fresh protected backup
+was checksum-verified and completely decoded without restoring or emitting data.
+Preparing INSERT-only historical evidence through the existing owner guard;
+the previous single-resident attestation and all source/report/capture rows remain
+unchanged at this stage. No frontend or authorization change is needed.
+
+Completed the 12-row historical evidence operation through the installed owner
+guard, with distinct persisted operation UUIDs and confirmation digests. The
+frozen cohort, guard definitions, view, reader privileges and prior canonical
+attestation were checked before and under bounded locks. Validated with rollback
+before committing the batch atomically; source, raw/report/capture fingerprints,
+prior evidence/revocations and view/reader privileges remained unchanged.
+
+The first validation stopped before any insert because a read-only boolean check
+returned psql's `t` rather than JSON `true`. Corrected the two scalar JSON queries;
+proved the exact frozen preflight/prior evidence unchanged, all 12 operation IDs
+absent and the remote provenance artifact absent before rebinding the reviewed
+script digest. Preserved all operation UUIDs/digests and recorded that pre-write
+recovery privately. Fresh rollback validation and commit then passed. Independent
+script review, local/embedded syntax and confirmation/backup checks passed.
+
+The actual dedicated reader now returns valid Latest completed report summaries
+for all 13 confirmed mapped residents. Every latest report link resolves to a
+stored payload with matching identity; wrong-parent and wrong-organization lookups
+remain denied. Checks emit only outcomes/counts, never clinical values. No frontend,
+API deployment or restart was needed; refresh Overview to replace cached cells.
+
+## Simplify overview and report-page controls — 30 October 2026
+
+Removed the visible Overview heading from caregiver overview while keeping its
+Refresh button aligned right. On report detail, removed the page-level Refresh
+button and Back to overview/Trends links. The primary caregiver navigation and
+explicit error retry actions remain. Changes are confined to `src/care/pages.tsx`.
+Formatting, diff checks and the production container build/typecheck passed;
+rebuilt/restarted local Admin with the existing caregiver overlay.
+All 10 affected existing browser cases passed against synthetic fixtures using
+the exact container-built assets. Checks cover overview arrival without a heading,
+sign-in/deep links, desktop/tablet header navigation, absence of report-page
+controls and cross-subject isolation. The tablet screenshot was reviewed for
+readability and clipping. Health, SPA/deep links, authentication boundaries and
+served entry/graph hashes also passed. Temporary synthetic preview was stopped.
+
+## Inline report navigation — 30 October 2026
+
+Merged the report controls into one wrapping row in `src/care/report-navigation.tsx`:
+Reporting period, Latest report, Previous report, Next report. Controls align at
+their lower edge and retain this DOM/keyboard order when wrapping on smaller
+screens. The existing neighbor/back-forward/reload browser case passed against
+the exact container-built assets. A temporary 1440/768px check and screenshots
+confirmed desktop inline placement, tablet wrapping, keyboard order and no
+clipping. Formatting, diff checks and the production build/typecheck passed;
+local Admin was rebuilt/restarted healthy and served-bundle/authentication checks
+passed. No report-query behavior or data changed.

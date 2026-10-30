@@ -56,7 +56,7 @@ test("an anonymous caregiver entry returns an administrator to the caregiver ove
   await signIn(page);
   await expect(page).toHaveURL(/\/care$/);
   await expect(
-    page.getByRole("heading", { name: "Overview", exact: true }),
+    page.getByRole("searchbox", { name: "Search assets", exact: true }),
   ).toBeVisible();
   expect(fixture.calls.some((call) => call.path === "/api/services")).toBe(
     false,
@@ -89,7 +89,7 @@ for (const kind of ["report", "trends", "date"] as const) {
       .toBe(target);
     await expect(
       page.getByRole("heading", {
-        name: kind === "trends" ? "Historical trends" : "Report summary",
+        name: kind === "trends" ? "Historical trends" : "Reporting period",
         exact: true,
       }),
     ).toBeVisible();
@@ -135,7 +135,7 @@ test("a caregiver signing in without a return link still opens the caregiver ove
   await signIn(page);
   await expect(page).toHaveURL(/\/care$/);
   await expect(
-    page.getByRole("heading", { name: "Overview", exact: true }),
+    page.getByRole("searchbox", { name: "Search assets", exact: true }),
   ).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
   expect(externalRequests).toEqual([]);
@@ -168,12 +168,14 @@ for (const careIntent of [false, true]) {
     await page.goto(`/login?${params}`);
     await signIn(page);
     await expect(page).toHaveURL(careIntent ? /\/care$/ : /\/services$/);
-    await expect(
-      page.getByRole("heading", {
-        name: careIntent ? "Overview" : "Service status",
-        exact: true,
-      }),
-    ).toBeVisible();
+    if (careIntent)
+      await expect(
+        page.getByRole("searchbox", { name: "Search assets", exact: true }),
+      ).toBeVisible();
+    else
+      await expect(
+        page.getByRole("heading", { name: "Service status", exact: true }),
+      ).toBeVisible();
     expect(externalRequests).toEqual([]);
     expect(fixture.unexpected).toEqual([]);
   });

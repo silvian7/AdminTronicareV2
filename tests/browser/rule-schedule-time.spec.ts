@@ -117,6 +117,7 @@ async function expectSchedule(
   raw: { start: string; end: string },
   timezone: string,
   anchorDate: string,
+  zoneNames = { start: "CET", end: "CET" },
 ) {
   for (const [boundary, key] of [
     ["Start", "start"],
@@ -126,8 +127,9 @@ async function expectSchedule(
     await expect(field).toHaveText(expected[key]);
     const tooltip = await field.locator("[title]").getAttribute("title");
     expect(tooltip).toContain(timezone);
-    expect(tooltip).toContain(raw[key]);
-    expect(tooltip).toContain(anchorDate);
+    expect(tooltip).toContain(expected[key].slice(0, 8));
+    expect(tooltip).toMatch(new RegExp(`\\b${zoneNames[key]}\\b`));
+    expect(tooltip).not.toContain("GMT");
     await expect(field.locator("time")).toHaveAttribute(
       "datetime",
       new Date(`${anchorDate}T${raw[key]}Z`).toISOString(),
@@ -169,6 +171,9 @@ for (const season of [
       { start: season.start, end: season.end },
       "Europe/Brussels",
       season.now.slice(0, 10),
+      season.label === "summer"
+        ? { start: "CEST", end: "CEST" }
+        : { start: "CET", end: "CET" },
     );
     if (season.label === "summer")
       await page.screenshot({
@@ -195,11 +200,12 @@ test("schedule times on the DST transition day use the offset at each UTC time",
     { start: "00:30:00", end: "02:30:00" },
     "Europe/Brussels",
     "2026-03-29",
+    { start: "CET", end: "CEST" },
   );
   expect(mock.mutations).toEqual([]);
 });
 
-test.describe("rule schedule details in New York", () => {
+test.describe("rule schedule details in a New York browser", () => {
   test.use({ timezoneId: "America/New_York" });
 
   test("UTC today anchors the conversion when the browser's local date is still yesterday", async ({
@@ -214,9 +220,9 @@ test.describe("rule schedule details in New York", () => {
     await page.goto("/rules/41");
     await expectSchedule(
       page,
-      { start: "19:30:00", end: "18:45:00" },
+      { start: "01:30:00", end: "00:45:00" },
       { start: "00:30:00", end: "23:45:00" },
-      "America/New_York",
+      "Europe/Brussels",
       "2026-01-15",
     );
     expect(mock.mutations).toEqual([]);
@@ -367,7 +373,7 @@ for (const season of [
     ]);
   });
 
-test.describe("editing local schedule times in New York", () => {
+test.describe("editing Brussels schedule times in a New York browser", () => {
   test.use({ timezoneId: "America/New_York" });
 
   test("local edits crossing midnight are saved as UTC time-of-day values", async ({
@@ -382,8 +388,8 @@ test.describe("editing local schedule times in New York", () => {
     await page.goto("/rules/41/edit");
     const start = page.getByLabel("Start time (local)", { exact: true });
     const end = page.getByLabel("End time (local)", { exact: true });
-    await expect(start).toHaveValue("19:30:00");
-    await expect(end).toHaveValue("18:45:00");
+    await expect(start).toHaveValue("01:30:00");
+    await expect(end).toHaveValue("00:45:00");
     await start.fill("20:15:30.125");
     await end.fill("00:15:00.500");
     await page.getByRole("button", { name: /Save rule$/ }).click();
@@ -391,7 +397,7 @@ test.describe("editing local schedule times in New York", () => {
     await expect(localTime(page, "Start")).toHaveText("20:15:30.125");
     await expect(localTime(page, "End")).toHaveText("00:15:00.500");
     expect(mock.mutations.map(({ body }) => body)).toEqual([
-      { m_hTimeStart: "01:15:30.125", m_hTimeEnd: "05:15:00.500" },
+      { m_hTimeStart: "19:15:30.125", m_hTimeEnd: "23:15:00.500" },
     ]);
   });
 });

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { Identity, RecordData } from "../../shared/resources";
 
-test.use({ locale: "en-GB", timezoneId: "Europe/Brussels" });
+test.use({ locale: "en-US", timezoneId: "America/New_York" });
 
 const created = "2026-01-15T12:45:56.000";
 
@@ -82,9 +82,18 @@ async function expectLocalEvent(
   const local = await page.evaluate((instant) => {
     const date = new Date(instant);
     return {
-      text: date.toLocaleString(undefined, { hourCycle: "h23" }),
-      hour: date.getHours(),
-      zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      text: date.toLocaleString("en-GB", {
+        hourCycle: "h23",
+        timeZone: "Europe/Brussels",
+      }),
+      hour: Number(
+        new Intl.DateTimeFormat("en-GB", {
+          hour: "2-digit",
+          hourCycle: "h23",
+          timeZone: "Europe/Brussels",
+        }).format(date),
+      ),
+      zone: "Europe/Brussels",
     };
   }, iso);
   expect(local.hour).toBe(hour);
@@ -148,11 +157,11 @@ test("asset last events use the event date's local winter or summer time across 
     await expectLocalEvent(page, detailField(page, "Last event"), iso, hour);
     if (id === "41") {
       await expect(detailField(page, "Created")).toHaveText(
-        "2026-01-15 12:45:56.000",
+        "15/01/2026, 12:45:56.000",
       );
       await expect(
         detailField(page, "Created").locator("span[title]"),
-      ).toHaveAttribute("title", created);
+      ).toHaveAttribute("title", "Europe/Brussels");
     }
   }
   await page.goto("/");

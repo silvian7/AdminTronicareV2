@@ -21,17 +21,20 @@ describe("rule schedule conversion", () => {
     ["Europe/Brussels", "2026-07-15T12:00:00Z", "00:30:00", "02:30:00"],
     ["Europe/Brussels", "2026-01-15T12:00:00Z", "23:00:00", "00:00:00"],
     ["Europe/Brussels", "2026-07-15T12:00:00Z", "23:59:59.999", "01:59:59.999"],
-    ["America/New_York", "2026-01-15T02:00:00Z", "00:30:00", "19:30:00"],
-    ["America/New_York", "2026-07-15T12:00:00Z", "00:30:00", "20:30:00"],
-    ["Asia/Kolkata", "2026-01-15T12:00:00Z", "23:45:00", "05:15:00"],
-    ["Asia/Kolkata", "2026-07-15T12:00:00Z", "00:00:00.010", "05:30:00.010"],
-  ])("roundtrips %s schedule %s / %s", (timezone, day, utc, local) => {
-    process.env.TZ = timezone;
-    const date = reference(day);
-    expect(utcTimeToLocal(utc, date)).toBe(local);
-    expect(localTimeToUtc(local, date, utc)).toBe(utc);
-    expect(localTimeToUtc(local, date)).toBe(utc);
-  });
+    ["America/New_York", "2026-01-15T02:00:00Z", "00:30:00", "01:30:00"],
+    ["America/New_York", "2026-07-15T12:00:00Z", "00:30:00", "02:30:00"],
+    ["Asia/Kolkata", "2026-01-15T12:00:00Z", "23:45:00", "00:45:00"],
+    ["Asia/Kolkata", "2026-07-15T12:00:00Z", "00:00:00.010", "02:00:00.010"],
+  ])(
+    "roundtrips Brussels time on host %s for schedule %s / %s",
+    (timezone, day, utc, local) => {
+      process.env.TZ = timezone;
+      const date = reference(day);
+      expect(utcTimeToLocal(utc, date)).toBe(local);
+      expect(localTimeToUtc(local, date, utc)).toBe(utc);
+      expect(localTimeToUtc(local, date)).toBe(utc);
+    },
+  );
 
   it("anchors the UTC calendar date without modifying the reference date", () => {
     process.env.TZ = "America/New_York";
@@ -40,24 +43,24 @@ describe("rule schedule conversion", () => {
     expect(utcScheduleDate("23:59:59.5", date)?.toISOString()).toBe(
       "2026-01-15T23:59:59.500Z",
     );
-    expect(utcTimeToLocal("00:30:00", date)).toBe("19:30:00");
-    expect(localTimeToUtc("19:30", date)).toBe("00:30:00");
+    expect(utcTimeToLocal("00:30:00", date)).toBe("01:30:00");
+    expect(localTimeToUtc("01:30", date)).toBe("00:30:00");
     expect(date.toISOString()).toBe(instant);
   });
 
   it("normalizes supported local input precision without rounding", () => {
     process.env.TZ = "UTC";
-    for (const [local, utc] of [
-      ["00:00", "00:00:00"],
-      ["12:34", "12:34:00"],
-      ["12:34:56.0", "12:34:56"],
-      ["12:34:56.1", "12:34:56.100"],
-      ["12:34:56.01", "12:34:56.010"],
-      ["12:34:56.123", "12:34:56.123"],
-      [" 12:34:56.123 ", "12:34:56.123"],
+    for (const [local, utc, normalized] of [
+      ["00:00", "23:00:00", "00:00:00"],
+      ["12:34", "11:34:00", "12:34:00"],
+      ["12:34:56.0", "11:34:56", "12:34:56"],
+      ["12:34:56.1", "11:34:56.100", "12:34:56.100"],
+      ["12:34:56.01", "11:34:56.010", "12:34:56.010"],
+      ["12:34:56.123", "11:34:56.123", "12:34:56.123"],
+      [" 12:34:56.123 ", "11:34:56.123", "12:34:56.123"],
     ]) {
       expect(localTimeToUtc(local, reference())).toBe(utc);
-      expect(utcTimeToLocal(utc, reference())).toBe(utc);
+      expect(utcTimeToLocal(utc, reference())).toBe(normalized);
     }
   });
 
@@ -72,13 +75,13 @@ describe("rule schedule conversion", () => {
     expect(localTimeToUtc("02:30:00.123", day, "00:30:00.123")).toBeUndefined();
   });
 
-  it("rejects New York's spring gap and preserves valid midnight rollover", () => {
+  it("ignores the host timezone's spring transition", () => {
     process.env.TZ = "America/New_York";
     const day = reference("2026-03-08T12:00:00Z");
-    expect(localTimeToUtc("02:30", day)).toBeUndefined();
-    expect(localTimeToUtc("01:30", day)).toBe("06:30:00");
-    expect(localTimeToUtc("03:30", day)).toBe("07:30:00");
-    expect(localTimeToUtc("19:30", day)).toBe("00:30:00");
+    expect(localTimeToUtc("02:30", day)).toBe("01:30:00");
+    expect(localTimeToUtc("01:30", day)).toBe("00:30:00");
+    expect(localTimeToUtc("03:30", day)).toBe("02:30:00");
+    expect(localTimeToUtc("19:30", day)).toBe("18:30:00");
   });
 
   it("preserves either original instant when an autumn local time is repeated", () => {
@@ -104,14 +107,14 @@ describe("rule schedule conversion", () => {
     expect(localTimeToUtc("01:30", day)).toBeUndefined();
   });
 
-  it("handles New York's repeated local times and UTC-date anchoring", () => {
+  it("ignores the host timezone's repeated autumn time", () => {
     process.env.TZ = "America/New_York";
     const day = reference("2026-11-01T12:00:00Z");
-    expect(localTimeToUtc("01:30", day, "05:30:00")).toBe("05:30:00");
-    expect(localTimeToUtc("01:30", day, "06:30:00")).toBe("06:30:00");
-    expect(localTimeToUtc("01:45", day, "06:30:00")).toBe("06:45:00");
-    expect(localTimeToUtc("01:45", day)).toBe("05:45:00");
-    expect(localTimeToUtc("19:30", day)).toBeUndefined();
+    expect(localTimeToUtc("01:30", day, "05:30:00")).toBe("00:30:00");
+    expect(localTimeToUtc("01:30", day, "06:30:00")).toBe("00:30:00");
+    expect(localTimeToUtc("01:45", day, "06:30:00")).toBe("00:45:00");
+    expect(localTimeToUtc("01:45", day)).toBe("00:45:00");
+    expect(localTimeToUtc("19:30", day)).toBe("18:30:00");
   });
 
   it.each([

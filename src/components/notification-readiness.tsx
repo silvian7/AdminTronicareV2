@@ -18,6 +18,10 @@ import {
 } from "../../shared/notification-readiness";
 import { getSessionEpoch, request } from "../api";
 import { useAdmin } from "../context";
+import {
+  DISPLAY_TIME_ZONE,
+  formatDisplayDateTime,
+} from "../../shared/date-time";
 
 export function useNotificationReadiness(userIds: readonly string[]) {
   const { organization } = useAdmin();
@@ -148,8 +152,11 @@ export function NotificationReadinessCard({ userId }: { userId: string }) {
           {available?.lastRegistrationAt && (
             <Typography.Text type="secondary">
               Last registration:{" "}
-              <time dateTime={available.lastRegistrationAt}>
-                {new Date(available.lastRegistrationAt).toLocaleString()}
+              <time
+                dateTime={available.lastRegistrationAt}
+                title={DISPLAY_TIME_ZONE}
+              >
+                {formatDisplayDateTime(available.lastRegistrationAt)}
               </time>
             </Typography.Text>
           )}

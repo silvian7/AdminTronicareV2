@@ -7,10 +7,11 @@ import {
   type CareFixturesOptions,
 } from "./care-fixtures";
 
-test.use({ timezoneId: "Europe/Brussels" });
+test.use({ timezoneId: "America/New_York" });
 
 async function openTrends(page: Page, options: CareFixturesOptions = {}) {
-  await page.clock.setFixedTime(new Date("2026-10-29T12:00:00Z"));
+  // Brussels has crossed midnight; both UTC and the browser are still yesterday.
+  await page.clock.setFixedTime(new Date("2026-10-28T23:30:00Z"));
   const fixture = await installCareFixtures(page, {
     withTrends: true,
     ...options,
@@ -154,7 +155,7 @@ test("an accessible daily point link opens its actual stored report identity", a
     new RegExp(`/care/subjects/${subject.id}/reports/${report.id}$`),
   );
   await expect(
-    page.getByRole("heading", { name: "Report summary", exact: true }),
+    page.getByRole("heading", { name: "Reporting period", exact: true }),
   ).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
 });
@@ -262,7 +263,10 @@ test("a different subject cannot reuse another subject's trend response", async 
     .getByRole("link", { name: "Overview", exact: true })
     .click();
   await page.getByRole("link", { name: target.tag, exact: true }).click();
-  await page.getByRole("link", { name: "Trends", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "Caregiver navigation", exact: true })
+    .getByRole("link", { name: "Trends", exact: true })
+    .click();
   await expect(page).toHaveURL(
     new RegExp(`/care/subjects/${target.id}/trends$`),
   );

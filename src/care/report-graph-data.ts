@@ -4,6 +4,7 @@ import type {
   CareReportDetail,
   CareSeries,
 } from "../../shared/care";
+import { parseBrusselsDateTimeInput } from "../../shared/date-time";
 
 export const bedStateLabel = (state: BedState) =>
   state === "in_bed"
@@ -12,23 +13,17 @@ export const bedStateLabel = (state: BedState) =>
       ? "Out of bed"
       : "Unknown";
 
-export function utcInput(value: string) {
-  return new Date(value).toISOString().slice(0, -1);
-}
-
-/** datetime-local is deliberately interpreted as UTC, as its visible label states. */
-export function graphRange(start: string, end: string, period: CarePeriod) {
-  const parse = (value: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/.test(value))
-      return NaN;
-    const at = Date.parse(`${value}Z`);
-    return Number.isFinite(at) &&
-      new Date(at).toISOString().slice(0, 16) === value.slice(0, 16)
-      ? at
-      : NaN;
-  };
-  const left = parse(start),
-    right = parse(end);
+/** Preserve unchanged DST-fold boundaries; edited local times must be unambiguous. */
+export function graphRange(
+  start: string,
+  end: string,
+  period: CarePeriod,
+  previous = { start: period.start, end: period.endExclusive },
+) {
+  const from = parseBrusselsDateTimeInput(start, previous.start),
+    to = parseBrusselsDateTimeInput(end, previous.end),
+    left = from ? Date.parse(from) : NaN,
+    right = to ? Date.parse(to) : NaN;
   if (
     !Number.isFinite(left) ||
     !Number.isFinite(right) ||

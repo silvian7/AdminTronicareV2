@@ -13,6 +13,7 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { CareMetric, CareTrends } from "../../shared/care";
 import { translated } from "../../shared/resources";
+import { brusselsDateInput } from "../../shared/date-time";
 import {
   careDateOffset,
   careDate,
@@ -140,7 +141,7 @@ export default function CareTrendsPage() {
   const { subjectId } = useParams<{ subjectId: string }>();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = brusselsDateInput(new Date());
   const end = params.get("endDate") ?? today;
   const safeEnd = validCareDate(end) ? end : today;
   const start = params.get("startDate") ?? undefined;
@@ -236,8 +237,7 @@ export default function CareTrendsPage() {
             <p>
               {translated(subject.tag) ||
                 translated(subject.label) ||
-                `Asset #${subject.id}`}{" "}
-              · Asset #{subject.id}
+                "Resident"}
             </p>
           )}
         </div>
@@ -309,7 +309,7 @@ export default function CareTrendsPage() {
               </div>
               {!custom && (
                 <label>
-                  Trend end date (UTC)
+                  Trend end date
                   <Input
                     aria-label="Trend end date"
                     type="date"
@@ -346,7 +346,7 @@ export default function CareTrendsPage() {
                 }}
               >
                 <label>
-                  Custom start date (UTC)
+                  Custom start date
                   <Input
                     aria-label="Custom start date"
                     type="date"
@@ -356,7 +356,7 @@ export default function CareTrendsPage() {
                   />
                 </label>
                 <label>
-                  Custom end date (UTC)
+                  Custom end date
                   <Input
                     aria-label="Custom end date"
                     type="date"
@@ -370,10 +370,10 @@ export default function CareTrendsPage() {
             )}
             {rangeError && <Alert type="error" message={rangeError} showIcon />}
             <p className="care-note">
-              Each day shows an unambiguous eligible completed report by its
-              original UTC report date. Missing, unverified or ambiguous days
-              are unavailable; incomplete reports are shown separately. These
-              states are not zero. Open a report to inspect its exact period.
+              Each day shows an unambiguous eligible completed report. Times use
+              Brussels local time. Missing, unverified or ambiguous days are
+              unavailable; incomplete reports are shown separately. These states
+              are not zero. Open a report to inspect its exact period.
             </p>
           </Card>
           {query.isError ? (
@@ -432,7 +432,7 @@ export default function CareTrendsPage() {
                   size="small"
                   columns={[
                     {
-                      title: "Report date (UTC)",
+                      title: "Report date",
                       dataIndex: "date",
                       width: 130,
                       render: (value: string) => careDate(value),

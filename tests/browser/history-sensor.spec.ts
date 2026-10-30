@@ -647,7 +647,7 @@ test("unknown or absent value types show a missing value instead of guessing fro
   ]);
 });
 
-test("history event time uses the browser timezone and event date's winter or summer offset", async ({
+test("history event time uses Brussels and the event date's winter or summer offset", async ({
   page,
 }) => {
   const cases = [
@@ -742,27 +742,27 @@ test("invalid, absent or unzoned history event times preserve the reading withou
   }
 });
 
-test.describe("history event time follows a different browser timezone", () => {
+test.describe("history event time retains Brussels time in a different browser timezone", () => {
   test.use({ timezoneId: "America/New_York" });
 
-  test("UTC instants display local time including a previous local calendar day", async ({
+  test("UTC instants display Brussels time regardless of the browser's calendar day", async ({
     page,
   }) => {
     const cases = [
       {
         id: "121",
         raw: "2026-01-01T01:30:45Z",
-        display: "31/12/2025, 20:30:45",
+        display: "01/01/2026, 02:30:45",
         iso: "2026-01-01T01:30:45.000Z",
       },
       {
         id: "122",
         raw: "20260708123045",
-        display: "08/07/2026, 08:30:45",
+        display: "08/07/2026, 14:30:45",
         iso: "2026-07-08T12:30:45.000Z",
       },
     ];
-    await syntheticHistory(page, {
+    const mock = await syntheticHistory(page, {
       pages: [
         historyPage(
           cases.map(({ id, raw }) =>
@@ -771,7 +771,21 @@ test.describe("history event time follows a different browser timezone", () => {
         ),
       ],
     });
-    await loadHistory(page);
+    await page.goto(`/sensor-history?idsensor=${largeSensorId}`);
+    await page
+      .getByLabel("From (Brussels)", { exact: true })
+      .fill("2026-01-01T02:30:45");
+    await page
+      .getByLabel("Until (Brussels)", { exact: true })
+      .fill("2026-07-08T14:30:45");
+    await page.getByRole("button", { name: /Load history$/ }).click();
+    await expect(readingRow(page, "121")).toBeVisible();
+    expect(mock.historyQueries[0].get("dhstart")).toBe(
+      "2026-01-01T01:30:45.000Z",
+    );
+    expect(mock.historyQueries[0].get("dhend")).toBe(
+      "2026-07-08T12:30:45.000Z",
+    );
     expect(
       await page.evaluate(
         () => Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -783,7 +797,7 @@ test.describe("history event time follows a different browser timezone", () => {
       await expect(cell.locator("time")).toHaveAttribute("datetime", iso);
       await expect(cell.locator("time")).toHaveAttribute(
         "title",
-        "America/New_York",
+        "Europe/Brussels",
       );
     }
   });

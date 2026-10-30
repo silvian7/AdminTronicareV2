@@ -22,10 +22,12 @@ export function OrganizationSelector({
   organizations,
   onBusyChange,
   showLabel = true,
+  showIds = true,
 }: {
   organizations: readonly RecordData[];
   onBusyChange: (busy: boolean) => void;
   showLabel?: boolean;
+  showIds?: boolean;
 }) {
   const session = getSession()!;
   const { identity, can, confirmOrganizationChange } = useAdmin();
@@ -60,6 +62,8 @@ export function OrganizationSelector({
       : `Role #${id}`;
   };
   const active = session.activeOrganizationId;
+  const organizationFallback = (id: string) =>
+    showIds ? `Organization #${id}` : "Organization";
   const options = [
     ...(active === null
       ? [
@@ -81,8 +85,8 @@ export function OrganizationSelector({
           value: membership.organizationId,
           label: organization
             ? translated(valueOf(organization, "Tag")).trim() ||
-              `Organization #${membership.organizationId}`
-            : `Organization #${membership.organizationId}`,
+              organizationFallback(membership.organizationId)
+            : organizationFallback(membership.organizationId),
           description: roleTitle(membership.userTypeId),
           disabled: false,
         };
@@ -94,7 +98,7 @@ export function OrganizationSelector({
   )
     options.unshift({
       value: active,
-      label: `Organization #${active}`,
+      label: organizationFallback(active),
       description: roleTitle(identity.userTypeId),
       disabled: true,
     });

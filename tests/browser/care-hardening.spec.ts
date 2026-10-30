@@ -6,14 +6,12 @@ import {
   syntheticCareTrends,
 } from "./care-fixtures";
 
-test.use({ timezoneId: "Europe/Brussels" });
+test.use({ timezoneId: "America/New_York" });
 
 const fourPanels =
-  "Bed presence, heart rate, respiration and movement over time";
+  "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
 const fivePanels =
   "Bed presence, heart rate, respiration, movement and Vendor HRV over time";
-const reading = (region: Locator, label: string) =>
-  region.getByText(label, { exact: true }).locator("..").locator("dd");
 const graphRegion = (page: Page) =>
   page.getByRole("region", { name: "Report graphs", exact: true });
 
@@ -89,7 +87,7 @@ for (const kind of ["report", "trends"] as const) {
       await held.finished;
       await expect(page.getByLabel("Login", { exact: true })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Report summary", exact: true }),
+        page.getByRole("heading", { name: "Reporting period", exact: true }),
       ).toHaveCount(0);
       await expect(page.getByRole("img", { name: fourPanels })).toHaveCount(0);
       await expect(
@@ -116,11 +114,11 @@ test("Brussels DST labels distinguish repeated local times while UTC report boun
   const fixture = await installCareFixtures(page);
   const subject = fixture.subjects[0],
     report = structuredClone(fixture.histories.get(subject.id)![0]);
-  // A labelled synthetic report keeps the actual 24-hour 05:00 UTC convention.
+  // A synthetic short window covers both occurrences of the Brussels repeated hour.
   report.period = {
-    start: "2026-10-24T05:00:00.000Z",
-    endExclusive: "2026-10-25T05:00:00.000Z",
-    reportDate: "2026-10-24",
+    start: "2026-10-25T00:30:00.000Z",
+    endExclusive: "2026-10-25T01:31:00.000Z",
+    reportDate: "2026-10-25",
     timezone: "UTC",
   };
   subject.latestReport = report;
@@ -153,33 +151,58 @@ test("Brussels DST labels distinguish repeated local times while UTC report boun
   await page.goto(`/care/subjects/${subject.id}/reports/${report.id}`);
   const graphs = graphRegion(page);
   await expect(graphs.getByRole("img", { name: fourPanels })).toBeVisible();
-  const inspector = graphs.getByRole("region", {
-    name: "Sample values",
+  const visible = graphs.getByRole("status", {
+    name: "Visible range",
     exact: true,
   });
-  await expect(reading(inspector, "Sample time")).toContainText(
-    /25\/10\/2026.*02:30:00.*(?:GMT\+2|CEST)/,
+  await expect(visible.locator("time").nth(0)).toContainText(
+    /25\/10\/2026.*02:30:00.*CEST/,
   );
-  await expect(
-    reading(inspector, "Sample time").locator("time"),
-  ).toHaveAttribute("datetime", series.points[0].at);
-  await inspector
-    .getByRole("button", { name: "Next sample", exact: true })
-    .click();
-  await expect(reading(inspector, "Sample time")).toContainText(
-    /25\/10\/2026.*02:30:00.*(?:GMT\+1|CET)/,
+  await expect(visible.locator("time").nth(0)).toHaveAttribute(
+    "datetime",
+    report.period.start,
   );
+  await expect(visible.locator("time").nth(1)).toContainText(
+    /25\/10\/2026.*02:31:00.*CET/,
+  );
+  await expect(visible.locator("time").nth(1)).toHaveAttribute(
+    "datetime",
+    report.period.endExclusive,
+  );
+  const seriesReads = fixture.calls.filter((call) =>
+    call.path.endsWith("/series"),
+  ).length;
+  await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
+  expect(
+    fixture.calls.filter((call) => call.path.endsWith("/series")),
+  ).toHaveLength(seriesReads);
+  await expect
+    .poll(() => visibleBounds(graphs))
+    .toEqual([
+      Date.parse(report.period.start),
+      Date.parse(report.period.endExclusive),
+    ]);
   await expect(
-    reading(inspector, "Sample time").locator("time"),
-  ).toHaveAttribute("datetime", series.points[1].at);
-  expect(
-    await graphs.getByLabel("Range start (UTC)", { exact: true }).inputValue(),
-  ).toMatch(/^2026-10-24T05:00/);
-  expect(
-    await graphs.getByLabel("Range end (UTC)", { exact: true }).inputValue(),
-  ).toMatch(/^2026-10-25T05:00/);
+    graphs.getByRole("heading", { name: /^Vendor HRV/ }),
+  ).toContainText("Not available");
   await expect(page).toHaveURL(new RegExp(`/reports/${report.id}$`));
-  await inspector.screenshot({
+  await page.reload();
+  await expect(graphs.getByRole("img", { name: fourPanels })).toBeVisible();
+  await expect
+    .poll(() => visibleBounds(graphs))
+    .toEqual([
+      Date.parse(report.period.start),
+      Date.parse(report.period.endExclusive),
+    ]);
+  for (const call of fixture.calls.filter((call) =>
+    call.path.endsWith("/series"),
+  )) {
+    expect(call.query.has("start")).toBe(false);
+    expect(call.query.has("end")).toBe(false);
+    expect(call.query.has("maxPoints")).toBe(false);
+  }
+  await graphs.screenshot({
     path: testInfo.outputPath("care-brussels-dst.png"),
   });
   expect(fixture.unexpected).toEqual([]);
@@ -245,56 +268,30 @@ test("maximum bounded series remains operable with 5000 points, 5000 intervals a
   await expect(
     graphs.getByText("Reduced sample set", { exact: true }),
   ).toBeVisible();
-  await graphs.getByRole("button", { name: "Load range", exact: true }).click();
-  await expect
-    .poll(() =>
-      fixture.calls.some(
-        (call) =>
-          call.path.endsWith("/series") &&
-          call.query.get("maxPoints") === "5000",
-      ),
-    )
-    .toBe(true);
+  const initialSeriesReads = fixture.calls.filter((call) =>
+    call.path.endsWith("/series"),
+  );
+  expect(initialSeriesReads).toHaveLength(1);
+  for (const key of ["start", "end", "maxPoints"])
+    expect(initialSeriesReads[0].query.has(key)).toBe(false);
   await expect(graphs.getByRole("img", { name: fourPanels })).toBeVisible();
-  await graphs
-    .getByRole("checkbox", { name: "Show Vendor HRV", exact: true })
-    .check();
   await expect(graphs.getByRole("img", { name: fivePanels })).toBeVisible();
   const fullBounds = await visibleBounds(graphs);
   await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect.poll(() => visibleBounds(graphs)).not.toEqual(fullBounds);
-  const inspector = graphs.getByRole("region", {
-    name: "Sample values",
-    exact: true,
-  });
-  await inspector
-    .getByRole("combobox", { name: "Inspect retained sample", exact: true })
-    .selectOption("4999");
+  await graphs.getByRole("button", { name: "Pan later", exact: true }).click();
+  for (const name of ["Sample values", "Vendor HRV sample values", "Bed exits"])
+    await expect(graphs.getByRole("region", { name, exact: true })).toHaveCount(
+      0,
+    );
   await expect(
-    reading(inspector, "Sample time").locator("time"),
-  ).toHaveAttribute("datetime", data.points[4999].at);
-  await expect(
-    inspector.getByRole("button", { name: "Next sample", exact: true }),
-  ).toBeDisabled();
-  await inspector
-    .getByRole("button", { name: "Previous sample", exact: true })
-    .click();
-  await expect(
-    reading(inspector, "Sample time").locator("time"),
-  ).toHaveAttribute("datetime", data.points[4998].at);
-  const hrv = graphs.getByRole("region", {
-    name: "Vendor HRV sample values",
-    exact: true,
-  });
-  await hrv
-    .getByRole("combobox", { name: "Inspect Vendor HRV sample", exact: true })
-    .selectOption("287");
-  await expect(reading(hrv, "Vendor HRV (ms)")).toHaveText("42");
-  await expect(
-    hrv.getByRole("button", { name: "Next HRV sample", exact: true }),
-  ).toBeDisabled();
+    graphs.getByRole("heading", { name: /^Vendor HRV/ }),
+  ).toBeVisible();
   await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
   await expect.poll(() => visibleBounds(graphs)).toEqual(fullBounds);
+  expect(
+    fixture.calls.filter((call) => call.path.endsWith("/series")),
+  ).toHaveLength(1);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > innerWidth + 1,
@@ -392,7 +389,7 @@ test("31 daily reports stay bounded and their final keyboard link opens the exac
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/reports/${reports[30].id}$`));
   await expect(
-    page.getByRole("heading", { name: "Report summary", exact: true }),
+    page.getByRole("heading", { name: "Reporting period", exact: true }),
   ).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
 });

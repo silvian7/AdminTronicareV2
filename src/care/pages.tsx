@@ -12,7 +12,7 @@ import {
   Typography,
   type TableColumnsType,
 } from "antd";
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ReloadOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { CarePeriod, CareReport, CareSubject } from "../../shared/care";
 import { translated } from "../../shared/resources";
@@ -53,9 +53,7 @@ function useStatusTime() {
 }
 
 const subjectName = (subject: CareSubject) =>
-  translated(subject.tag) ||
-  translated(subject.label) ||
-  `Asset #${subject.id}`;
+  translated(subject.tag) || translated(subject.label) || "Resident";
 
 function knownReport(report: CareReport | null | undefined, subjectId: string) {
   return !!(
@@ -298,10 +296,7 @@ export function CareOverview() {
   ];
   return (
     <div className="care-page care-overview">
-      <div className="care-page-heading">
-        <div>
-          <h1>Overview</h1>
-        </div>
+      <div className="care-page-heading" style={{ justifyContent: "flex-end" }}>
         <Button
           icon={<ReloadOutlined aria-hidden="true" />}
           loading={query.isFetching}
@@ -429,10 +424,6 @@ export function CareOverview() {
   );
 }
 
-const metricNumber = new Intl.NumberFormat(undefined, {
-  maximumSignificantDigits: 15,
-});
-
 export function CareDetail() {
   const statusNow = useStatusTime();
   const navigate = useNavigate();
@@ -500,19 +491,6 @@ export function CareDetail() {
   };
   return (
     <div className="care-page care-detail">
-      <div className="care-detail-links">
-        <Link to="/care" className="care-back-link">
-          <ArrowLeftOutlined aria-hidden="true" /> Back to overview
-        </Link>
-        {subject && (
-          <Link
-            className="care-back-link"
-            to={`${careSubjectUrl(subject.id)}/trends`}
-          >
-            Trends
-          </Link>
-        )}
-      </div>
       <div className="care-page-heading">
         <div>
           <div className="care-asset-title">
@@ -525,18 +503,6 @@ export function CareDetail() {
             <p>{translated(subject.label)}</p>
           )}
         </div>
-        {validSubject && (
-          <Button
-            icon={<ReloadOutlined aria-hidden="true" />}
-            loading={
-              subjectQuery.isFetching ||
-              (reportAllowed && reportQuery.isFetching)
-            }
-            onClick={refresh}
-          >
-            Refresh
-          </Button>
-        )}
       </div>
       {!validSubject || !validReport ? (
         <Alert
@@ -566,24 +532,6 @@ export function CareDetail() {
         )
       ) : (
         <>
-          <dl className="care-identity-metadata">
-            <div>
-              <dt>Asset ID</dt>
-              <dd>{subject.id}</dd>
-            </div>
-            <div>
-              <dt>Organization ID</dt>
-              <dd>{subject.organizationId}</dd>
-            </div>
-          </dl>
-          <Card
-            title={<h2 className="care-card-heading">Latest observation</h2>}
-          >
-            <BedObservation subject={subject} />
-            <p className="care-note">
-              This observation is separate from the completed report below.
-            </p>
-          </Card>
           {reportAllowed && validReport && (
             <ReportNavigation
               subject={subject}
@@ -652,38 +600,9 @@ export function CareDetail() {
               >
                 <Period period={report.period} />
                 <p className="care-time-note">
-                  Reporting convention: {report.period.timezone}. Times shown in{" "}
-                  {careDisplayTimezone()}. The end marks the start of the next
-                  period.
+                  Dates and times shown in {careDisplayTimezone()}. The end
+                  marks the start of the next period.
                 </p>
-              </Card>
-              <Card
-                title={<h2 className="care-card-heading">Report summary</h2>}
-              >
-                <p className="care-note">
-                  Stored report values. Data coverage is not available.
-                </p>
-                <dl className="care-summary-values">
-                  {report.metrics.map((metric) => (
-                    <div key={metric.key}>
-                      <dt>{metric.label}</dt>
-                      <dd>
-                        {metric.value === null ||
-                        !Number.isFinite(metric.value) ? (
-                          <span className="care-missing">Not available</span>
-                        ) : (
-                          <>
-                            <span>{metricNumber.format(metric.value)}</span>
-                            <small>{metric.unit}</small>
-                          </>
-                        )}
-                      </dd>
-                      {metric.definition && (
-                        <p className="care-note">{metric.definition}</p>
-                      )}
-                    </div>
-                  ))}
-                </dl>
               </Card>
               <Suspense
                 fallback={
@@ -698,48 +617,6 @@ export function CareDetail() {
                   report={report}
                 />
               </Suspense>
-              <Card
-                title={
-                  <h2 className="care-card-heading">Report information</h2>
-                }
-              >
-                <dl className="care-provenance">
-                  <div>
-                    <dt>Generation time</dt>
-                    <dd>
-                      {report.generatedAt ? (
-                        <Moment value={report.generatedAt} />
-                      ) : (
-                        "Not recorded"
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Received</dt>
-                    <dd>
-                      <Moment value={report.provenance.ingestedAt} />
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Processed</dt>
-                    <dd>
-                      <Moment value={report.provenance.parsedAt} />
-                    </dd>
-                  </div>
-                  {report.provenance.vendorUpdatedAt && (
-                    <div>
-                      <dt>Vendor updated</dt>
-                      <dd>
-                        <Moment value={report.provenance.vendorUpdatedAt} />
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-                <p className="care-note">
-                  Received and processed times describe report preparation, not
-                  its measurement window.
-                </p>
-              </Card>
             </>
           )}
         </>

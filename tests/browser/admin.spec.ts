@@ -205,7 +205,11 @@ test("sensor history loads the documented readings", async ({ page }) => {
   await page.getByRole("button", { name: /Load history$/ }).click();
   const eventAt = "2026-09-16T10:30:00.000Z";
   const localEvent = await page.evaluate(
-    (value) => new Date(value).toLocaleString(undefined, { hourCycle: "h23" }),
+    (value) =>
+      new Date(value).toLocaleString("en-GB", {
+        hourCycle: "h23",
+        timeZone: "Europe/Brussels",
+      }),
     eventAt,
   );
   await expect(page.locator(`time[datetime="${eventAt}"]`)).toHaveText(

@@ -122,7 +122,11 @@ async function expectLocalTime(
   zone: string,
 ) {
   const expected = await page.evaluate(
-    (value) => new Date(value).toLocaleString(undefined, { hourCycle: "h23" }),
+    (value) =>
+      new Date(value).toLocaleString("en-GB", {
+        hourCycle: "h23",
+        timeZone: "Europe/Brussels",
+      }),
     iso,
   );
   const field = detailField(page, label);
@@ -334,10 +338,10 @@ test("all user detail timestamps display local time using each event's winter or
   }
 });
 
-test.describe("user timestamps follow a different browser timezone", () => {
+test.describe("user timestamps retain Brussels time in a different browser timezone", () => {
   test.use({ timezoneId: "America/New_York" });
 
-  test("local dates can roll back while invalid, zero and empty timestamps remain unavailable", async ({
+  test("Brussels dates stay fixed while invalid, zero and empty timestamps remain unavailable", async ({
     page,
   }) => {
     const timestamps: Record<string, unknown> = {
@@ -352,10 +356,10 @@ test.describe("user timestamps follow a different browser timezone", () => {
       page,
       "Last Login",
       "2026-01-15T01:30:00.000Z",
-      "America/New_York",
+      "Europe/Brussels",
     );
     await expect(detailField(page, "Last Login")).toHaveText(
-      "14/01/2026, 20:30:00",
+      "15/01/2026, 02:30:00",
     );
     for (const label of ["Last Logout", "Created", "Modified"]) {
       await expect(detailField(page, label)).toHaveText("\u2014");
@@ -376,7 +380,7 @@ test.describe("user timestamps follow a different browser timezone", () => {
       page,
       "Modified",
       "1970-01-01T00:00:00.000Z",
-      "America/New_York",
+      "Europe/Brussels",
     );
   });
 });

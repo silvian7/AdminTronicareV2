@@ -1,3 +1,5 @@
+import { DISPLAY_TIME_ZONE } from "./date-time";
+
 export const ruleScheduleLabels: Readonly<Record<string, string>> = {
   TimeStart: "Start time (local)",
   TimeEnd: "End time (local)",
@@ -32,9 +34,48 @@ function parseTime(
 function formatTime(date: Date, utc: boolean): string {
   const parts = utc
     ? [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
-    : [date.getHours(), date.getMinutes(), date.getSeconds()];
-  const milliseconds = utc ? date.getUTCMilliseconds() : date.getMilliseconds();
+    : localTimeParts(date).slice(0, 3);
+  const milliseconds = date.getUTCMilliseconds();
   return `${parts.map((part) => String(part).padStart(2, "0")).join(":")}${milliseconds ? `.${String(milliseconds).padStart(3, "0")}` : ""}`;
+}
+
+const localFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: DISPLAY_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function localParts(date: Date): Record<string, number> {
+  return Object.fromEntries(
+    localFormatter
+      .formatToParts(date)
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value }) => [type, Number(value)]),
+  );
+}
+
+function localTimeParts(date: Date): TimeParts {
+  const parts = localParts(date);
+  return [parts.hour, parts.minute, parts.second, date.getUTCMilliseconds()];
+}
+
+function timezoneOffset(date: Date): number {
+  const parts = localParts(date);
+  const localTimestamp = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    date.getUTCMilliseconds(),
+  );
+  return (date.getTime() - localTimestamp) / 60_000;
 }
 
 function utcDayStart(referenceDate: Date): number | undefined {
@@ -72,19 +113,16 @@ export function localTimeToUtc(
   const start = utcDayStart(referenceDate);
   if (!time || start === undefined) return undefined;
   const matches = (date: Date) =>
-    date.getHours() === time[0] &&
-    date.getMinutes() === time[1] &&
-    date.getSeconds() === time[2] &&
-    date.getMilliseconds() === time[3];
+    localTimeParts(date).every((part, index) => part === time[index]);
   const original = utcScheduleDate(originalUtc, referenceDate);
   // A repeated local time must not change an untouched UTC schedule.
   if (original && matches(original)) return formatTime(original, true);
 
   const offsets = new Set<number>();
   for (let hour = 0; hour <= 24; hour += 1)
-    offsets.add(new Date(start + hour * hourMilliseconds).getTimezoneOffset());
-  offsets.add(new Date(start + dayMilliseconds - 1).getTimezoneOffset());
-  if (original) offsets.add(original.getTimezoneOffset());
+    offsets.add(timezoneOffset(new Date(start + hour * hourMilliseconds)));
+  offsets.add(timezoneOffset(new Date(start + dayMilliseconds - 1)));
+  if (original) offsets.add(timezoneOffset(original));
 
   const localMilliseconds =
     ((time[0] * 60 + time[1]) * 60 + time[2]) * 1000 + time[3];
@@ -105,9 +143,7 @@ export function localTimeToUtc(
     .sort((a, b) => a - b)
     .map((time) => new Date(time));
   const preferred = original
-    ? dates.find(
-        (date) => date.getTimezoneOffset() === original.getTimezoneOffset(),
-      )
+    ? dates.find((date) => timezoneOffset(date) === timezoneOffset(original))
     : undefined;
   const date = preferred ?? dates[0];
   // Reject gaps instead of allowing Date to silently move the entered time.
