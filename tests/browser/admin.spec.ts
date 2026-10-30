@@ -30,7 +30,28 @@ test("all resource lists and details render without browser errors", async ({
     await expect(
       page.getByRole("tab", { name: "Details", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".ant-descriptions")).toBeVisible();
+    await expect(page.locator(".ant-descriptions").first()).toBeVisible();
+    if (
+      [
+        "users",
+        "organizations",
+        "usergroups",
+        "assets",
+        "hubs",
+        "devices",
+        "sensors",
+        "rules",
+        "actions",
+      ].includes(resource.name)
+    )
+      await expect(
+        page.locator(".form-section .ant-card-head-title"),
+      ).toHaveText([
+        "General",
+        "Relationships",
+        ...(resource.name === "rules" ? ["Settings", "Activity"] : []),
+        "Configuration",
+      ]);
   }
   expect(errors).toEqual([]);
 });
@@ -144,12 +165,52 @@ test("internal navigation offers to keep unsaved edits", async ({ page }) => {
   await expect(page).toHaveURL(/\/assets\/1$/);
 });
 test("sensor history loads the documented readings", async ({ page }) => {
+  await page.route("**/api/history?**", (route) => {
+    expect(new URL(route.request().url()).searchParams.get("idsensor")).toBe(
+      "1",
+    );
+    return route.fulfill({
+      json: {
+        data: [
+          {
+            m_nIDSensorHistory: "42",
+            m_nIDSensor: "1",
+            m_nIDSensorType: "1",
+            m_dhDhLastEvent: "20260916103000",
+            m_nValueInt: "21",
+            m_bValueBool: false,
+            m_rValueReal: "21.5",
+          },
+        ],
+        snapshot: "synthetic-snapshot",
+        highWaterId: "42",
+        hasMore: false,
+      },
+    });
+  });
+  await page.route("**/api/resources/sensortypes/1", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "1",
+          m_nIDSensorType: "1",
+          m_nValueType: "4",
+          m_sTag: "SYNTHETIC-TEMPERATURE",
+        },
+      },
+    }),
+  );
   await login(page);
   await page.goto("/sensor-history?idsensor=1");
   await page.getByRole("button", { name: /Load history$/ }).click();
-  await expect(
-    page.getByRole("cell", { name: "2026-09-16 10:30:00", exact: true }),
-  ).toBeVisible();
+  const eventAt = "2026-09-16T10:30:00.000Z";
+  const localEvent = await page.evaluate(
+    (value) => new Date(value).toLocaleString(undefined, { hourCycle: "h23" }),
+    eventAt,
+  );
+  await expect(page.locator(`time[datetime="${eventAt}"]`)).toHaveText(
+    localEvent,
+  );
   await expect(
     page.getByRole("cell", { name: "21.5", exact: true }),
   ).toBeVisible();

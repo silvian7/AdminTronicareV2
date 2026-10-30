@@ -1,0 +1,182 @@
+.care-report-graphs .ant-card-head-title {
+  white-space: normal;
+}
+.care-graph-range-form,
+.care-graph-toolbar,
+.care-graph-sample-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 16px 0;
+}
+.care-graph-range-form label,
+.care-graph-sample-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-weight: 550;
+  max-width: 100%;
+}
+.care-graph-range-form input,
+.care-graph-sample-controls select {
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid #aebfca;
+  border-radius: 6px;
+  background: white;
+  padding: 8px;
+  min-height: 40px;
+  font: inherit;
+  color: #163246;
+}
+.care-graph-figure {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin-top: 14px;
+}
+.care-report-chart {
+  width: 100%;
+  height: 775px;
+}
+.care-graph-with-hrv .care-report-chart {
+  height: 995px;
+}
+.care-graph-hrv-option {
+  margin: 18px 0;
+}
+.care-graph-hrv-option label {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 550;
+}
+.care-graph-hrv-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: #6c59a6;
+}
+.care-graph-source-note {
+  margin-top: 20px;
+  border-top: 1px solid #dce6eb;
+  padding-top: 16px;
+}
+.care-graph-source-note summary {
+  cursor: pointer;
+  min-height: 40px;
+  padding-top: 8px;
+  color: #577183;
+}
+.care-graph-panel-title {
+  position: absolute;
+  left: 16px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  color: #163246;
+  z-index: 1;
+  pointer-events: none;
+}
+.care-graph-panel-title small {
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #577183;
+}
+.care-graph-panel-0 {
+  top: 18px;
+}
+.care-graph-panel-1 {
+  top: 190px;
+}
+.care-graph-panel-2 {
+  top: 370px;
+}
+.care-graph-panel-3 {
+  top: 550px;
+}
+.care-graph-panel-4 {
+  top: 730px;
+}
+.care-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  font-size: 13px;
+}
+.care-graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.care-graph-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #8d9ca6;
+}
+.care-graph-inspector,
+.care-bed-exits {
+  border-top: 1px solid #dce6eb;
+  margin-top: 24px;
+  padding-top: 18px;
+}
+.care-graph-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.care-graph-numbers dt {
+  font-size: 13px;
+  color: #577183;
+}
+.care-graph-numbers dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.care-bed-exits ul {
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow: auto;
+}
+.care-bed-exits li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 2px;
+}
+.care-bed-exits li .ant-btn {
+  margin-right: 8px;
+  white-space: normal;
+  height: auto;
+  min-height: 40px;
+}
+@media (max-width: 600px) {
+  .care-graph-range-form label {
+    width: 100%;
+  }
+  .care-graph-range-form input {
+    width: 100%;
+  }
+  .care-graph-panel-title {
+    left: 0;
+  }
+  .care-graph-panel-title small {
+    display: block;
+    margin: 4px 0 0;
+  }
+  .care-graph-sample-controls label {
+    width: 100%;
+  }
+  .care-graph-sample-controls select {
+    width: 100%;
+  }
+  .care-graph-numbers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

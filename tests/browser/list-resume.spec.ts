@@ -470,6 +470,8 @@ test("Assets refreshes every fifteen seconds without accelerating reference read
     page.getByRole("link", { name: organizationTag, exact: true }),
   ).toBeVisible();
   await page.clock.runFor(30_000);
+  // Flush the reference query's scheduled observer notification after the read.
+  await page.clock.runFor(1);
   await visibleWithPausedClock(
     page,
     page.getByRole("link", { name: secondTag, exact: true }),

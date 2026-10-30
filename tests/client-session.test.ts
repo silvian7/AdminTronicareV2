@@ -59,15 +59,40 @@ describe("account request isolation", () => {
     { level: 100, mustChangePassword: false, redirectTo: "/services" },
     { level: 30, mustChangePassword: true, redirectTo: "/account" },
     { level: 90, mustChangePassword: true, redirectTo: "/account" },
+    {
+      level: 30,
+      caregiverReadOnly: true,
+      mustChangePassword: false,
+      redirectTo: "/care",
+    },
+    {
+      level: 90,
+      caregiverReadOnly: true,
+      mustChangePassword: false,
+      redirectTo: "/care",
+    },
+    {
+      level: 30,
+      caregiverReadOnly: true,
+      mustChangePassword: true,
+      redirectTo: "/care/account",
+    },
+    {
+      level: 90,
+      caregiverReadOnly: true,
+      mustChangePassword: true,
+      redirectTo: "/care/account",
+    },
   ])(
-    "redirects level $level with password change $mustChangePassword to $redirectTo",
-    async ({ level, mustChangePassword, redirectTo }) => {
+    "redirects level $level with password change $mustChangePassword and caregiver $caregiverReadOnly to $redirectTo",
+    async ({ level, mustChangePassword, caregiverReadOnly, redirectTo }) => {
       const api = await import("../src/api");
       const current = account("A");
       current.identity = {
         ...current.identity,
         level,
         mustChangePassword,
+        caregiverReadOnly,
       };
       const fetcher = vi.fn(async (path: string) => {
         if (path === "/api/session/login" || path === "/api/session")
@@ -88,6 +113,79 @@ describe("account request isolation", () => {
         "/api/session",
       ]);
       expect(api.getSession()?.identity).toEqual(current.identity);
+    },
+  );
+
+  it.each([
+    { level: 30, mustChangePassword: false, redirectTo: "/care" },
+    { level: 90, mustChangePassword: false, redirectTo: "/care" },
+    { level: 30, mustChangePassword: true, redirectTo: "/care/account" },
+    { level: 90, mustChangePassword: true, redirectTo: "/care/account" },
+  ])(
+    "preserves an authorized care visit for level $level with password change $mustChangePassword",
+    async ({ level, mustChangePassword, redirectTo }) => {
+      const { sessionLanding } = await import("../src/api");
+      const current = account("A");
+      current.identity = { ...current.identity, level, mustChangePassword };
+      const original = structuredClone(current);
+      expect(sessionLanding(current, true)).toBe(redirectTo);
+      expect(current).toEqual(original);
+      expect(current.identity.caregiverReadOnly).toBeUndefined();
+    },
+  );
+
+  it("uses the authoritative post-login caregiver audience for its landing", async () => {
+    const api = await import("../src/api");
+    const initial = account("A");
+    initial.identity.level = 90;
+    const fresh = structuredClone(initial);
+    fresh.identity.caregiverReadOnly = true;
+    const fetcher = vi.fn(async (path: string) => {
+      if (path === "/api/session/login") return Response.json(initial);
+      if (path === "/api/session") return Response.json(fresh);
+      throw new Error("Unexpected authentication request");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      api.authProvider.login!({
+        login: "A",
+        password: "synthetic",
+        mode: "password",
+      }),
+    ).resolves.toMatchObject({ success: true, redirectTo: "/care" });
+    expect(api.getSession()?.identity).toEqual(fresh.identity);
+  });
+
+  it.each([200, 401])(
+    "fences an old %s response when the same account becomes caregiver-only",
+    async (status) => {
+      const { api, fetcher } = await setup();
+      const pending = delayedResponse();
+      let signal: AbortSignal | undefined;
+      fetcher.mockImplementationOnce(async (_path, options) => {
+        signal = options?.signal ?? undefined;
+        return pending.promise;
+      });
+      const previous = api
+        .request("/api/resources/assets/1")
+        .catch((error) => error);
+      const changed = account("A");
+      changed.identity.caregiverReadOnly = true;
+      fetcher.mockImplementationOnce(async () => Response.json(changed));
+      const epoch = api.getSessionEpoch();
+      await api.loadSession();
+      expect(api.getSessionEpoch()).toBe(epoch + 1);
+      expect(signal?.aborted).toBe(true);
+      pending.resolve(
+        Response.json(
+          status === 200
+            ? { data: { m_sLabel: "Old administration response" } }
+            : { message: "Old authorization expired." },
+          { status },
+        ),
+      );
+      expect(await previous).toMatchObject({ name: "AbortError" });
+      expect(api.getSession()?.identity).toEqual(changed.identity);
     },
   );
 

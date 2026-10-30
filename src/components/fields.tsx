@@ -30,6 +30,7 @@ import {
 } from "../../shared/resources";
 import { useAdmin } from "../context";
 import { hubLastEventTime } from "../../shared/hub-status";
+import { sensorLastReadingTime } from "../../shared/sensor-reading";
 import { linkedHubAssetIds } from "../../shared/hub-assets";
 import {
   millisecondsToSeconds,
@@ -837,25 +838,11 @@ export function RuleScheduleTime({ value }: { value: unknown }) {
   );
 }
 export function SensorLastReading({ row }: { row: RecordData }) {
-  const value = valueOf(row, "DhLastEvent");
-  if (typeof value !== "string") return <span className="muted">—</span>;
-  const timestamp = value.replace(
-    /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/,
-    "$1-$2-$3T$4:$5:$6Z",
+  return (
+    <LocalEventTime
+      timestamp={sensorLastReadingTime(valueOf(row, "DhLastEvent"))}
+    />
   );
-  const parts = timestamp.match(
-    /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/,
-  );
-  if (!parts) return <span className="muted">—</span>;
-  const calendar = new Date(`${parts[1]}T${parts[2]}Z`);
-  const date = new Date(timestamp);
-  if (
-    !Number.isFinite(calendar.getTime()) ||
-    calendar.toISOString().slice(0, 19) !== `${parts[1]}T${parts[2]}` ||
-    !Number.isFinite(date.getTime())
-  )
-    return <span className="muted">—</span>;
-  return <LocalEventTime timestamp={date.getTime()} />;
 }
 export function SensorHistoryValue({ row }: { row: RecordData }) {
   return <SensorReadingValue row={row} history />;

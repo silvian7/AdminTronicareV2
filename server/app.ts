@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { LosslessNumber, stringify } from "lossless-json";
+import { LosslessNumber, parse, stringify } from "lossless-json";
 import {
   resourceMap,
   assetAssignmentRoutes,
@@ -24,6 +24,7 @@ import {
 import type { Config } from "./config";
 import { hubLastEventTime } from "../shared/hub-status";
 import { createUpstream, type Transport } from "./upstream";
+import { registerCareRoutes } from "./care";
 import { coreOutboxes } from "./core-outboxes";
 import {
   serviceOutboxes,
@@ -88,6 +89,15 @@ export function createApp(
 ) {
   const app = express();
   const upstream = createUpstream(config, transport);
+  const careUpstream = config.careApiOrigin
+    ? createUpstream(
+        {
+          ...config,
+          origins: { ...config.origins, core: config.careApiOrigin },
+        },
+        transport,
+      )
+    : upstream;
   const authorization = createAuthorization(upstream);
   const contextChanged = () =>
     new ApiError(
@@ -103,8 +113,13 @@ export function createApp(
       undefined,
       "organization_switch_pending",
     );
+  const isCaregiver = (session: Session) =>
+    session.identity.caregiverReadOnly === true ||
+    config.caregiverUserTypeIds?.has(session.identity.userTypeId) === true;
   const sessionInfo = (session: Session) => ({
-    identity: session.identity,
+    identity: isCaregiver(session)
+      ? { ...session.identity, caregiverReadOnly: true }
+      : session.identity,
     csrf: session.csrf,
     expiresAt: session.expiresAt,
     ...(session.organizationMemberships === undefined
@@ -269,6 +284,11 @@ export function createApp(
     }
     Object.assign(req, { session, sessionId: id });
     const path = req.originalUrl.split("?")[0];
+    if (
+      isCaregiver(session) &&
+      !/^\/api\/(?:care(?:\/|$)|session(?:\/|$))/.test(path)
+    )
+      throw new ApiError(403, "This account has read-only caregiver access.");
     if (session.switching && path !== "/api/session/logout") {
       if (session.switching.expiresAt <= Date.now()) {
         await store.compareAndSet(id!, session, null);
@@ -320,6 +340,71 @@ export function createApp(
     if (!(await store.compareAndSet(r.sessionId, r.session, session)))
       throw contextChanged();
     res.json({ data: session.organizationMemberships });
+  });
+  app.get("/api/session/organization-tags", async (req, res) => {
+    if (
+      Object.keys(req.query).length ||
+      req.body !== undefined ||
+      req.headers["transfer-encoding"] !== undefined ||
+      (req.headers["content-length"] !== undefined &&
+        req.headers["content-length"] !== "0")
+    )
+      throw new ApiError(400, "Unsupported organization-tag parameters.");
+    const r = req as AuthRequest;
+    const { data } = await upstream(
+      "organizations",
+      "/v1/organizationsadmin/membership-tags",
+      r.session.token,
+      {
+        // Check actual string types before parseWire normalizes JSON numbers.
+        validateResponse: (body) => {
+          const raw = parse(body);
+          const rows =
+            raw && typeof raw === "object" && !Array.isArray(raw)
+              ? (raw as Record<string, unknown>).organizations
+              : undefined;
+          if (
+            !Array.isArray(rows) ||
+            rows.some(
+              (row: unknown) =>
+                !row ||
+                typeof row !== "object" ||
+                Array.isArray(row) ||
+                typeof (row as Record<string, unknown>).tag !== "string",
+            )
+          )
+            throw new Error("Invalid organization tag types.");
+        },
+      },
+    );
+    const invalidTags = () =>
+      new ApiError(502, "The service returned invalid organization tags.");
+    if (!data || typeof data !== "object" || Array.isArray(data))
+      throw invalidTags();
+    const rows = (data as Record<string, unknown>).organizations;
+    if (!Array.isArray(rows) || rows.length > 256) throw invalidTags();
+    const seen = new Set<string>();
+    const organizations = rows.map((row: unknown) => {
+      if (!row || typeof row !== "object" || Array.isArray(row))
+        throw invalidTags();
+      const entry = row as Record<string, unknown>;
+      let organizationId: string;
+      try {
+        organizationId = idValue(entry.idorganization);
+      } catch {
+        throw invalidTags();
+      }
+      if (
+        seen.has(organizationId) ||
+        typeof entry.tag !== "string" ||
+        entry.tag.length > 65_536 ||
+        entry.tag.includes("\0")
+      )
+        throw invalidTags();
+      seen.add(organizationId);
+      return { organizationId, tag: entry.tag };
+    });
+    res.json({ organizations });
   });
   app.post("/api/session/organization", async (req, res) => {
     const r = req as AuthRequest;
@@ -474,6 +559,12 @@ export function createApp(
       throw contextChanged();
     res.json({ success: true });
   });
+  registerCareRoutes(
+    app,
+    careUpstream,
+    (req) => (req as AuthRequest).session,
+    config.careUseAdminObservations ? upstream : undefined,
+  );
   function requirePermission(
     req: Request,
     resource: Resource,

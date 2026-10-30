@@ -1,0 +1,86 @@
+.care-trend-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.care-trend-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 550;
+}
+.care-trend-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.care-trend-chart {
+  width: 100%;
+  height: 320px;
+  min-width: 0;
+}
+.care-trend-data .ant-table-cell {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.care-trend-data a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+}
+.care-breath-source {
+  border-top: 1px solid #dce6eb;
+  padding-top: 20px;
+  margin-top: 24px;
+}
+.care-breath-source h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.care-breath-source summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-weight: 550;
+}
+.care-breath-values {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 400px;
+  overflow: auto;
+}
+.care-breath-values li {
+  padding: 8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+}
+.care-breath-values a {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+.care-trend-metric {
+  width: min(100%, 360px);
+}
+.care-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .care-trend-controls label,
+  .care-trend-controls .ant-select {
+    width: 100%;
+  }
+  .care-trend-chart {
+    height: 280px;
+  }
+  .care-trend-data .ant-table-cell {
+    padding: 10px 8px !important;
+  }
+}

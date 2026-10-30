@@ -1,0 +1,83 @@
+# Local caregiver API overlay. Existing Administration service origins stay intact.
+# Run scripts/prepare-local-care.mjs before starting these services.
+services:
+  admin:
+    environment:
+      CARE_API_ORIGIN: http://care-api:8082
+      CARE_USE_ADMIN_OBSERVATIONS: "true"
+
+  care-api:
+    image: tronicare-care-api:local-working-tree
+    command: [core-api]
+    user: "65532:65532"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    environment:
+      TRONICARE_CONFIG_ROOT: /run/tronicare-config
+    volumes:
+      - ./.local/care-runtime/api:/run/tronicare-config:ro
+    depends_on:
+      care-postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          python,
+          -c,
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/_health/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  care-postgres:
+    image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+    restart: unless-stopped
+    env_file: ./.local/care-runtime/postgres.env
+    command:
+      [
+        postgres,
+        -c,
+        ssl=on,
+        -c,
+        ssl_cert_file=/tls/server.crt,
+        -c,
+        ssl_key_file=/tls/server.key,
+      ]
+    volumes:
+      - care-core-data:/var/lib/postgresql
+      - care-core-tls:/tls:ro
+    depends_on:
+      care-tls:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, pg_isready, -U, care_owner, -d, care_core_local]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    shm_size: 128m
+
+  care-tls:
+    image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+    network_mode: none
+    restart: "no"
+    entrypoint: [bash, -ceu]
+    command:
+      - |
+        umask 077
+        if [ ! -s /tls/server.key ] || [ ! -s /tls/server.crt ]; then
+          openssl req -new -x509 -nodes -days 3650 -subj /CN=care-postgres -keyout /tls/server.key -out /tls/server.crt >/dev/null 2>&1
+        fi
+        chown 999:999 /tls/server.key /tls/server.crt
+        chmod 600 /tls/server.key
+    volumes:
+      - care-core-tls:/tls
+
+volumes:
+  care-core-data:
+  care-core-tls:

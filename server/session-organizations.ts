@@ -77,6 +77,11 @@ export function connectedSession(
 ) {
   const data = object(value);
   if (
+    "caregiver_read_only" in data &&
+    typeof data.caregiver_read_only !== "boolean"
+  )
+    throw invalid();
+  if (
     data.status !== true ||
     typeof data.token !== "string" ||
     data.token === "null" ||
@@ -114,6 +119,7 @@ export function connectedSession(
     level,
     permissions,
     mustChangePassword: data.onetimepwd === true,
+    ...(data.caregiver_read_only === true ? { caregiverReadOnly: true } : {}),
   };
   if (options.userId && identity.id !== options.userId) throw invalid();
   if (

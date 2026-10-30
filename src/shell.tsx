@@ -77,6 +77,15 @@ export function Shell() {
         ]
       : []),
     { key: "/", icon: <AppstoreOutlined />, label: "Overview" },
+    ...(can(resourceMap.assets, "list")
+      ? [
+          {
+            key: "/care",
+            icon: <TeamOutlined />,
+            label: "Caregiver portal",
+          },
+        ]
+      : []),
     ...Object.entries(groupIcons)
       .map(([group, icon]) => ({
         key: group,

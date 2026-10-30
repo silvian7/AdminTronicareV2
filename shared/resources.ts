@@ -297,12 +297,15 @@ export interface Identity {
   level: number;
   permissions: { entity: string; rights: string }[];
   mustChangePassword: boolean;
+  /** Restrictive, server-derived audience flag; never supplied by a browser. */
+  caregiverReadOnly?: boolean;
 }
 export function canAccess(
   identity: Identity,
   name: string,
   operation: Operation,
 ): boolean {
+  if (identity.caregiverReadOnly) return false;
   const r = resourceMap[name];
   if (!r?.routes[operation]) return false;
   const read = operation === "list" || operation === "show";

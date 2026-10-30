@@ -18,6 +18,7 @@ export function createUpstream(config: Config, transport: Transport = fetch) {
       query?: Record<string, string>;
       body?: string;
       signal?: AbortSignal;
+      validateResponse?: (body: string) => void;
     } = {},
   ): Promise<UpstreamResult> => {
     const origin = config.origins[service];
@@ -97,6 +98,13 @@ export function createUpstream(config: Config, transport: Transport = fetch) {
         undefined,
         `upstream_${response.status}`,
       );
+    }
+    if (options.validateResponse) {
+      try {
+        options.validateResponse(text);
+      } catch {
+        throw new ApiError(502, "The service returned an invalid response.");
+      }
     }
     const data = parseWire(text);
     if (data && typeof data === "object" && !Array.isArray(data)) {

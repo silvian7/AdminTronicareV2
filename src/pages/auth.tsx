@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useLogin } from "@refinedev/core";
+import { useInvalidateAuthStore, useLogin } from "@refinedev/core";
+import { useLocation, useNavigate } from "react-router";
 import {
   Form,
   Input,
@@ -17,23 +18,50 @@ import {
   UserOutlined,
   ArrowRightOutlined,
 } from "@ant-design/icons";
-import { loadSession, request } from "../api";
+import { getSession, loadSession, request, sessionLanding } from "../api";
 import { useAdmin } from "../context";
+import { careLoginDestination, careLoginReturnTo } from "../care/login-return";
 
 export function Login() {
-  const { mutate: login, isPending } = useLogin();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const invalidateAuthStore = useInvalidateAuthStore();
+  const careReturnTo = careLoginReturnTo(
+    new URLSearchParams(location.search).get("careReturnTo"),
+  );
   const [mode, setMode] = useState("password");
   const [recover, setRecover] = useState(false);
   const [error, setError] = useState("");
   const [recoveryResult, setRecoveryResult] = useState("");
   const [recovering, setRecovering] = useState(false);
+  const { mutate: login, isPending } = useLogin({
+    mutationOptions: {
+      // Refine's default success handler trusts its raw `to` query parameter.
+      // Keep password-change priority and accept only our local care intent.
+      onSuccess: (result) => {
+        if (result.success) {
+          const current = getSession();
+          if (current)
+            navigate(careLoginDestination(current, careReturnTo), {
+              replace: true,
+            });
+        } else {
+          setError(result.error?.message ?? "Sign in failed.");
+        }
+        setTimeout(() => void invalidateAuthStore(), 32);
+      },
+    },
+  });
   return (
     <main className="login-page">
       <div className="login-story">
         <div className="brand">
           <span className="brand-mark">T</span>
           <span>
-            tronicare<small>ADMINISTRATION</small>
+            tronicare
+            <small>
+              {careReturnTo ? "CAREGIVER PORTAL" : "ADMINISTRATION"}
+            </small>
           </span>
         </div>
         <div>
@@ -44,7 +72,9 @@ export function Login() {
             Connected care.
           </h1>
           <p>
-            Manage your organizations, assets and devices from one workspace.
+            {careReturnTo
+              ? "View your authorized assets, observations and stored reports."
+              : "Manage your organizations, assets and devices from one workspace."}
           </p>
         </div>
         <span className="login-footer">Tronicare platform</span>
@@ -53,7 +83,9 @@ export function Login() {
         <div className="login-form">
           <Typography.Title level={2}>Welcome back</Typography.Title>
           <Typography.Paragraph type="secondary">
-            Sign in to your administration workspace.
+            {careReturnTo
+              ? "Sign in with your TroniCare account to continue to the caregiver portal."
+              : "Sign in to TroniCare."}
           </Typography.Paragraph>
           <Segmented
             block
@@ -78,15 +110,7 @@ export function Login() {
             requiredMark={false}
             onFinish={(values) => {
               setError("");
-              login(
-                { ...values, mode },
-                {
-                  onSuccess: (result) => {
-                    if (!result.success)
-                      setError(result.error?.message ?? "Sign in failed.");
-                  },
-                },
-              );
+              login({ ...values, mode });
             }}
           >
             <Form.Item
@@ -248,10 +272,15 @@ export function Account() {
                   method: "POST",
                   body: JSON.stringify({ password: values.password }),
                 });
-                await loadSession();
+                const next = await loadSession();
                 form.resetFields();
                 message.success("Password updated.");
-                window.location.assign("/");
+                window.location.assign(
+                  sessionLanding(
+                    next,
+                    window.location.pathname.startsWith("/care"),
+                  ),
+                );
               } catch (e) {
                 setError((e as Error).message);
               } finally {

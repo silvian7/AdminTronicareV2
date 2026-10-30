@@ -1,0 +1,28 @@
+# The build context is the Python backend repository, not the Admin repository.
+**
+!packages/
+!packages/foundation/
+!packages/foundation/src/
+!packages/foundation/src/**
+!services/
+!services/core/
+!services/core/src/
+!services/core/src/**
+!services/core/alembic.ini
+!services/core/migrations/
+!services/core/migrations/**
+
+# Never send local credentials, private artifacts, or generated Python caches.
+**/.env
+**/.env.*
+**/.secret
+**/.secret.*
+**/.platform-private
+**/.platform-private/**
+**/*.pem
+**/*.key
+**/*.crt
+**/__pycache__
+**/__pycache__/**
+**/*.pyc
+**/*.pyo

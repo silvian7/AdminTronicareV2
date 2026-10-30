@@ -316,7 +316,8 @@ test("navigating to another rule hides the previous count until the new exact ru
   await expect(actionTab(page, "Actions (3)")).toBeVisible();
   const held = mock.hold(secondRuleId);
   await page.getByRole("link", { name: "Rules", exact: true }).click();
-  await page.getByRole("link", { name: secondRuleLabel, exact: true }).click();
+  await page.locator(`tr[data-row-key="${secondRuleId}"]`).focus();
+  await page.locator(`tr[data-row-key="${secondRuleId}"]`).press("Enter");
   await expect(
     page.getByRole("heading", { name: secondRuleLabel, exact: true }),
   ).toBeVisible();

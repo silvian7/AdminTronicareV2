@@ -12,8 +12,21 @@ export interface Config {
   requestTimeoutMs: number;
   trustProxy: number;
   redisUrl?: string;
+  caregiverUserTypeIds?: ReadonlySet<string>;
+  careApiOrigin?: string;
+  careUseAdminObservations?: boolean;
 }
 export function loadConfig(env = process.env): Config {
+  const caregiverUserTypeIds = new Set<string>();
+  for (const entry of (env.CAREGIVER_USER_TYPE_IDS ?? "").split(",")) {
+    const id = entry.trim();
+    if (!id) continue;
+    if (!/^[1-9]\d{0,18}$/.test(id) || BigInt(id) > 9223372036854775807n)
+      throw new Error(
+        "CAREGIVER_USER_TYPE_IDS must contain positive int64 IDs",
+      );
+    caregiverUserTypeIds.add(id);
+  }
   const production = env.NODE_ENV === "production";
   const publicOrigin = env.PUBLIC_ORIGIN ?? "http://localhost:5173";
   const origin = new URL(publicOrigin);
@@ -48,6 +61,25 @@ export function loadConfig(env = process.env): Config {
   }
   if (!origins.users)
     throw new Error("USERS_API_ORIGIN or API_ORIGIN is required");
+  let careApiOrigin: string | undefined;
+  if (
+    env.CARE_USE_ADMIN_OBSERVATIONS !== undefined &&
+    !["true", "false"].includes(env.CARE_USE_ADMIN_OBSERVATIONS)
+  )
+    throw new Error("CARE_USE_ADMIN_OBSERVATIONS must be true or false");
+  if (env.CARE_API_ORIGIN) {
+    const url = new URL(env.CARE_API_ORIGIN);
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== "/"
+    )
+      throw new Error("Invalid CARE_API_ORIGIN");
+    careApiOrigin = url.origin;
+  }
   const enabledWrites = new Set(
     (
       env.ENABLED_WRITE_SERVICES ??
@@ -77,5 +109,8 @@ export function loadConfig(env = process.env): Config {
     enabledWrites,
     requestTimeoutMs: 15000,
     trustProxy: Number(env.TRUST_PROXY_HOPS ?? 0),
+    caregiverUserTypeIds,
+    careApiOrigin,
+    careUseAdminObservations: env.CARE_USE_ADMIN_OBSERVATIONS === "true",
   };
 }

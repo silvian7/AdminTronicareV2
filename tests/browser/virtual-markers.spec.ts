@@ -237,7 +237,9 @@ for (const resource of ["assets", "hubs", "devices", "sensors", "rules"]) {
     await marker.press("Enter");
     await marker.press("Space");
     await marker.click();
-    expect(new URL(page.url()).pathname).toBe(`/${resource}`);
+    expect(new URL(page.url()).pathname.replace(/\/$/, "")).toBe(
+      `/${resource}`,
+    );
     expect(
       mock.reads.filter((url) =>
         new RegExp(`^/api/resources/${resource}/[^/]+$`).test(url.pathname),

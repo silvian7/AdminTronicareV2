@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { useList } from "@refinedev/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Select, Space, Tag, Tooltip, Typography } from "antd";
-import { useNavigate } from "react-router";
+import { Button, Select, Space, Tooltip, Typography } from "antd";
+import { useLocation, useNavigate } from "react-router";
 import {
   resourceMap,
   translated,
@@ -14,19 +14,23 @@ import {
   getSessionEpoch,
   loadOrganizationMemberships,
   switchOrganization,
+  sessionLanding,
 } from "../api";
 import { useAdmin } from "../context";
 
 export function OrganizationSelector({
   organizations,
   onBusyChange,
+  showLabel = true,
 }: {
   organizations: readonly RecordData[];
   onBusyChange: (busy: boolean) => void;
+  showLabel?: boolean;
 }) {
   const session = getSession()!;
   const { identity, can, confirmOrganizationChange } = useAdmin();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -104,14 +108,9 @@ export function OrganizationSelector({
     try {
       if (!(await confirmOrganizationChange())) return;
       const next = await switchOrganization(organizationId);
-      navigate(
-        next.identity.mustChangePassword
-          ? "/account"
-          : next.identity.level >= 90
-            ? "/services"
-            : "/",
-        { replace: true },
-      );
+      navigate(sessionLanding(next, location.pathname.startsWith("/care")), {
+        replace: true,
+      });
     } catch (failure) {
       if (getSession()) {
         setError(
@@ -129,9 +128,11 @@ export function OrganizationSelector({
 
   return (
     <div className="active-organization-control">
-      <Typography.Text className="workspace-label">
-        Active organization
-      </Typography.Text>
+      {showLabel && (
+        <Typography.Text className="workspace-label">
+          Active organization
+        </Typography.Text>
+      )}
       <Select
         aria-label="Active organization"
         className="organization-picker active-organization-picker"
@@ -158,11 +159,6 @@ export function OrganizationSelector({
         }
         onChange={(value) => void choose(value)}
       />
-      <Tooltip title={`Current role: ${roleTitle(identity.userTypeId)}`}>
-        <Tag className="organization-role">
-          {roleTitle(identity.userTypeId)}
-        </Tag>
-      </Tooltip>
       {!busy && (error || memberships.isError) && (
         <Tooltip title={error || "Organization memberships are unavailable."}>
           <Button

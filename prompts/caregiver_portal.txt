@@ -1,0 +1,259 @@
+Decision
+Extend the existing Refine/React admin and Python backend. Use the Flutter app as the caregiver experience reference and the daily ingester as the analytical reference.
+
+How to use
+Open the existing admin project in Codex. Make the related backend and ingester repositories accessible if they are separate; the Flutter repository is useful but optional. Paste prompts 1 through 6 in order in the same Codex conversation. Let each stage finish and inspect its result before sending the next. Prompt 1 records the actual architecture; prompts 2 through 6 implement and verify it.
+
+The sequence does not assume repository paths, a particular Python framework, a plotting library or a resident data model. Codex must discover those details.
+
+For one continuous run, attach this file and send:
+"Read the attached TroniCare caregiver portal prompt file. Execute prompts 1 through 6 in order, treating prompt 1's standing instructions as applicable throughout. Complete each stage's relevant checks before advancing. Make reasonable implementation decisions without repeated confirmations and record progress in the implementation note. Do not execute the optional deployment prompt."
+
+The optional final prompt deploys to the project's established development or staging target. Production deployment is outside that optional prompt.
+
+PROMPT 1
+ESTABLISH THE PROJECT CONTEXT AND INSPECT THE EXISTING CODE
+
+Run this first. It establishes the standing requirements and records what is actually implemented.
+
+BEGIN PROMPT
+We are extending TroniCare's current Refine/React admin and Python backend with a browser-accessible caregiver portal.
+
+The decision is made: start from the existing admin. Use the Flutter mobile app as a reference for caregiver terminology, navigation and visual conventions. Use the daily ingester's graphs, data preparation and metric definitions as the reference for the analytical content.
+
+The first release is a read-only caregiver workflow: overview, subject detail with coordinated graphs, and historical trends. A subject means the resident, room, bed or asset that the existing model actually supports.
+
+Standing instructions for all subsequent stages:
+- Read and follow applicable repository instructions, including AGENTS.md. Inspect the working tree and preserve unrelated and uncommitted work.
+- Reuse the existing frontend framework versions, UI toolkit, router, API client, Python framework, authentication and deployment conventions. Keep existing admin behaviour and mobile API contracts compatible.
+- Build inside the current project. Avoid a fresh application scaffold, broad framework upgrades, a replacement backend or unrelated database restructuring.
+- Ground statements in actual files and symbols. Do not assume FastAPI, particular tables, endpoint paths, role names, chart libraries or a resident model.
+- Use existing organisation and assignment relationships. Do not fabricate resident identities or historical assignments. If only rooms/assets are represented, build the supported workflow and document that limitation.
+- Connect the production UI to real authenticated API endpoints. Use synthetic data only for tests or explicitly labelled local demonstrations; never silently replace a failed API response with mock data.
+- Preserve existing metric definitions, units, time boundaries and ingestion schedules. New clinical interpretation, AI summaries, alerts and notification systems are outside this first release.
+- For implementation stages, make the changes, run relevant checks and fix failures. Do not stop at proposing a plan or ask for routine implementation confirmations.
+- Follow authorization already established for this workspace. Complete unaffected work before reporting a genuine blocker.
+- Keep one concise implementation note in the repository's established documentation location. Record paths, decisions, API contracts, progress, remaining issues and checks actually run. Do not rewrite AGENTS.md to store this note.
+
+For this first stage, inspect:
+1. The admin frontend entry points, routing, layout, UI components, authentication, data provider and query caching.
+2. The Python API, database access, organisation filtering and object permissions.
+3. How residents/rooms/assets/monitored systems and their current or historical assignments are represented.
+4. The measurement, event and daily-report models, including timezones, report boundaries, units, quality and completeness.
+5. The daily ingester's graph-generation path, plotting library and reusable calculations. Inventory its existing graphs, their sources, units and reporting windows, and map the useful graphs to planned portal panels.
+6. Relevant Flutter screens if the source is available. Missing Flutter source alone must not block implementation.
+7. Existing build, test and deployment commands.
+
+Trace one report or graph from its stored source to its displayed values. Distinguish confirmed capabilities from missing ones.
+
+Choose the chart approach using actual reuse: keep an existing suitable library; reuse Plotly if useful Plotly figures already exist; otherwise consider Apache ECharts. Explain the choice briefly.
+
+Write the implementation note with the concrete files/modules to extend and a small staged plan. Inspect and document in this stage; application implementation starts in the next stage.
+
+Return the discovered architecture, chosen approach, missing dependencies and the location of the note.
+END PROMPT
+
+
+PROMPT 2
+IMPLEMENT THE CAREGIVER API AND SHARED ANALYTICS ACCESS
+
+Extend the existing backend before building screens around assumed endpoints.
+
+BEGIN PROMPT
+Continue from the implementation note and inspect the current code before editing. Implement the backend data access required by the caregiver portal in the existing Python application.
+
+Deliver the smallest API surface needed for:
+- An authorised subject overview, with search/filtering/pagination where appropriate.
+- Available reports and the latest completed report for a subject.
+- Report details and summary metrics.
+- Time-series measurements and bed-presence intervals for a bounded period.
+- Comparable daily metrics for historical trends.
+
+Reuse existing endpoints and schemas where they fit. Add narrowly scoped endpoints only where needed, following existing naming and response conventions.
+
+Data and analytics requirements:
+1. Read stored measurements and reports. Opening a page must not execute ingestion, request a full vendor history or regenerate all reports.
+2. Reuse the ingester's data preparation and metric definitions. Extract shared functions if necessary, without importing an executable job in a way that starts it or triggers side effects.
+3. Preserve existing report values and provenance. Return actual period start/end, timezone, completeness, measurement freshness, report generation time, metric units and available quality information.
+4. Keep the report's measurement window separate from the time when the job ran. Honour the actual vendor/local-time convention, including clock changes where applicable.
+5. Keep missing measurements, invalid samples, zero movement and out-of-bed states distinct. Return null/unknown where appropriate. Do not claim coverage unless its calculation is defined.
+6. For occupancy intervals, establish the valid state at the left boundary from earlier data when possible; otherwise start with unknown. Apply the established freshness rules so old state is not carried indefinitely through missing data.
+7. Bound date ranges and response sizes. Aggregate continuous signals when needed while preserving gaps and meaningful extrema. Preserve bed-exit transitions as intervals/events.
+8. Keep HRV fields tied to their documented definitions. Do not rename an undefined vendor HRV value as RMSSD. Preserve the actual meaning and calibration of temperature channels.
+9. Respect known subject-to-device assignment boundaries. Do not present an entire device history as one resident's history.
+
+Enforce access in the backend for every overview, report, series, trend and download request. Validate organisation membership, the existing subject permissions and parent-child relationships: an allowed subject ID must not make another subject's report ID accessible. Verify caregiver accounts cannot invoke administrative mutations or technical-only endpoints directly, even if the existing admin treated every authenticated user as privileged. Extend the existing authorization model minimally where necessary while preserving authorised administrator access. Use the existing error conventions without leaking protected data.
+
+Add focused tests for allowed access, cross-organisation denial, a mismatched subject/report pair, caregiver denial of an administrative mutation with authorised admin access preserved, time boundaries, missing data and occupancy reconstruction. Use the project's existing test tools.
+
+Make the necessary changes and run relevant backend checks. Prefer existing schema structures; if a migration is genuinely necessary, keep it additive and compatible with existing consumers.
+
+Update the implementation note with the actual API contracts, supported metrics and unresolved limitations. Report changed files, checks actually run and any blocked validation.
+END PROMPT
+
+
+PROMPT 3
+BUILD THE CAREGIVER LAYOUT AND OVERVIEW
+
+Create a working entry point using the current admin's infrastructure and real API.
+
+BEGIN PROMPT
+Continue from the implementation note and the implemented caregiver API. Build the caregiver section inside the existing Refine/React application.
+
+Use a dedicated caregiver layout and route group, such as /care if compatible with the existing router. Keep technical administration available through its existing routes and permissions.
+
+Reuse the current UI toolkit, theme, authentication, API client, translations and data-fetching conventions. Use familiar labels and status conventions from the mobile app when its source is available.
+
+Implement:
+1. A caregiver entry point and concise navigation for Overview, Detail/Reports and Trends as appropriate.
+2. An overview of the real subjects available to the signed-in user: residents, rooms or assets according to the model.
+3. Search, pagination and existing organisation/unit filters where supported by actual data.
+4. Per-subject identity, room/asset label, latest known bed status, observation timestamp, available completed report and report period.
+5. Direct navigation to a minimal real subject detail view showing the selected/latest completed report's period and supported summary values. The next stage extends this view with interactive graphs; do not leave broken links.
+6. Clear loading, empty, unavailable, partial, stale and error states with a useful retry action.
+
+Distinguish current observations from the latest completed report. Show unknown bed status when the data does not establish it; do not infer out-of-bed from a silent sensor.
+
+Protect the routes and verify the API still enforces access independently. Scope query keys and caches to the relevant user/organisation/subject; clear or isolate cached results on logout or context changes. Prevent a late response from the previous selection replacing the current subject's data.
+
+Avoid one request per row where the overview can be fetched efficiently through a list endpoint. Use the existing refresh strategy; add modest polling only where needed for current observations, following the project's conventions.
+
+Make the layout usable on desktop and tablet, with readable status text, visible keyboard focus and sufficiently large controls. The displayed information must remain understandable without relying only on colour.
+
+Implement the actual integration rather than leaving mocked lists or TODO-only pages. Verify direct navigation, refresh, normal caregiver access, denied access and the existing admin entry point.
+
+Run the relevant frontend checks and update the implementation note. Report what is working and what remains for the graph stage.
+END PROMPT
+
+
+PROMPT 4
+IMPLEMENT THE DETAIL PAGE AND COORDINATED GRAPHS
+
+Build the central caregiver workflow and match the daily ingester's analytical content.
+
+BEGIN PROMPT
+Continue from the implementation note, the caregiver API and the caregiver layout. Implement the complete subject detail and report page with interactive graphs.
+
+Use the chart library selected after inspecting the existing code. Reuse the ingester's calculations and, where applicable, reusable Plotly figure definitions. Do not create a second set of metric calculations in the browser.
+
+The page must include:
+- The actual subject identity and room/asset label.
+- A default selection of the latest completed reporting period.
+- Previous/next report navigation and a date/report selector.
+- Clear period boundaries, timezone, report status, generation time and available coverage information.
+- A small group of summary values supported by the selected report.
+
+Use the ingester graph inventory as the content checklist. Reproduce useful existing views whose data and definitions are available, starting with vertically aligned panels for:
+1. Bed presence, showing in-bed, out-of-bed and unknown intervals.
+2. Heart rate.
+3. Respiratory rate.
+4. Movement.
+
+Coordinate the panels:
+- One selected time range for the whole page.
+- Synchronized zoom and pan, with a clear reset.
+- A coordinated cursor/inspection time and tooltips with values and units.
+- Selecting a bed-exit interval focuses the same period across the other panels.
+- Resize correctly on desktop and tablet.
+- Keep units separate and labels readable.
+
+Preserve gaps and invalid values. Do not draw continuous lines across missing periods or smooth bed-state transitions. When signals have different sampling intervals, identify the actual sample times or the aggregation interval instead of implying measurements occurred simultaneously.
+
+Support stable direct URLs for the subject and selected report, following the current router. Browser refresh and back/forward navigation must work. A missing or inaccessible report should produce the established unavailable/denied behaviour, without showing another subject's cached data.
+
+Separate current observations from completed-report analysis. Additional temperature or HRV panels may be added only when their source, units and definitions are established; otherwise leave them for the next stage. Make extra panels selectable or collapsible so the default view remains readable.
+
+Provide accessible labels, keyboard-reachable controls and a concise numeric/text summary. Do not rely exclusively on chart colours or hover.
+
+Compare one authorised representative completed report against the existing ingester output: match its period boundaries and summary values, and investigate any disagreement before changing calculation definitions. If real report access is unavailable, verify the contracts with clearly labelled fixtures and state that live parity remains unverified.
+
+Implement and run relevant checks. Inspect the page in a real browser if available, including a period with missing data and one with a bed exit. Update the implementation note and report the evidence of correct behaviour.
+END PROMPT
+
+
+PROMPT 5
+ADD HISTORICAL TRENDS AND SUPPORTED ADDITIONAL SIGNALS
+
+Extend the first working report view without introducing new metric definitions.
+
+BEGIN PROMPT
+Continue from the working caregiver overview and detail page. Implement historical trends using the existing caregiver API and the same report definitions as the ingester.
+
+Provide 7-day and 30-day views. Add a custom date range only within the bounds supported by the API.
+
+Include a useful subset of metrics that actually exists:
+- Time in bed.
+- Estimated sleep duration, where provided and defined.
+- Number and duration of bed exits.
+- Nightly heart-rate and respiratory-rate summaries.
+- A consistently defined nightly HRV metric, where available.
+- Data coverage or report availability.
+
+Use stored daily values or the established shared calculations. Do not average unlike HRV fields, invent sleep values, fill missing days with zero or infer a clinical status from a trend.
+
+Each plotted day must map to its actual report period. Selecting it opens the corresponding detailed report. Keep no-report, incomplete-report and zero-value cases distinguishable. Respect the actual local-date/timezone convention and known assignment boundaries.
+
+Complete the useful additional ingester graphs identified in stage 1 when their data and definitions are available. If these include temperature or HRV time-series panels, add them to the detail page with explicit names, units, sampling intervals and source definitions. Show bed/sensor temperature according to its actual meaning. Unsupported optional signals should be clearly unavailable or omitted without breaking the rest of the page.
+
+Keep the overview, detail and trends connected through consistent subject selection, navigation and direct URLs. Preserve filters where that improves navigation.
+
+Use bounded requests and appropriate caching. Avoid loading raw high-frequency history when daily report values answer the selected trend. Check that switching subjects or organisations cannot display previous cached results.
+
+Keep this stage focused on observation and comparison. Do not add new diagnostic scores, clinical thresholds, AI interpretation or a configurable dashboard builder.
+
+Implement, test a subject with complete history and one with missing/partial history, and verify that selecting a trend point opens the correct report. Update the implementation note with the supported metrics and any remaining limitations.
+END PROMPT
+
+
+PROMPT 6
+VERIFY THE INTEGRATED PORTAL AND PREPARE THE RELEASE
+
+Fix integration issues and leave a concrete, reviewable release using the existing deployment setup.
+
+BEGIN PROMPT
+Review the implemented TroniCare caregiver portal as an integrated feature. Read the implementation note, inspect the actual changes and fix problems you find.
+
+The expected result is:
+A caregiver can sign in, select an authorised subject, inspect the latest completed report across coordinated graphs, review historical trends and obtain values consistent with the daily ingester. Existing administration and mobile API behaviour remain compatible.
+
+Perform focused verification using the existing project tools:
+1. Backend access controls, including cross-organisation requests, direct report access, mismatched subject/report IDs and any exposed report/download files. Verify a caregiver cannot invoke administrative mutations or technical-only endpoints while an authorised administrator retains the appropriate access.
+2. Existing admin routes and the API contracts used by the mobile app.
+3. Caregiver overview, report selection, direct-link refresh, back/forward navigation, logout and organisation/subject switching.
+4. Coordinated graph navigation, missing-data gaps, bed-state transitions, unavailable reports and freshness indicators.
+5. Metric and reporting-window agreement with the ingester for a representative authorised report.
+6. Applicable local-time clock-change boundaries and known device/subject reassignment boundaries.
+7. A realistic maximum supported report/trend range, checking response size and browser usability.
+8. Desktop and tablet layouts, visible focus, readable labels and relevant loading/error states.
+
+Run the applicable type checks, linting, builds and backend/frontend tests. Add tests where they protect the actual access-control and data-semantics risks; avoid duplicating implementation details or creating a new test framework without need. Use browser automation/manual inspection if available and report any browser checks that could not be performed.
+
+Fix concrete failures. Distinguish existing unrelated failures from regressions. Do not claim a check passed unless it was run successfully, and do not claim ingester parity from fixtures alone.
+
+Prepare the feature for the existing deployment process:
+- Update existing configuration only where necessary.
+- Ensure the caregiver routes work on a direct browser refresh.
+- Keep sensitive configuration server-side.
+- Document required environment-variable names without secret values.
+- Document any additive migration and compatibility considerations.
+- Record the exact build, release, smoke-test and rollback steps supported by the repository.
+- Do not introduce a new hosting platform.
+
+Update the implementation note so another developer can continue without rediscovery. Account for every graph in the ingester inventory as implemented, available through an authenticated existing report, or deferred with a concrete reason. Identify incomplete requested functionality explicitly.
+
+Return the delivered functionality, changed components, commands and checks actually run, unresolved limitations, and concrete release steps. This stage prepares the release; deployment is a separate explicit task.
+END PROMPT
+
+OPTIONAL DEPLOYMENT
+
+BEGIN PROMPT
+Deploy the completed caregiver portal through the existing TroniCare deployment workflow to the development or staging environment already designated for this project.
+
+Read the implementation note and current deployment configuration. Verify the target, current source revision and required configuration. If multiple targets are equally plausible or no target is established, finish the release preparation and ask only which environment to use before making deployment changes.
+
+Preserve the existing audience, authentication, organisation restrictions and technical-admin access. Apply only the documented compatible changes and any necessary migration through the existing process.
+
+Build and deploy the exact prepared source, then verify deployment status, direct /care navigation, login, authorised report loading, one interactive graph and existing admin access.
+
+Do not mark the task complete merely because a deployment command exited successfully. Report the actual URL, deployed revision, smoke-test results and rollback procedure. Do not include secret values or resident data in the report.
+END PROMPT

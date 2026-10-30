@@ -286,7 +286,7 @@ describe("contract routing", () => {
     expect(result.status).toBe(200);
     expect(result.body.data.id).toBe("1");
   });
-  it("turns documented backend write gates into an actionable error", async () => {
+  it("sanitizes an unavailable backend without leaking its private error", async () => {
     const { api, fixture, csrf } = await setup();
     fixture.respondNext(new Response("private backend error", { status: 503 }));
     const result = await api
@@ -295,7 +295,7 @@ describe("contract routing", () => {
       .set("X-CSRF-Token", csrf)
       .send({ m_sLabel: "Updated" });
     expect(result.status).toBe(503);
-    expect(result.body.message).toContain("paused");
+    expect(result.body.message).toContain("temporarily unavailable");
     expect(JSON.stringify(result.body)).not.toContain("private backend");
   });
   it("translates membership commands to legacy GET mutations behind POST+CSRF", async () => {

@@ -1,0 +1,30 @@
+# Local development overlay. Build with the Python backend repository as context;
+# Dockerfile.care-api.dockerignore admits only the current Core/Foundation sources.
+# Dependencies come from the trusted Core runtime and are not reinstalled here.
+ARG CARE_CORE_BASE_IMAGE=smandi/core-py@sha256:9cdab73fd5bb960eb027cc4c7c3a429af4df61fa14acb489d71eb1e18dd2e7cf
+FROM ${CARE_CORE_BASE_IMAGE}
+
+# Override inherited release metadata: this image contains uncommitted local code
+# and is not an immutable production release or evidence of deployment readiness.
+LABEL org.opencontainers.image.title="Tronicare Core API local working tree" \
+      org.opencontainers.image.description="Local-only current Core/Foundation source overlay on a trusted Core runtime" \
+      org.opencontainers.image.version="local-working-tree" \
+      org.opencontainers.image.revision="local-working-tree" \
+      io.tronicare.build.kind="local-working-tree"
+
+WORKDIR /app
+ENV PYTHONPATH="/app/local-source/foundation:/app/local-source/core" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TRONICARE_CONFIG_ROOT=/run/tronicare-config
+
+COPY --chown=65532:65532 packages/foundation/src/ /app/local-source/foundation/
+COPY --chown=65532:65532 services/core/src/ /app/local-source/core/
+COPY --chown=65532:65532 services/core/alembic.ini /app/services/core/alembic.ini
+COPY --chown=65532:65532 services/core/migrations/ /app/services/core/migrations/
+
+# Configuration is supplied separately at runtime through a read-only mount.
+# No migrations, worker, ingest process, test helpers, or vendor jobs run here.
+USER 65532:65532
+EXPOSE 8082
+CMD ["core-api"]

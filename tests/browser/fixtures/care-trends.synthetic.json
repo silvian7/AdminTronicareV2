@@ -1,0 +1,308 @@
+{
+  "label": "SYNTHETIC 24-hour caregiver parity fixture; not a real report; live parity unverified.",
+  "rows": [
+    {
+      "id": 101,
+      "subject_id": 9223372036854775806,
+      "organization_id": 7,
+      "vendor_user_id": "synthetic-user",
+      "vendor_device_id": "first-stream",
+      "session_start_at": "2026-10-27T05:00:00.000Z",
+      "session_end_at": "2026-10-27T05:03:59.000Z",
+      "end_exclusive": "2026-10-27T05:04:00.000Z",
+      "update_at": "2026-10-27T06:00:00.000Z",
+      "ingested_at": "2026-10-27T07:00:00.000Z",
+      "parsed_at": "2026-10-27T08:00:00.000Z",
+      "time_step_sec": 60,
+      "off_bed_count": 0,
+      "avg_heart_rate": 60.5,
+      "avg_breath_rate": null,
+      "ahi_count": 0
+    },
+    {
+      "id": 102,
+      "subject_id": 9223372036854775806,
+      "organization_id": 7,
+      "vendor_user_id": "synthetic-user",
+      "vendor_device_id": "first-stream",
+      "session_start_at": "2026-09-30T05:00:00.000Z",
+      "session_end_at": "2026-09-30T05:03:59.000Z",
+      "end_exclusive": "2026-09-30T05:04:00.000Z",
+      "update_at": "2026-10-27T06:00:00.000Z",
+      "ingested_at": "2026-10-27T07:00:00.000Z",
+      "parsed_at": "2026-10-27T08:00:00.000Z",
+      "time_step_sec": 60,
+      "off_bed_count": 0,
+      "avg_heart_rate": 60.5,
+      "avg_breath_rate": null,
+      "ahi_count": 2.5
+    },
+    {
+      "id": 103,
+      "subject_id": 9223372036854775806,
+      "organization_id": 7,
+      "vendor_user_id": "synthetic-user",
+      "vendor_device_id": "first-stream",
+      "session_start_at": "2026-09-29T05:00:00.000Z",
+      "session_end_at": "2026-09-29T05:03:59.000Z",
+      "end_exclusive": "2026-09-29T05:04:00.000Z",
+      "update_at": "2026-10-27T06:00:00.000Z",
+      "ingested_at": "2026-10-27T07:00:00.000Z",
+      "parsed_at": "2026-10-27T08:00:00.000Z",
+      "time_step_sec": 60,
+      "off_bed_count": 0,
+      "avg_heart_rate": 60.5,
+      "avg_breath_rate": null,
+      "ahi_count": 99
+    },
+    {
+      "id": 201,
+      "subject_id": 9223372036854775806,
+      "organization_id": 7,
+      "vendor_user_id": "synthetic-user",
+      "vendor_device_id": "second-stream",
+      "session_start_at": "2026-06-29T05:00:00.000Z",
+      "session_end_at": "2026-06-29T05:03:59.000Z",
+      "end_exclusive": "2026-06-29T05:04:00.000Z",
+      "update_at": "2026-10-27T06:00:00.000Z",
+      "ingested_at": "2026-10-27T07:00:00.000Z",
+      "parsed_at": "2026-10-27T08:00:00.000Z",
+      "time_step_sec": 60,
+      "off_bed_count": 0,
+      "avg_heart_rate": 60.5,
+      "avg_breath_rate": null,
+      "ahi_count": null
+    },
+    {
+      "id": 202,
+      "subject_id": 9223372036854775806,
+      "organization_id": 7,
+      "vendor_user_id": "synthetic-user",
+      "vendor_device_id": "second-stream",
+      "session_start_at": "2026-06-02T05:00:00.000Z",
+      "session_end_at": "2026-06-02T05:03:59.000Z",
+      "end_exclusive": "2026-06-02T05:04:00.000Z",
+      "update_at": "2026-10-27T06:00:00.000Z",
+      "ingested_at": "2026-10-27T07:00:00.000Z",
+      "parsed_at": "2026-10-27T08:00:00.000Z",
+      "time_step_sec": 60,
+      "off_bed_count": 0,
+      "avg_heart_rate": 60.5,
+      "avg_breath_rate": null,
+      "ahi_count": 3
+    },
+    {
+      "id": 203,
+      "subject_id": 9223372036854775806,
+      "organization_id": 7,
+      "vendor_user_id": "synthetic-user",
+      "vendor_device_id": "second-stream",
+      "session_start_at": "2026-06-01T05:00:00.000Z",
+      "session_end_at": "2026-06-01T05:03:59.000Z",
+      "end_exclusive": "2026-06-01T05:04:00.000Z",
+      "update_at": "2026-10-27T06:00:00.000Z",
+      "ingested_at": "2026-10-27T07:00:00.000Z",
+      "parsed_at": "2026-10-27T08:00:00.000Z",
+      "time_step_sec": 60,
+      "off_bed_count": 0,
+      "avg_heart_rate": 60.5,
+      "avg_breath_rate": null,
+      "ahi_count": 99
+    }
+  ],
+  "trends": {
+    "subjectId": "9223372036854775806",
+    "startDate": "2026-10-21",
+    "endDate": "2026-10-27",
+    "timezone": "UTC",
+    "days": [
+      {
+        "date": "2026-10-21",
+        "status": "unavailable",
+        "report": null
+      },
+      {
+        "date": "2026-10-22",
+        "status": "unavailable",
+        "report": null
+      },
+      {
+        "date": "2026-10-23",
+        "status": "unavailable",
+        "report": null
+      },
+      {
+        "date": "2026-10-24",
+        "status": "unavailable",
+        "report": null
+      },
+      {
+        "date": "2026-10-25",
+        "status": "unavailable",
+        "report": null
+      },
+      {
+        "date": "2026-10-26",
+        "status": "unavailable",
+        "report": null
+      },
+      {
+        "date": "2026-10-27",
+        "status": "available",
+        "report": {
+          "id": "101",
+          "subjectId": "9223372036854775806",
+          "period": {
+            "start": "2026-10-27T05:00:00.000Z",
+            "endExclusive": "2026-10-27T05:04:00.000Z",
+            "timezone": "UTC",
+            "reportDate": "2026-10-27"
+          },
+          "generatedAt": null,
+          "quality": {
+            "status": "completed",
+            "coverage": null,
+            "flagInvalid": 0,
+            "errorCode": 0
+          },
+          "metrics": [
+            {
+              "key": "duration_min",
+              "label": "Vendor report duration",
+              "value": null,
+              "unit": "min",
+              "source": "daily_report.duration_min"
+            },
+            {
+              "key": "asleep_min",
+              "label": "Vendor estimated asleep duration",
+              "value": null,
+              "unit": "min",
+              "source": "daily_report.asleep_min"
+            },
+            {
+              "key": "wake_min",
+              "label": "Vendor wake duration",
+              "value": null,
+              "unit": "min",
+              "source": "daily_report.wake_min"
+            },
+            {
+              "key": "awake_min",
+              "label": "Vendor awake duration",
+              "value": null,
+              "unit": "min",
+              "source": "daily_report.awake_min"
+            },
+            {
+              "key": "off_bed_min",
+              "label": "Bed-exit duration",
+              "value": null,
+              "unit": "min",
+              "source": "daily_report.off_bed_min"
+            },
+            {
+              "key": "off_bed_count",
+              "label": "Bed exits",
+              "value": 0.0,
+              "unit": "events/report",
+              "source": "daily_report.off_bed_count"
+            },
+            {
+              "key": "avg_heart_rate",
+              "label": "Average heart rate",
+              "value": 60.5,
+              "unit": "beats/min",
+              "source": "daily_report.avg_heart_rate"
+            },
+            {
+              "key": "avg_breath_rate",
+              "label": "Average respiratory rate",
+              "value": null,
+              "unit": "breaths/min",
+              "source": "daily_report.avg_breath_rate"
+            },
+            {
+              "key": "hrv_rmssd",
+              "label": "Vendor RMSSD",
+              "value": null,
+              "unit": "ms",
+              "source": "daily_report.hrv_rmssd"
+            },
+            {
+              "key": "ahi_count",
+              "label": "Vendor apnea/hypopnea events",
+              "value": 0.0,
+              "unit": "events/report",
+              "source": "daily_report.ahi_count"
+            }
+          ]
+        }
+      }
+    ],
+    "limited": false,
+    "breathHistory": {
+      "source": "daily_report.ahi_count",
+      "unit": "events/report",
+      "windowDays": 28,
+      "cutoff": "exclusive",
+      "limited": false,
+      "groups": [
+        {
+          "anchorReportId": "101",
+          "startExclusive": "2026-09-29T05:00:00.000Z",
+          "endInclusive": "2026-10-27T05:00:00.000Z",
+          "points": [
+            {
+              "reportId": "102",
+              "period": {
+                "start": "2026-09-30T05:00:00.000Z",
+                "endExclusive": "2026-09-30T05:04:00.000Z",
+                "timezone": "UTC",
+                "reportDate": "2026-09-30"
+              },
+              "value": null
+            },
+            {
+              "reportId": "101",
+              "period": {
+                "start": "2026-10-27T05:00:00.000Z",
+                "endExclusive": "2026-10-27T05:04:00.000Z",
+                "timezone": "UTC",
+                "reportDate": "2026-10-27"
+              },
+              "value": 0
+            }
+          ]
+        },
+        {
+          "anchorReportId": "201",
+          "startExclusive": "2026-06-01T05:00:00.000Z",
+          "endInclusive": "2026-06-29T05:00:00.000Z",
+          "points": [
+            {
+              "reportId": "202",
+              "period": {
+                "start": "2026-06-02T05:00:00.000Z",
+                "endExclusive": "2026-06-02T05:04:00.000Z",
+                "timezone": "UTC",
+                "reportDate": "2026-06-02"
+              },
+              "value": 3
+            },
+            {
+              "reportId": "201",
+              "period": {
+                "start": "2026-06-29T05:00:00.000Z",
+                "endExclusive": "2026-06-29T05:04:00.000Z",
+                "timezone": "UTC",
+                "reportDate": "2026-06-29"
+              },
+              "value": null
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

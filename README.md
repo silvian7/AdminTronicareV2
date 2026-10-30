@@ -19,8 +19,43 @@ cd .\AdminTronicareV2
 
 Login uses your Tronicare account. Select **One-time code** for recovery credentials. Plain passwords are hashed server-side using the documented legacy Users protocol. Browser credentials are sent in a POST body; upstream Users still requires its documented GET protocol. Configure upstream/ingress logs to redact credential query parameters.
 
+### Local caregiver API
+
+The optional `compose.care.yaml` overlay runs the current Python caregiver API alongside Admin. It routes caregiver reads through `CARE_API_ORIGIN=http://care-api:8082`; normal Administration service origins, including Core reads and writes, remain unchanged. Admin stays at `http://localhost:8080`. The caregiver API and its PostgreSQL database have no published host ports.
+
+On the current machine, the same `CARE_API_ORIGIN` is also saved in the existing ignored `.env`, with no unrelated keys changed. An Admin-only Compose rebuild therefore retains caregiver routing. Both Compose files are still required to start or stop the full local caregiver stack.
+
+Build the local API image with the companion Python workspace as its context. From this Admin directory, set the backend path for your checkout:
+
+```powershell
+$adminRoot = (Get-Location).Path
+$backendRoot = 'C:/Users/silvi/OneDrive/dev/python/Tronicare_multi/tronicare_py'
+docker build -f "$adminRoot/Dockerfile.care-api" -t tronicare-care-api:local-working-tree "$backendRoot"
+```
+
+This is a local working-tree image: it overlays current Core/Foundation sources and migrations on a pinned trusted Core runtime, without reinstalling dependencies or claiming an immutable release revision. Its file-specific build allowlist excludes credentials, private artifacts, tests and vendor jobs. Runtime configuration is mounted separately from ignored `.local/care-runtime/api`.
+
+The current local installation has a new isolated named PostgreSQL volume, schema revision `20261027_0029`, TLS, and a dedicated SELECT-only API role with writes denied. It contains no copied equipment or telemetry. The API uses the normal remote Users context and Assets scope endpoints for authorization; it does not bypass authentication or fabricate subjects. No report database DSN is configured, so stored sleep reports are unavailable. No worker, ingest process, vendor request or telemetry simulation is started.
+
+The local overlay also enables the optional `CARE_USE_ADMIN_OBSERVATIONS=true` bridge, persisted in this machine's ignored `.env`. It fills only missing last-reported bed observations from the existing normal Core service, using the signed-in caller's token and bounded batched Sensor, Sensor type and Device reads. Existing caregiver observations are preserved. Boolean `bedoff=false` means last reported in bed, and `true` means last reported out of bed; matching device/asset/organization and a valid nonfuture Admin timestamp are required. Missing, denied, ambiguous or limited measurements remain unavailable. This does not establish current occupancy or freshness: current state stays unknown and freshness unassessed. A caregiver backend may deny the technical reads needed for this bridge; no elevated token or broader grant is used. Report access remains unconfigured.
+
+For this initialized installation, rebuild/restart using both Compose files so the caregiver origin override is retained:
+
+```powershell
+docker compose -f compose.yaml -f compose.care.yaml up -d --build --wait --wait-timeout 120 admin care-api
+```
+
+Run the API image build again after changing Python source. Reuse the existing local database/configuration when restarting. `node scripts/prepare-local-care.mjs` is a first-time initializer only: it generates local credentials and a reader-grant script, requires the verified HTTPS Users/Assets origin, and refuses to overwrite existing configuration. It does not migrate the database or apply grants. A fresh installation requires separately initializing only its new local database through the backend Alembic path and applying its generated reader grants before starting the API; do not point this setup at an existing/shared database.
+
+The local API readiness and TLS/read-only checks have passed. Admin was rebuilt with the overlay and is healthy; the caregiver collection now returns an authentication response rather than an upstream route-not-found error. Anonymous caregiver links preserve their sign-in return path. The user subsequently reported that `/care` lists their Assets. A live bed reading through the optional bridge and representative report parity have not yet been verified. See the [local runtime follow-up](CAREGIVER_PORTAL_IMPLEMENTATION.md#authorized-local-caregiver-api--29-october-2026) for the recorded boundary and pending observation checks.
+
+The ingester's `.secret` credentials were subsequently verified against VPS5 `sensors_history`, including a TLS connection from the running caregiver container using read-only transactions. Stored reports exist, but the required assignment-history view is absent and the supplied role has elevated privileges. Portal report wiring awaits the prospective binding migration and a dedicated read-only role; no remote changes have been applied. See the [report access preflight](CAREGIVER_PORTAL_IMPLEMENTATION.md#vps5-report-credential-access--29-october-2026). Admin excludes `.secret` files from Git and Docker build contexts.
+
 ## Application coverage
 
+- The read-only caregiver portal lives at `/care`, with authorized Asset overview, completed reports, coordinated graphs and historical trends. See [caregiver implementation and release notes](CAREGIVER_PORTAL_IMPLEMENTATION.md) for supported metrics, backend configuration, prospective assignment evidence, checks and rollout limitations.
+- Caregiver bed observations use the original Admin occupied/empty bed pictograms. Asset status discs reuse Admin's event-age colors and the Asset's `lastEventAt`, independently of bed observations. The header omits the standalone role badge. This local installation maps the confirmed Standard User type through `CAREGIVER_USER_TYPE_IDS`, so it opens only `/care`; organization and platform administrators retain their existing entry points.
+- Caregiver dates display as `DD/MM/YYYY` and times use 24-hour format. The overview calls the Asset column **Resident**, shows bed pictograms with observation timestamps, and keeps the header compact with the active organization's tag. Membership tags use the caller-scoped Organizations metadata endpoint through `/api/session/organization-tags`, without general organization-read access.
 - 22 resource definitions from the supplied OpenAPI specifications: organizations and types; users, groups, user types, permissions, permission resources and user activity; assets and types; hubs/devices/sensors and types; rules/actions, types and forwarded history.
 - Search, sorting, pagination of loaded results, documented service filters, record details and schema-derived forms. Hub, device and sensor lists and details display their corresponding type tags. Core writes use canonical input names while reads preserve legacy DTO names. Organization-type updates use the documented nested compatibility path.
 - Role-aware navigation and actions; backend permission enforcement remains authoritative. Service write switches can disable mutations independently while backend authority gates continue to apply.
@@ -91,18 +126,21 @@ After selecting and verifying your intended Kubernetes context and namespace, ap
 
 Runtime settings:
 
-| Variable                 | Purpose                                                                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PUBLIC_ORIGIN`          | Exact browser origin; HTTPS required in production.                                                                                             |
-| `SESSION_SECRET`         | Base64-encoded 32-byte encryption key shared by all replicas.                                                                                   |
-| `REDIS_URL`              | Shared session store; required in production. Use `rediss://` where appropriate.                                                                |
-| `API_ORIGIN`             | Common ingress origin for all service APIs.                                                                                                     |
-| `<SERVICE>_API_ORIGIN`   | Per-service override for USERS, ORGANIZATIONS, ASSETS, CORE, RULES, ACTIONS, EMAIL, SMS, PUSH, MQTT or MQTTBRIDGE. No URL paths or credentials. |
-| `ENABLED_WRITE_SERVICES` | Comma-separated write-enabled service names. Empty disables resource writes. Auth operations still follow Users' own authority gates.           |
-| `LEGACY_PASSWORD_SALT`   | Users compatibility digest prefix; default `tcare` matches the supplied implementation.                                                         |
-| `TRUST_PROXY_HOPS`       | Express trusted proxy hop count; leave zero unless the ingress topology is known.                                                               |
-| `PORT`                   | Server port, default 8080.                                                                                                                      |
-| `ALLOW_HTTP`             | Isolated local production-container testing only; never enable for public ingress.                                                              |
+| Variable                      | Purpose                                                                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`               | Exact browser origin; HTTPS required in production.                                                                                                                                   |
+| `SESSION_SECRET`              | Base64-encoded 32-byte encryption key shared by all replicas.                                                                                                                         |
+| `REDIS_URL`                   | Shared session store; required in production. Use `rediss://` where appropriate.                                                                                                      |
+| `API_ORIGIN`                  | Common ingress origin for all service APIs.                                                                                                                                           |
+| `<SERVICE>_API_ORIGIN`        | Per-service override for USERS, ORGANIZATIONS, ASSETS, CORE, RULES, ACTIONS, EMAIL, SMS, PUSH, MQTT or MQTTBRIDGE. No URL paths or credentials.                                       |
+| `CARE_API_ORIGIN`             | Optional origin used only for caregiver `/v1/care` reads; defaults to the normal Core origin. Does not redirect technical Core operations.                                            |
+| `CARE_USE_ADMIN_OBSERVATIONS` | Optional `true`/`false` bridge for missing caregiver bed observations using the caller's normal Core read access. Defaults to `false`; enabled for the local caregiver stack.         |
+| `ENABLED_WRITE_SERVICES`      | Comma-separated write-enabled service names. Empty disables resource writes. Auth operations still follow Users' own authority gates.                                                 |
+| `CAREGIVER_USER_TYPE_IDS`     | Optional restrictive caregiver UserType IDs, matching Users' `USERS_CAREGIVER_USER_TYPE_IDS`. Trusted backend classification also applies; never infer this audience from role level. |
+| `LEGACY_PASSWORD_SALT`        | Users compatibility digest prefix; default `tcare` matches the supplied implementation.                                                                                               |
+| `TRUST_PROXY_HOPS`            | Express trusted proxy hop count; leave zero unless the ingress topology is known.                                                                                                     |
+| `PORT`                        | Server port, default 8080.                                                                                                                                                            |
+| `ALLOW_HTTP`                  | Isolated local production-container testing only; never enable for public ingress.                                                                                                    |
 
 No internal service credential is embedded in the frontend. Administration information uses the signed-in platform administrator's token; a service that declines it is shown as unavailable.
 

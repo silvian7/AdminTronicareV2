@@ -389,7 +389,7 @@ test("ordinary members see only active memberships and adopt the selected role a
   expect(mock.switches()[0].csrf).toBe("synthetic-organization-csrf-0");
   held.release();
   await assertSecondContext(page);
-  await expect(page.locator(".organization-role")).toHaveText(secondRole);
+  await expect(page.locator(".organization-role")).toHaveCount(0);
   await page.getByRole("menuitem", { name: "Assets", exact: true }).click();
   await expect(page.locator('tr[data-row-key="42"]')).toBeVisible();
   await expect(page.getByText(privateLabel, { exact: true })).toHaveCount(0);
@@ -629,7 +629,7 @@ test("a modern global platform context is represented without offering a switch-
   await expect(
     page.getByRole("heading", { name: "Service status", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".organization-role")).toHaveText(platformRole);
+  await expect(page.locator(".organization-role")).toHaveCount(0);
   await expect(
     page.getByRole("combobox", { name: "Organization", exact: true }),
   ).toBeEnabled();

@@ -15,6 +15,12 @@ export interface SessionInfo {
     Record<Service, { configured: boolean; writable: boolean }>
   >;
 }
+export function sessionLanding(value: SessionInfo, preferCare = false) {
+  const care = value.identity.caregiverReadOnly || preferCare;
+  if (value.identity.mustChangePassword)
+    return care ? "/care/account" : "/account";
+  return care ? "/care" : value.identity.level >= 90 ? "/services" : "/";
+}
 let session: SessionInfo | null = null;
 let sessionEpoch = 0;
 let sessionRevision = 0;
@@ -376,11 +382,7 @@ export const authProvider: AuthProvider = {
         throw new DOMException("The account session changed.", "AbortError");
       return {
         success: true,
-        redirectTo: current.identity.mustChangePassword
-          ? "/account"
-          : current.identity.level >= 90
-            ? "/services"
-            : "/",
+        redirectTo: sessionLanding(current),
       };
     } catch (e) {
       return {

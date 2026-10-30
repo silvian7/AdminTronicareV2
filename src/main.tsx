@@ -11,6 +11,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router";
 import {
   authProvider,
@@ -30,8 +31,11 @@ import {
   ResourceEditor,
 } from "./pages/resources";
 import { SensorHistory } from "./pages/history";
+import { CareLayout } from "./care/layout";
+import { CareOverview, CareDetail } from "./care/pages";
 import "antd/dist/reset.css";
 import "./styles.css";
+const CareTrendsPage = React.lazy(() => import("./care/trends"));
 
 focusManager.setEventListener((onFocus) => {
   const visible = () => document.visibilityState !== "hidden";
@@ -71,6 +75,31 @@ subscribeSessionChange(() => {
   void previous.cancelQueries();
   previous.clear();
 });
+
+function AdminShell() {
+  const location = useLocation();
+  const identity = getSession()!.identity;
+  if (identity.caregiverReadOnly)
+    return (
+      <Navigate
+        to={
+          identity.mustChangePassword || location.pathname === "/account"
+            ? "/care/account"
+            : "/care"
+        }
+        replace
+      />
+    );
+  return <Shell />;
+}
+
+function CareLoginRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams({
+    careReturnTo: `${location.pathname}${location.search}${location.hash}`,
+  });
+  return <Navigate to={`/login?${params}`} replace />;
+}
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -136,13 +165,52 @@ function Application() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
+          path="/care"
+          element={
+            <Authenticated
+              key="care-protected"
+              fallback={<CareLoginRedirect />}
+            >
+              <AdminProvider>
+                <CareLayout />
+              </AdminProvider>
+            </Authenticated>
+          }
+        >
+          <Route index element={<CareOverview />} />
+          <Route path="subjects/:subjectId" element={<CareDetail />} />
+          <Route
+            path="subjects/:subjectId/reports/:reportId"
+            element={<CareDetail />}
+          />
+          <Route
+            path="subjects/:subjectId/trends"
+            element={
+              <React.Suspense fallback={<Result title="Loading trends" />}>
+                <CareTrendsPage />
+              </React.Suspense>
+            }
+          />
+          <Route path="account" element={<Account />} />
+          <Route
+            path="*"
+            element={
+              <Result
+                status="404"
+                title="Page not found"
+                extra={<Button href="/care">Back to overview</Button>}
+              />
+            }
+          />
+        </Route>
+        <Route
           element={
             <Authenticated
               key="protected"
               fallback={<Navigate to="/login" replace />}
             >
               <AdminProvider>
-                <Shell />
+                <AdminShell />
               </AdminProvider>
             </Authenticated>
           }
