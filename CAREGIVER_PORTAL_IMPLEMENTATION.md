@@ -673,3 +673,29 @@ anonymous protected routes remain 401, Standard-role restrictions and local
 caregiver routing remain configured, and technical service routing is unchanged.
 The Core API and existing authorization services retain their expected health/
 anonymous-auth responses. No signed-in live report or graph was inspected.
+
+## Report dependency diagnosis — 30 October 2026
+
+The user confirmed resident navigation succeeds but shows Reports unavailable.
+Fresh read-only checks confirm `CORE_CARE_REPORTS_DATABASE_URL` is absent from
+the local API secret, and VPS5 still lacks the binding event/interval relations.
+The Admin root `.secret` now contains `DB_URL`; those supplied credentials were
+verified privately with TLS/read-only transactions against the intended report
+database. The role is elevated and must not be installed as the API reader.
+
+The dedicated reader role and portal index do not exist yet. ACL preflight found
+no PUBLIC schema/database CREATE, table-write, or public SECURITY DEFINER execute
+grants that would obstruct the prepared reader setup. No current backup was
+identified in the initial conventional-path check; verify/create a protected
+backup before any approved migration. No live schema, role or configuration
+changes were made. Approval for the prepared remote setup was requested under
+the ingester's explicit production-change gate.
+
+Core deliberately returns `reportsAvailable=false` for a missing or failed report
+dependency; the page therefore makes no report/series request. A working query
+with no eligible report instead returns true with an empty report selection.
+Refresh cannot repair absent configuration/schema. Installing prospective
+capture enables later whole reporting periods only; existing historical reports
+also require independently verified assignment evidence, which the current
+raw/report/run/summary schema does not contain. Current monitored-system links
+and the Excel current-binding join are not such evidence.
