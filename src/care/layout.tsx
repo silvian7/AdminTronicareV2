@@ -10,7 +10,11 @@ import {
   Spin,
   Typography,
 } from "antd";
-import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import {
+  LogoutOutlined,
+  ReloadOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useAdmin } from "../context";
 import { getSession } from "../api";
@@ -22,7 +26,12 @@ import {
   type RecordData,
 } from "../../shared/resources";
 import "./care.css";
-import { careSubjectUrl, validCareId, useCareOrganizationTags } from "./api";
+import {
+  careSubjectUrl,
+  validCareId,
+  useCareOrganizationTags,
+  useCareSubjectsRefresh,
+} from "./api";
 
 export function CareLayout() {
   const { identity, organization, setOrganization, can } = useAdmin();
@@ -31,6 +40,7 @@ export function CareLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const onOverview = /^\/care\/?$/.test(location.pathname);
+  const overviewRefresh = useCareSubjectsRefresh();
   const selectedSubject = /^\/care\/subjects\/([1-9]\d*)(?:\/|$)/.exec(
     location.pathname,
   )?.[1];
@@ -134,6 +144,15 @@ export function CareLayout() {
           {!identity.caregiverReadOnly && <Link to="/">Administration</Link>}
         </nav>
         <Space wrap>
+          {onOverview && canRead && !busy && !identity.mustChangePassword && (
+            <Button
+              icon={<ReloadOutlined aria-hidden="true" />}
+              loading={overviewRefresh.isFetching}
+              onClick={() => void overviewRefresh.refresh()}
+            >
+              Refresh
+            </Button>
+          )}
           <Typography.Text>{identity.name}</Typography.Text>
           <Button
             icon={<LogoutOutlined aria-hidden="true" />}

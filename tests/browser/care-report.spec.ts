@@ -179,6 +179,9 @@ test("five coordinated panels remain visible while inspection and bed-exit secti
   const main = page.getByRole("main");
   await expect(main.getByRole("button", { name: /Refresh$/ })).toHaveCount(0);
   await expect(
+    page.getByRole("banner").getByRole("button", { name: /Refresh$/ }),
+  ).toHaveCount(0);
+  await expect(
     main.getByRole("link", { name: /Back to overview$/ }),
   ).toHaveCount(0);
   await expect(

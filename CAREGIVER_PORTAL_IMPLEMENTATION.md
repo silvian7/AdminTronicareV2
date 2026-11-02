@@ -1025,6 +1025,18 @@ guards, report-header return navigation, and report neighbors/history/reload.
 The tablet screenshot was reviewed for readability and clipping. Temporary
 synthetic preview was stopped after verification.
 
+## Hide My account identifiers — 30 October 2026
+
+Removed User ID and Organization ID from the Profile card in the shared
+`Account` component (`src/pages/auth.tsx`), covering caregiver and Admin routes.
+The profile name and password form remain. Formatting, diff checks and the
+production container build/typecheck passed; local Admin was rebuilt/restarted
+healthy, with health, SPA/deep-link, authentication and served-image smoke
+checks passing. All three existing password-priority browser cases passed
+against synthetic fixtures using the exact container-built assets, confirming
+the name and password fields, hidden ID rows and required-password routing.
+Temporary synthetic preview was stopped after verification.
+
 ## Simplify HRV and Trends labels and controls — 30 October 2026
 
 Renamed the graph's Vendor HRV display to HRV in `src/care/report-graphs.tsx`,
@@ -1044,3 +1056,21 @@ container assets. Checks cover HRV and metric naming, removed Trends controls,
 desktop row/header navigation and cross-subject isolation. Reviewed HRV tablet
 and Trends desktop captures for correct text and contained layout. Temporary
 synthetic preview was stopped after verification.
+
+## Move overview Refresh into the header — 30 October 2026
+
+Moved Refresh from the overview content into the top caregiver header in
+`src/care/layout.tsx`, removing its old empty heading row in `pages.tsx`.
+`useCareSubjectsRefresh` in `src/care/api.ts` tracks loading and refetches only
+active overview queries within the existing user/session/organization scope,
+preserving the visible search and pagination. The button appears only on the
+authorized overview, outside an organization switch or required-password flow.
+
+Formatting, diff checks and production container build/typecheck passed. Local
+Admin was rebuilt/restarted healthy; health, SPA/deep-link, authentication and
+served-image smoke checks passed. Four affected existing browser cases passed
+against synthetic fixtures using the exact container-built assets. Verified one
+header button, no content duplicate, current-filter refresh with exactly one
+list request, unchanged URL/results and no inactive-query refresh. Report pages
+have no Refresh button. Reviewed the tablet screenshot for header alignment,
+containment and removal of the previous gap. Temporary preview was stopped.

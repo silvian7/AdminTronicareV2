@@ -246,15 +246,7 @@ export function Account() {
         <Card title="Profile">
           <Descriptions
             column={1}
-            items={[
-              { key: "name", label: "Name", children: identity.name },
-              { key: "id", label: "User ID", children: identity.id },
-              {
-                key: "org",
-                label: "Organization ID",
-                children: identity.organizationId,
-              },
-            ]}
+            items={[{ key: "name", label: "Name", children: identity.name }]}
           />
         </Card>
         <Card title="Change password">

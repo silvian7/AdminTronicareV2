@@ -135,6 +135,14 @@ test("overview shows resident identities, accessible bed images and dated observ
       .getByRole("link", { name: "Overview", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByText("Overview", { exact: true })).toHaveCount(0);
+  const headerRefresh = page
+    .getByRole("banner")
+    .getByRole("button", { name: /Refresh$/ });
+  await expect(headerRefresh).toHaveCount(1);
+  await expect(headerRefresh).toBeVisible();
+  await expect(
+    page.locator(".care-overview").getByRole("button", { name: /Refresh$/ }),
+  ).toHaveCount(0);
   await expect(page.locator(".care-context")).toContainText(
     syntheticCareOrganizationTag("1"),
   );
@@ -342,6 +350,33 @@ test("search and pagination request bounded server pages without per-row reads",
       ),
     )
     .toBe(true);
+  const addressBeforeRefresh = page.url();
+  const readsBeforeRefresh = fixture.calls.filter(
+    (call) => call.path === "/api/care/subjects",
+  );
+  const expectedQuery = readsBeforeRefresh.at(-1)!.query.toString();
+  const refreshCallStart = fixture.calls.length;
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: /Refresh$/ })
+    .click();
+  await expect
+    .poll(
+      () =>
+        fixture.calls.filter((call) => call.path === "/api/care/subjects")
+          .length,
+    )
+    .toBe(readsBeforeRefresh.length + 1);
+  expect(
+    fixture.calls
+      .slice(refreshCallStart)
+      .filter((call) => call.path === "/api/care/subjects")
+      .map((call) => call.query.toString()),
+  ).toEqual([expectedQuery]);
+  await expect(page).toHaveURL(addressBeforeRefresh);
+  await expect(
+    page.getByRole("link", { name: fixture.subjects[23].tag, exact: true }),
+  ).toBeVisible();
   expect(
     fixture.calls
       .filter((call) => call.path.startsWith("/api/care/"))
@@ -453,6 +488,14 @@ test("tablet resident cards open latest report graphs from plain card content an
   ).toHaveCount(0);
   await expect(card.getByText("Open report", { exact: true })).toHaveCount(0);
   await expect(card.locator(".care-latest-report time")).toHaveCount(2);
+  const headerRefresh = page
+    .getByRole("banner")
+    .getByRole("button", { name: /Refresh$/ });
+  await expect(headerRefresh).toHaveCount(1);
+  await expect(headerRefresh).toBeVisible();
+  await expect(
+    page.locator(".care-overview").getByRole("button", { name: /Refresh$/ }),
+  ).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath("care-clickable-resident-card.png"),
     animations: "disabled",

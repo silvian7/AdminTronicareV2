@@ -210,6 +210,23 @@ for (const scenario of [
     await expect(
       page.getByRole("heading", { name: "My account", exact: true }),
     ).toBeVisible();
+    const profile = page.locator(".ant-card").filter({
+      has: page.getByText("Profile", { exact: true }),
+    });
+    await expect(
+      profile.getByText(fixture.session.identity.name, { exact: true }),
+    ).toBeVisible();
+    await expect(profile.locator(".ant-descriptions-item-label")).toHaveText([
+      "Name",
+    ]);
+    for (const label of ["User ID", "Organization ID"])
+      await expect(profile.getByText(label, { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByLabel("New password", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByLabel("Confirm password", { exact: true }),
+    ).toBeVisible();
     expect(
       fixture.calls.some((call) => call.path.startsWith("/api/care/")),
     ).toBe(false);

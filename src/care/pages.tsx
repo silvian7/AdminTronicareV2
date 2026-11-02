@@ -12,7 +12,6 @@ import {
   Typography,
   type TableColumnsType,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { CarePeriod, CareReport, CareSubject } from "../../shared/care";
 import { translated } from "../../shared/resources";
@@ -290,15 +289,6 @@ export function CareOverview() {
   ];
   return (
     <div className="care-page care-overview">
-      <div className="care-page-heading" style={{ justifyContent: "flex-end" }}>
-        <Button
-          icon={<ReloadOutlined aria-hidden="true" />}
-          loading={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          Refresh
-        </Button>
-      </div>
       <Card className="care-search-card">
         <label htmlFor="care-search">Find an asset</label>
         <Input.Search

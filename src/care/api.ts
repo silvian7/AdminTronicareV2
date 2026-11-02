@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSessionEpoch, request } from "../api";
 import { useAdmin } from "../context";
 import {
@@ -72,6 +72,16 @@ export function useCareSubjects(filters: {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
+}
+export function useCareSubjectsRefresh() {
+  const scope = useCareScope();
+  const queryClient = useQueryClient();
+  const queryKey = [...scope, "subjects"];
+  const isFetching = useIsFetching({ queryKey }) > 0;
+  return {
+    isFetching,
+    refresh: () => queryClient.refetchQueries({ queryKey, type: "active" }),
+  };
 }
 export interface CareSubjectResponse {
   data: CareSubject;
