@@ -113,10 +113,17 @@ async function setup(
       if (state.mutationStatus !== 200)
         return new Response(null, { status: state.mutationStatus });
       if (method === "DELETE") return new Response(null, { status: 200 });
-      const body = parseWire(String(init?.body)) as { idusertype: string };
+      const body = parseWire(String(init?.body)) as {
+        idusertype: string;
+        active: boolean;
+        all_assets?: boolean;
+      };
       return response(
         state.putReply ?? {
-          ...document(item[2], body.idusertype, true, item[1]),
+          ...document(item[2], body.idusertype, body.active, item[1]),
+          ...(body.all_assets === undefined
+            ? {}
+            : { all_assets: body.all_assets }),
           privateSentinel: "must-not-return",
         },
       );
@@ -173,6 +180,38 @@ async function setup(
 }
 
 describe("user organization membership reads", () => {
+  it("preserves organization-specific all-assets grants, including dormant grants, without inferring missing values", async () => {
+    const h = await setup();
+    h.state.list = [
+      { ...document("7"), all_assets: true },
+      { ...document("8"), all_assets: false },
+      { ...document("9", targetRole, false), all_assets: true },
+      document("10"),
+    ];
+    const result = await h.request("get", listPath());
+    expect(result.status).toBe(200);
+    expect(result.body.data).toEqual([
+      {
+        organizationId: "7",
+        userTypeId: targetRole,
+        active: true,
+        allAssets: true,
+      },
+      {
+        organizationId: "8",
+        userTypeId: targetRole,
+        active: true,
+        allAssets: false,
+      },
+      {
+        organizationId: "9",
+        userTypeId: targetRole,
+        active: false,
+        allAssets: true,
+      },
+      { organizationId: "10", userTypeId: targetRole, active: true },
+    ]);
+  });
   it("returns active and inactive memberships with exact IDs and no extra upstream fields", async () => {
     const h = await setup();
     h.state.list = [
@@ -236,6 +275,9 @@ describe("user organization membership reads", () => {
     ["duplicate organization", [document(), document()]],
     ["invalid role ID", [document("7", "07")]],
     ["invalid active flag", [{ ...document(), active: "false" }]],
+    ["string all-assets flag", [{ ...document(), all_assets: "false" }]],
+    ["numeric all-assets flag", [{ ...document(), all_assets: 1 }]],
+    ["null all-assets flag", [{ ...document(), all_assets: null }]],
     ["invalid list", { organizations: [document()] }],
     [
       "too many",
@@ -268,6 +310,75 @@ describe("user organization membership reads", () => {
 });
 
 describe("user organization membership changes", () => {
+  it.each([true, false])(
+    "forwards explicit allAssets=%s as a strict membership boolean with exact role IDs",
+    async (allAssets) => {
+      const h = await setup();
+      const result = await h.request("put", itemPath()).send({
+        userTypeId: targetRole,
+        allAssets,
+      });
+      expect(result.status).toBe(200);
+      expect(result.body.data).toEqual({
+        organizationId: targetOrg,
+        userTypeId: targetRole,
+        active: true,
+        allAssets,
+      });
+      expect(h.mutations()).toHaveLength(1);
+      expect(h.mutations()[0].body).toBe(
+        `{"idusertype":${targetRole},"active":true,"all_assets":${allAssets}}`,
+      );
+      expect(h.mutations()[0].headers.get("Token")).toBe(
+        "synthetic-session-token",
+      );
+    },
+  );
+
+  it("can change an inactive membership grant without reactivating it", async () => {
+    const h = await setup();
+    const result = await h.request("put", itemPath()).send({
+      userTypeId: targetRole,
+      active: false,
+      allAssets: false,
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.data).toMatchObject({ active: false, allAssets: false });
+    expect(h.mutations()[0].body).toBe(
+      `{"idusertype":${targetRole},"active":false,"all_assets":false}`,
+    );
+  });
+
+  it.each([undefined, true, "false", null])(
+    "rejects unconfirmed or malformed all-assets changes in the upstream response: %s",
+    async (allAssets) => {
+      const h = await setup();
+      h.state.putReply = {
+        ...document(targetOrg),
+        ...(allAssets === undefined ? {} : { all_assets: allAssets }),
+      };
+      const result = await h.request("put", itemPath()).send({
+        userTypeId: targetRole,
+        allAssets: false,
+      });
+      expect(result.status).toBe(502);
+      expect(result.body.data).toBeUndefined();
+      expect(h.mutations()).toHaveLength(1);
+    },
+  );
+
+  it("preserves the authoritative denial of a broad grant for an ordinary administrator", async () => {
+    const h = await setup(ordinary);
+    h.state.mutationStatus = 403;
+    const result = await h.request("put", itemPath(targetUser, "7")).send({
+      userTypeId: targetRole,
+      allAssets: true,
+    });
+    expect(result.status).toBe(403);
+    expect(result.body.data).toBeUndefined();
+    expect(h.mutations()).toHaveLength(1);
+  });
+
   it("PUT uses lossless role integers, active true, caller token, and sanitized response", async () => {
     const h = await setup();
     const result = await h
@@ -430,7 +541,14 @@ describe("user organization membership changes", () => {
     { userTypeId: "0" },
     { userTypeId: "07" },
     { userTypeId: "9223372036854775808" },
-    { userTypeId: targetRole, active: false },
+    { userTypeId: targetRole, active: "false" },
+    { userTypeId: targetRole, active: null },
+    { userTypeId: targetRole, allAssets: "true" },
+    { userTypeId: targetRole, allAssets: 1 },
+    { userTypeId: targetRole, allAssets: null },
+    { userTypeId: targetRole, all_assets: true },
+    { userTypeId: targetRole, unexpected: true },
+    { allAssets: true },
   ])("rejects malformed PUT body %j", async (body) => {
     const h = await setup();
     expect((await h.request("put", itemPath()).send(body)).status).toBe(400);
@@ -521,6 +639,22 @@ describe("user organization membership changes", () => {
 });
 
 describe("self-membership session retirement", () => {
+  it("retires a selected self session after an unconfirmed all-assets update without replaying it", async () => {
+    const h = await setup();
+    await h.selected("7");
+    h.state.putReply = {
+      ...document("7", targetRole, true, testIdentity.id),
+      all_assets: false,
+    };
+    const result = await h.request("put", itemPath(testIdentity.id, "7")).send({
+      userTypeId: targetRole,
+      allAssets: true,
+    });
+    expect(result.status).toBe(401);
+    expect(result.body.code).toBe("organization_membership_session_ended");
+    expect(await h.store.get(h.sessionId)).toBeNull();
+    expect(h.mutations()).toHaveLength(1);
+  });
   it.each(["put", "delete"] as const)(
     "ends a selected self session after successful %s without clearing cookies",
     async (method) => {

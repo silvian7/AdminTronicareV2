@@ -1,0 +1,64 @@
+name: tronicare-admin-vps5
+
+services:
+  admin:
+    image: ${ADMIN_IMAGE:?Set ADMIN_IMAGE to an immutable image digest or image ID}
+    pull_policy: never
+    env_file:
+      - ${ADMIN_ENV_FILE:?Set ADMIN_ENV_FILE to the absolute private admin.env path}
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      REDIS_URL: redis://sessions:6379
+      TRUST_PROXY_HOPS: "1"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      sessions:
+        condition: service_healthy
+    user: "1000:1000"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1.0
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks: [app, sessions]
+
+  sessions:
+    image: ${SESSIONS_IMAGE:-redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf}
+    command:
+      [redis-server, --save, "", --appendonly, "no", --maxmemory, 128mb, --maxmemory-policy, allkeys-lru]
+    user: "999:999"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    cpus: 0.5
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [sessions]
+
+networks:
+  app:
+  sessions:
+    internal: true

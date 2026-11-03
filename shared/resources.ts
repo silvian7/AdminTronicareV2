@@ -287,6 +287,8 @@ export interface OrganizationMembership {
   organizationId: string;
   userTypeId: string;
   active: boolean;
+  /** Organization-specific grant; absent when an older Users service omits it. */
+  allAssets?: boolean;
 }
 
 export interface Identity {
@@ -297,6 +299,8 @@ export interface Identity {
   level: number;
   permissions: { entity: string; rights: string }[];
   mustChangePassword: boolean;
+  /** Server-derived grant in the active organization; asset scope stays authoritative. */
+  allAssets?: boolean;
   /** Restrictive, server-derived audience flag; never supplied by a browser. */
   caregiverReadOnly?: boolean;
 }

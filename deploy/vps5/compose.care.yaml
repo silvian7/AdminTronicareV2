@@ -1,0 +1,90 @@
+# Optional caregiver stack: a new private database, never the shared Core database.
+services:
+  admin:
+    environment:
+      CARE_API_ORIGIN: http://care-api:8082
+      CARE_USE_ADMIN_OBSERVATIONS: "true"
+
+  care-api:
+    image: ${CARE_IMAGE:?Set CARE_IMAGE to the verified content-pinned caregiver image}
+    pull_policy: never
+    command: [core-api]
+    user: "65532:65532"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    environment:
+      TRONICARE_CONFIG_ROOT: /run/tronicare-config
+    volumes:
+      - ${CARE_RUNTIME_ROOT:?Set CARE_RUNTIME_ROOT to the absolute private runtime directory}/api:/run/tronicare-config:ro
+    networks: [app, care-data]
+    depends_on:
+      care-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/_health/ready', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  care-migrate:
+    image: ${CARE_IMAGE:?Set CARE_IMAGE to the verified content-pinned caregiver image}
+    pull_policy: never
+    profiles: [care-init]
+    command: [python, -m, alembic, -c, /app/services/core/alembic.ini, upgrade, "20261027_0029"]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    environment:
+      TRONICARE_CONFIG_ROOT: /run/tronicare-config
+    volumes:
+      - ${CARE_RUNTIME_ROOT:?Set CARE_RUNTIME_ROOT to the absolute private runtime directory}/migrate:/run/tronicare-config:ro
+    networks: [care-data]
+
+  care-postgres:
+    image: ${CARE_POSTGRES_IMAGE:-postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af}
+    restart: unless-stopped
+    env_file: ${CARE_RUNTIME_ROOT:?Set CARE_RUNTIME_ROOT to the absolute private runtime directory}/postgres.env
+    command: [postgres, -c, ssl=on, -c, ssl_cert_file=/tls/server.crt, -c, ssl_key_file=/tls/server.key]
+    volumes:
+      - care-data:/var/lib/postgresql
+      - care-tls:/tls:ro
+    networks: [care-data]
+    depends_on:
+      care-tls:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, pg_isready, -U, care_owner, -d, care_core]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    shm_size: 128m
+
+  care-tls:
+    image: ${CARE_POSTGRES_IMAGE:-postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af}
+    network_mode: none
+    restart: "no"
+    entrypoint: [bash, -ceu]
+    command:
+      - |
+        umask 077
+        if [ ! -s /tls/server.key ] || [ ! -s /tls/server.crt ]; then
+          openssl req -new -x509 -nodes -days 3650 -subj /CN=care-postgres -keyout /tls/server.key -out /tls/server.crt >/dev/null 2>&1
+        fi
+        chown 999:999 /tls/server.key /tls/server.crt
+        chmod 600 /tls/server.key
+    volumes:
+      - care-tls:/tls
+
+networks:
+  care-data:
+    internal: true
+
+volumes:
+  care-data:
+  care-tls:

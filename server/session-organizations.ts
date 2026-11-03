@@ -33,12 +33,20 @@ export function organizationMemberships(
     if (
       identifier(entry.iduser) !== userId ||
       typeof entry.active !== "boolean" ||
+      ("all_assets" in entry && typeof entry.all_assets !== "boolean") ||
       seen.has(organizationId)
     )
       throw invalid();
     seen.add(organizationId);
     if (entry.active || options.includeInactive)
-      result.push({ organizationId, userTypeId, active: entry.active });
+      result.push({
+        organizationId,
+        userTypeId,
+        active: entry.active,
+        ...(typeof entry.all_assets === "boolean"
+          ? { allAssets: entry.all_assets }
+          : {}),
+      });
   }
   return result.sort((a, b) =>
     BigInt(a.organizationId) < BigInt(b.organizationId) ? -1 : 1,
@@ -60,7 +68,10 @@ export function validateSelectedMembership(
   if (
     !selected ||
     identity.organizationId !== activeOrganizationId ||
-    (identity.level < 90 && selected.userTypeId !== identity.userTypeId)
+    (identity.level < 90 && selected.userTypeId !== identity.userTypeId) ||
+    (identity.allAssets !== undefined &&
+      selected.allAssets !== undefined &&
+      identity.allAssets !== selected.allAssets)
   )
     throw invalid();
 }
@@ -77,8 +88,9 @@ export function connectedSession(
 ) {
   const data = object(value);
   if (
-    "caregiver_read_only" in data &&
-    typeof data.caregiver_read_only !== "boolean"
+    ("caregiver_read_only" in data &&
+      typeof data.caregiver_read_only !== "boolean") ||
+    ("all_assets" in data && typeof data.all_assets !== "boolean")
   )
     throw invalid();
   if (
@@ -120,6 +132,9 @@ export function connectedSession(
     permissions,
     mustChangePassword: data.onetimepwd === true,
     ...(data.caregiver_read_only === true ? { caregiverReadOnly: true } : {}),
+    ...(typeof data.all_assets === "boolean"
+      ? { allAssets: data.all_assets }
+      : {}),
   };
   if (options.userId && identity.id !== options.userId) throw invalid();
   if (

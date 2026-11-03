@@ -9,12 +9,14 @@ import {
   Modal,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
 } from "antd";
 import {
   DeleteOutlined,
+  EditOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -80,8 +82,15 @@ export function UserOrganizations({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const invalidate = useInvalidate();
-  const [form] = Form.useForm<{ organizationId: string; userTypeId: string }>();
+  const [form] = Form.useForm<{
+    organizationId: string;
+    userTypeId: string;
+    allAssets: boolean;
+  }>();
   const [open, setOpen] = useState(false);
+  const [editingMembership, setEditingMembership] =
+    useState<OrganizationMembership | null>(null);
+  const watchedAllAssets = Form.useWatch("allAssets", form);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const mounted = useRef(false);
@@ -163,6 +172,17 @@ export function UserOrganizations({
           level < identity.level))
     );
   };
+  const canGrantAllAssets = platform || identity.allAssets === true;
+  const canEditAssetAccess = (membership: OrganizationMembership) =>
+    membership.active &&
+    typeof membership.allAssets === "boolean" &&
+    (canGrantAllAssets || membership.allAssets === true) &&
+    canRemove(membership) &&
+    roleOptions.some((option) => option.value === membership.userTypeId);
+  const canChooseAllAssets =
+    canGrantAllAssets ||
+    (editingMembership?.active === true &&
+      editingMembership.allAssets === true);
 
   useEffect(() => {
     mounted.current = true;
@@ -189,6 +209,7 @@ export function UserOrganizations({
           confirmation.current = null;
           if (discard) {
             setOpen(false);
+            setEditingMembership(null);
             form.resetFields();
           }
           resolve(discard);
@@ -196,7 +217,7 @@ export function UserOrganizations({
         cancelGuard.current = () => resolve(false);
         confirmation.current = modal.confirm({
           title: "Discard unsaved changes?",
-          content: "The organization membership has not been added.",
+          content: "The organization membership changes have not been saved.",
           okText: "Discard",
           cancelText: "Keep editing",
           onOk: () => finish(true),
@@ -227,7 +248,10 @@ export function UserOrganizations({
     ]);
   }
 
-  async function changeMembership(organizationId: string, userTypeId?: string) {
+  async function changeMembership(
+    organizationId: string,
+    values?: { userTypeId: string; allAssets: boolean },
+  ) {
     if (
       !mounted.current ||
       getSessionEpoch() !== viewEpoch ||
@@ -237,16 +261,37 @@ export function UserOrganizations({
       memberships.isFetching
     )
       return;
-    const adding = userTypeId !== undefined;
+    const writing = values !== undefined;
     const existing = rows.find((row) => row.organizationId === organizationId);
+    const editingAccess =
+      writing && editingMembership?.organizationId === organizationId;
     if (
-      adding
-        ? !organizationOptions.some(
-            (option) => option.value === organizationId,
-          ) || !roleOptions.some((option) => option.value === userTypeId)
+      writing
+        ? editingAccess
+          ? !existing ||
+            !canEditAssetAccess(existing) ||
+            values.userTypeId !== existing.userTypeId
+          : !organizationOptions.some(
+              (option) => option.value === organizationId,
+            ) ||
+            !roleOptions.some((option) => option.value === values.userTypeId)
         : !existing || !canRemove(existing)
     )
       return;
+    if (
+      values &&
+      (typeof values.allAssets !== "boolean" ||
+        (values.allAssets &&
+          !canGrantAllAssets &&
+          !(editingAccess && existing?.active && existing.allAssets === true)))
+    )
+      return;
+    const includeAllAssets =
+      editingAccess ||
+      values?.allAssets === true ||
+      typeof existing?.allAssets === "boolean" ||
+      typeof identity.allAssets === "boolean" ||
+      rows.some((row) => typeof row.allAssets === "boolean");
     const epoch = getSessionEpoch();
     locked.current = true;
     setSaving(true);
@@ -255,8 +300,16 @@ export function UserOrganizations({
       const response = await request<{ sessionEnded?: boolean }>(
         `/api/users/${encodeURIComponent(user.id!)}/organizations/${encodeURIComponent(organizationId)}`,
         {
-          method: adding ? "PUT" : "DELETE",
-          ...(adding ? { body: JSON.stringify({ userTypeId }) } : {}),
+          method: writing ? "PUT" : "DELETE",
+          ...(values
+            ? {
+                body: JSON.stringify({
+                  userTypeId: values.userTypeId,
+                  active: editingAccess ? existing!.active : true,
+                  ...(includeAllAssets ? { allAssets: values.allAssets } : {}),
+                }),
+              }
+            : {}),
         },
       );
       if (getSessionEpoch() !== epoch) return;
@@ -268,10 +321,13 @@ export function UserOrganizations({
       }
       if (mounted.current) {
         setOpen(false);
+        setEditingMembership(null);
         form.resetFields();
         message.success(
-          adding
-            ? "Organization membership added."
+          writing
+            ? editingAccess
+              ? "Organization asset access updated."
+              : "Organization membership added."
             : "Organization membership removed.",
         );
       }
@@ -362,6 +418,9 @@ export function UserOrganizations({
               }
               onClick={() => {
                 setError("");
+                setEditingMembership(null);
+                form.resetFields();
+                form.setFieldsValue({ allAssets: false });
                 setOpen(true);
               }}
             >
@@ -374,7 +433,7 @@ export function UserOrganizations({
         rowKey="organizationId"
         loading={memberships.isLoading || saving}
         dataSource={rows}
-        scroll={{ x: 640 }}
+        scroll={{ x: 840 }}
         pagination={{ pageSize: 10 }}
         locale={{ emptyText: "No organization memberships." }}
         columns={[
@@ -393,6 +452,21 @@ export function UserOrganizations({
               referenceTitle(roleRows, row.userTypeId, "User type"),
           },
           {
+            title: "All assets",
+            render: (_, row) =>
+              typeof row.allAssets === "boolean" ? (
+                <Tag color={row.allAssets && row.active ? "cyan" : "default"}>
+                  {row.allAssets
+                    ? row.active
+                      ? "Yes"
+                      : "Yes (inactive)"
+                    : "No"}
+                </Tag>
+              ) : (
+                <Typography.Text type="secondary">Unavailable</Typography.Text>
+              ),
+          },
+          {
             title: "Status",
             render: (_, row) => (
               <Tag color={row.active ? "green" : "default"}>
@@ -405,35 +479,59 @@ export function UserOrganizations({
                 {
                   title: "",
                   key: "actions",
-                  render: (_: unknown, row: OrganizationMembership) =>
-                    canRemove(row) ? (
-                      <Button
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        disabled={saving || memberships.isFetching}
-                        onClick={() => removeMembership(row)}
-                      >
-                        Remove
-                      </Button>
-                    ) : null,
+                  render: (_: unknown, row: OrganizationMembership) => (
+                    <Space wrap>
+                      {canEditAssetAccess(row) && (
+                        <Button
+                          size="small"
+                          icon={<EditOutlined />}
+                          disabled={saving || memberships.isFetching}
+                          onClick={() => {
+                            setError("");
+                            setEditingMembership(row);
+                            form.resetFields();
+                            form.setFieldsValue({
+                              organizationId: row.organizationId,
+                              userTypeId: row.userTypeId,
+                              allAssets: row.allAssets,
+                            });
+                            setOpen(true);
+                          }}
+                        >
+                          Edit asset access
+                        </Button>
+                      )}
+                      {canRemove(row) && (
+                        <Button
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          disabled={saving || memberships.isFetching}
+                          onClick={() => removeMembership(row)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </Space>
+                  ),
                 },
               ]
             : []),
         ]}
       />
       <Modal
-        title="Add organization"
+        title={editingMembership ? "Edit asset access" : "Add organization"}
         open={open}
         onCancel={() => {
           if (!locked.current) {
             setOpen(false);
+            setEditingMembership(null);
             form.resetFields();
             setError("");
           }
         }}
         onOk={() => form.submit()}
-        okText="Add"
+        okText={editingMembership ? "Save" : "Add"}
         confirmLoading={saving}
         cancelButtonProps={{ disabled: saving }}
         closable={!saving}
@@ -446,17 +544,36 @@ export function UserOrganizations({
             roles.query.isError ||
             roles.query.isLoading ||
             !roleOptions.length ||
-            (platform &&
-              (organizations.query.isError || organizations.query.isLoading)) ||
-            !organizationOptions.length,
+            (editingMembership
+              ? watchedAllAssets === editingMembership.allAssets ||
+                !rows.some(
+                  (row) =>
+                    row.organizationId === editingMembership.organizationId &&
+                    canEditAssetAccess(row),
+                )
+              : (platform &&
+                  (organizations.query.isError ||
+                    organizations.query.isLoading)) ||
+                !organizationOptions.length),
         }}
       >
         {error && (
           <Alert type="error" showIcon message={error} className="page-alert" />
         )}
         <Typography.Paragraph>
-          Choose the organization and the user's role in that organization.
+          {editingMembership
+            ? "Choose whether this membership grants access to every asset in its organization. The organization and user type stay the same."
+            : "Choose the organization and the user's role in that organization."}
         </Typography.Paragraph>
+        {editingMembership &&
+          currentMembership(editingMembership.organizationId) && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Changing your active membership signs you out."
+              className="page-alert"
+            />
+          )}
         {platform && (
           <ErrorNotice
             error={organizations.query.error}
@@ -482,7 +599,8 @@ export function UserOrganizations({
             className="page-alert"
           />
         )}
-        {!organizationOptions.length &&
+        {!editingMembership &&
+          !organizationOptions.length &&
           !organizations.query.isLoading &&
           !organizations.query.isError && (
             <Alert
@@ -495,8 +613,8 @@ export function UserOrganizations({
           form={form}
           layout="vertical"
           disabled={saving}
-          onFinish={({ organizationId, userTypeId }) =>
-            void changeMembership(organizationId, userTypeId)
+          onFinish={({ organizationId, userTypeId, allAssets }) =>
+            void changeMembership(organizationId, { userTypeId, allAssets })
           }
         >
           <Form.Item
@@ -508,7 +626,21 @@ export function UserOrganizations({
               showSearch
               optionFilterProp="label"
               placeholder="Choose organization"
-              options={organizationOptions}
+              disabled={saving || !!editingMembership}
+              options={
+                editingMembership
+                  ? [
+                      {
+                        value: editingMembership.organizationId,
+                        label: referenceTitle(
+                          organizationRows,
+                          editingMembership.organizationId,
+                          "Organization",
+                        ),
+                      },
+                    ]
+                  : organizationOptions
+              }
               loading={organizations.query.isLoading}
             />
           </Form.Item>
@@ -521,8 +653,24 @@ export function UserOrganizations({
               showSearch
               optionFilterProp="label"
               placeholder="Choose user type"
+              disabled={saving || !!editingMembership}
               options={roleOptions}
               loading={roles.query.isLoading}
+            />
+          </Form.Item>
+          <Form.Item
+            name="allAssets"
+            label="All assets"
+            valuePropName="checked"
+            extra={
+              canChooseAllAssets
+                ? "Access every asset in this organization, subject to the user's permissions. Otherwise, access follows user and group assignments."
+                : "Only a platform administrator or an administrator with all-assets access in this organization can grant this access."
+            }
+          >
+            <Switch
+              aria-label="All assets"
+              disabled={saving || !canChooseAllAssets}
             />
           </Form.Item>
         </Form>

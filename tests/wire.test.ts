@@ -5,6 +5,15 @@ import { fixtureRecord } from "./fixtures";
 import { passwordDigest } from "../server/app";
 
 describe("wire compatibility", () => {
+  it.each(["create", "edit"] as const)(
+    "keeps organization-specific all-assets grants out of User CRUD during %s",
+    (mode) => {
+      for (const key of ["all_assets", "allAssets", "m_bAllAssets"])
+        expect(() =>
+          writeBody(resourceMap.users, { [key]: true }, mode),
+        ).toThrow("highlighted");
+    },
+  );
   it("preserves signed 64-bit IDs and exact decimal values on reads", () => {
     expect(
       parseWire(

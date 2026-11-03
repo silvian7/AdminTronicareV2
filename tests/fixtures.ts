@@ -117,6 +117,9 @@ export function fixtureTransport(identity = testIdentity) {
         lastname: "Administrator",
         onetimepwd: identity.mustChangePassword,
         authorizations: identity.permissions,
+        ...(identity.allAssets === undefined
+          ? {}
+          : { all_assets: identity.allAssets }),
       });
     if (url.pathname === "/v1/usersadmin/organizations")
       return new Response(null, { status: 404 });

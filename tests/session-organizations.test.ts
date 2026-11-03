@@ -359,6 +359,131 @@ describe("organization session contracts", () => {
   });
 });
 
+describe("organization-wide asset membership grants", () => {
+  it.each([false, true])(
+    "publishes reported all-assets=%s without granting access in another membership",
+    async (allAssets) => {
+      const h = setup();
+      h.state.connect.all_assets = allAssets;
+      h.state.connect.organizations = memberships().map((entry, index) => ({
+        ...entry,
+        all_assets: index === 0 ? allAssets : !allAssets,
+      }));
+      h.state.members = { organizations: h.state.connect.organizations };
+      const s = await h.signedIn();
+      expect(s.response.body.identity.allAssets).toBe(allAssets);
+      const expected = [
+        { organizationId: "7", userTypeId: "30", active: true, allAssets },
+        {
+          organizationId: target,
+          userTypeId: "40",
+          active: true,
+          allAssets: !allAssets,
+        },
+      ];
+      expect(s.response.body.organizationMemberships).toEqual(expected);
+      const list = await h.request(
+        "get",
+        "/api/session/organizations",
+        s.cookie,
+      );
+      expect(list.status).toBe(200);
+      expect(list.body.data).toEqual(expected);
+    },
+  );
+
+  it("preserves absent grant fields for older membership backends", async () => {
+    const h = setup();
+    const s = await h.signedIn();
+    expect(s.response.body.identity).not.toHaveProperty("allAssets");
+    for (const entry of s.response.body.organizationMemberships)
+      expect(entry).not.toHaveProperty("allAssets");
+  });
+
+  it.each([false, true])(
+    "replaces the selected grant when switching from all-assets=%s",
+    async (allAssets) => {
+      const h = setup();
+      h.state.connect.all_assets = allAssets;
+      h.state.connect.organizations = memberships().map((entry, index) => ({
+        ...entry,
+        all_assets: index === 0 ? allAssets : !allAssets,
+      }));
+      h.state.members = { organizations: h.state.connect.organizations };
+      const s = await h.signedIn();
+      h.state.switched = {
+        ...h.state.connect,
+        token: "synthetic-rotated-token",
+        idorganization: target,
+        idusertype: "40",
+        usertypelevel: "40",
+        all_assets: !allAssets,
+      };
+      const switched = await h
+        .request("post", "/api/session/organization", s.cookie, s.csrf)
+        .send({ organizationId: target });
+      expect(switched.status).toBe(200);
+      expect(switched.body.identity.allAssets).toBe(!allAssets);
+      expect((await h.store.get(s.sessionId))?.identity.allAssets).toBe(
+        !allAssets,
+      );
+      expect(switched.body.activeOrganizationId).toBe(target);
+    },
+  );
+
+  it("keeps the global platform grant distinct from its memberships", async () => {
+    const h = setup(90);
+    h.state.connect.all_assets = false;
+    h.state.connect.organizations = memberships().map((entry) => ({
+      ...entry,
+      all_assets: true,
+    }));
+    h.state.members = { organizations: h.state.connect.organizations };
+    const s = await h.signedIn();
+    expect(s.response.body.activeOrganizationId).toBeNull();
+    expect(s.response.body.identity.allAssets).toBe(false);
+    h.state.switched = {
+      ...h.state.connect,
+      token: "synthetic-rotated-token",
+      idorganization: target,
+      all_assets: true,
+    };
+    const switched = await h
+      .request("post", "/api/session/organization", s.cookie, s.csrf)
+      .send({ organizationId: target });
+    expect(switched.status).toBe(200);
+    expect(switched.body.identity).toMatchObject({
+      level: 90,
+      allAssets: true,
+    });
+  });
+
+  it.each([null, 0, 1, "true", {}, []])(
+    "rejects a non-Boolean login grant %j",
+    async (allAssets) => {
+      const h = setup();
+      h.state.connect.all_assets = allAssets;
+      const response = await h.login();
+      expect(response.status).toBe(502);
+      expect(response.headers["set-cookie"]).toBeUndefined();
+    },
+  );
+
+  it.each([false, true])(
+    "rejects inconsistent selected grant metadata with identity=%s",
+    async (allAssets) => {
+      const h = setup();
+      h.state.connect.all_assets = allAssets;
+      h.state.connect.organizations = [
+        { ...memberships()[0], all_assets: !allAssets },
+      ];
+      const response = await h.login();
+      expect(response.status).toBe(502);
+      expect(response.headers["set-cookie"]).toBeUndefined();
+    },
+  );
+});
+
 describe("membership validation and legacy sessions", () => {
   it.each([
     ["duplicate", () => [memberships()[0], memberships()[0]]],
@@ -366,6 +491,16 @@ describe("membership validation and legacy sessions", () => {
     ["wrong role", () => [{ ...memberships()[0], idusertype: "40" }]],
     ["invalid ID", () => [{ ...memberships()[0], idorganization: "07" }]],
     ["non-boolean active", () => [{ ...memberships()[0], active: "true" }]],
+    ["null all-assets", () => [{ ...memberships()[0], all_assets: null }]],
+    ["numeric all-assets", () => [{ ...memberships()[0], all_assets: 1 }]],
+    ["string all-assets", () => [{ ...memberships()[0], all_assets: "true" }]],
+    [
+      "invalid inactive all-assets",
+      () => [
+        memberships()[0],
+        { ...memberships()[1], active: false, all_assets: "true" },
+      ],
+    ],
     ["missing selected", () => [memberships()[1]]],
     [
       "too many",

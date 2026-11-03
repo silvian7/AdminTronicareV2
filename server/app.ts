@@ -740,15 +740,27 @@ export function createApp(
   const changeOrganizationMembership = async (req: Request, res: Response) => {
     const { r, userId, organizationId } = membershipRequest(req, true);
     let userTypeId: string | undefined;
+    let active = true;
+    let allAssets: boolean | undefined;
     if (req.method === "PUT") {
       if (
         !req.body ||
+        typeof req.body !== "object" ||
         Array.isArray(req.body) ||
-        Object.keys(req.body).length !== 1 ||
+        Object.keys(req.body).some(
+          (key) => !["userTypeId", "active", "allAssets"].includes(key),
+        ) ||
         !("userTypeId" in req.body)
       )
         throw new ApiError(400, "Choose the membership role.");
+      if (
+        ("active" in req.body && typeof req.body.active !== "boolean") ||
+        ("allAssets" in req.body && typeof req.body.allAssets !== "boolean")
+      )
+        throw new ApiError(400, "Choose valid membership access settings.");
       userTypeId = idValue(req.body.userTypeId);
+      if ("active" in req.body) active = req.body.active;
+      if ("allAssets" in req.body) allAssets = req.body.allAssets;
       const role = await authorization.read(r.session, "usertypes", userTypeId);
       const level = parseRoleLevel(valueOf(role, "Level"));
       if (level === null)
@@ -786,7 +798,8 @@ export function createApp(
             ? {
                 body: stringify({
                   idusertype: new LosslessNumber(userTypeId),
-                  active: true,
+                  active,
+                  ...(allAssets === undefined ? {} : { all_assets: allAssets }),
                 })!,
               }
             : {}),
@@ -799,7 +812,8 @@ export function createApp(
         if (
           membership.organizationId !== organizationId ||
           membership.userTypeId !== userTypeId ||
-          !membership.active
+          membership.active !== active ||
+          (allAssets !== undefined && membership.allAssets !== allAssets)
         )
           throw new ApiError(
             502,

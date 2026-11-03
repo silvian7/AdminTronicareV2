@@ -1915,6 +1915,18 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       return next;
     });
   }
+  function selectUserTab(tab: string) {
+    if (!["details", "organizations", "groups"].includes(tab)) return;
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (tab === "details") next.delete("tab");
+        else next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  }
   const detailFields = resource.fields.filter(
     (field) =>
       displayedField(resource, field) &&
@@ -2268,6 +2280,11 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         ),
       },
     );
+  const requestedUserTab = params.get("tab");
+  const selectedUserTab =
+    requestedUserTab && tabs.some((tab) => tab.key === requestedUserTab)
+      ? requestedUserTab
+      : "details";
   if (!can(resource, "show"))
     return <Result status="403" title="Access unavailable" />;
   if (query.error)
@@ -2485,9 +2502,17 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ? viewingDeviceSensors
                   ? "sensors"
                   : "details"
-                : undefined
+                : resource.name === "users"
+                  ? selectedUserTab
+                  : undefined
             }
-            onChange={resource.name === "devices" ? selectDeviceTab : undefined}
+            onChange={
+              resource.name === "devices"
+                ? selectDeviceTab
+                : resource.name === "users"
+                  ? selectUserTab
+                  : undefined
+            }
             destroyOnHidden
           />
         ) : (
@@ -2883,6 +2908,32 @@ export function ResourceEditor({
         error={detail.query.error}
         retry={() => detail.query.refetch()}
       />
+      {resource.name === "users" &&
+        mode === "edit" &&
+        can(resource, "show") &&
+        detail.query.isSuccess &&
+        !detail.query.isPlaceholderData &&
+        detail.result?.id === id && (
+          <Alert
+            className="page-alert"
+            type="info"
+            showIcon
+            message="All assets"
+            description="Asset access is set separately for each organization membership. Open Organizations to review or change access to all assets."
+            action={
+              <Button
+                disabled={saving}
+                onClick={() =>
+                  navigate(
+                    `/users/${encodeURIComponent(id!)}?tab=organizations`,
+                  )
+                }
+              >
+                Manage asset access
+              </Button>
+            }
+          />
+        )}
       {error && (
         <Alert className="page-alert" type="error" showIcon message={error} />
       )}

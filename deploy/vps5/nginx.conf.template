@@ -1,0 +1,55 @@
+# Replace every __ADMIN_HOST__ with the verified public DNS hostname.
+# Install the certificate first; nginx -t must pass before enabling/reloading.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __ADMIN_HOST__;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/tronicare-admin-acme;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 308 https://__ADMIN_HOST__$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name __ADMIN_HOST__;
+
+    ssl_certificate /etc/letsencrypt/live/__ADMIN_HOST__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__ADMIN_HOST__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:admin_tls:10m;
+    ssl_session_timeout 1d;
+
+    client_max_body_size 128k;
+    proxy_http_version 1.1;
+    proxy_set_header Host __ADMIN_HOST__;
+    proxy_set_header X-Forwarded-Host __ADMIN_HOST__;
+    proxy_set_header X-Forwarded-Proto https;
+    # Exactly one trusted proxy: discard any client-supplied forwarding chain.
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Connection "";
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 45s;
+    proxy_cache off;
+
+    location = /health/live {
+        access_log off;
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location = /health/ready {
+        access_log off;
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+    }
+}

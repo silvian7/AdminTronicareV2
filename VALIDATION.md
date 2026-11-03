@@ -1,5 +1,54 @@
 # Implementation validation
 
+## User edit access discovery and VPS5 update — 3 November 2026
+
+The user edit page now links directly from **All assets / Manage asset access**
+to that user's Organizations tab. Valid user tab URLs retain unrelated query
+parameters, invalid tabs fall back to Details, and unsaved profile edits still
+require Keep editing or Discard before navigation. Membership access remains a
+separate organization-specific operation, outside User CRUD.
+
+- Unit tests: **1,098 passed**, one opt-in real-Redis test skipped.
+- Chromium: **23 passed** locally: all 21 membership cases, including three new
+  discovery/navigation cases, and two existing device-tab regressions.
+- TypeScript, contracts and the Linux production Docker build passed.
+- VPS5 now serves the updated Admin image. Public HTTPS readiness passed and the
+  served bundle contains the new controls. Three browser checks passed against
+  that deployed bundle with all API calls intercepted by synthetic routes.
+- Redis and caregiver API/database container IDs were retained. Existing runtime
+  settings and session key were reused, and the previous release remains available.
+- Read-only inspection confirmed deployed Users/Assets binaries support the
+  membership flag. No backend rollout, database migration or real user grant was
+  performed by this Admin update.
+
+See [the VPS5 deployment record](deploy/vps5/DEPLOYMENT.md) for image identity,
+working-tree provenance, installed paths and rollout evidence.
+
+## Membership all-assets access — 3 November 2026
+
+User organization memberships now display their `all_assets` setting and expose
+an asset-access editor for eligible enabled memberships. Creation/reactivation
+defaults to assignment scope. Updates preserve exact role/organization IDs and
+membership status, and forward an explicit false when revoking a broad grant.
+Legacy missing values remain unavailable; disabled broad grants are marked inactive.
+
+- Unit tests: **1,098 passed**, one opt-in real-Redis test skipped.
+- Chromium: **27 unique cases passed** across focused runs: 18 user-membership
+  cases and nine organization-switch regressions, using fully synthetic API routes.
+- TypeScript, production client/server builds, and the 11-document / 22-resource
+  contract check passed. The existing Vite bundle-size warning remains.
+- Coverage includes strict Boolean reads/writes, omitted-value compatibility,
+  grant/revocation and reactivation permissions, denied/uncertain updates, active
+  self-membership sign-out, and session grant changes across organization switches.
+- Asset/equipment scope still comes from the authoritative Assets endpoint, even
+  when a session reports all-assets access; unavailable scope fails closed.
+- Desktop membership controls and their saved inactive-grant state were visually
+  inspected in Chromium.
+
+This feature validation made no live service or database changes. Usage requires
+the matching Users/Assets backend support and Users migration `20261103_0006`;
+local source inspection does not establish that backend rollout.
+
 ## Asset assignment API integration — 7 October 2026
 
 Asset details now add and remove user/group assignments through the updated Assets

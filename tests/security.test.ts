@@ -721,6 +721,35 @@ describe("password completion and logout", () => {
 });
 
 describe("tenant boundaries for equipment and history", () => {
+  it("uses authoritative Assets scope even when the session has an all-assets grant", async () => {
+    const { api } = await setup({ ...ordinary, allAssets: true }, (url) =>
+      url.pathname === "/v1/assets/scope"
+        ? Response.json([{ m_nIDAsset: "1", m_nIDOrganization: "7" }])
+        : undefined,
+    );
+    expect((await api.get("/api/session")).body.identity.allAssets).toBe(true);
+    for (const resource of ["assets", "devices"]) {
+      const list = await api.get(`/api/resources/${resource}`);
+      expect(list.status).toBe(200);
+      expect(list.body.data.map((row: { id: string }) => row.id)).toEqual([
+        "1",
+      ]);
+      expect((await api.get(`/api/resources/${resource}/2`)).status).toBe(403);
+      expect((await api.get(`/api/resources/${resource}/99`)).status).toBe(403);
+    }
+  });
+
+  it("does not fall back to all organization assets when an all-assets user's scope is unavailable", async () => {
+    const { api } = await setup({ ...ordinary, allAssets: true }, (url) =>
+      url.pathname === "/v1/assets/scope"
+        ? new Response(null, { status: 503 })
+        : undefined,
+    );
+    const list = await api.get("/api/resources/assets");
+    expect(list.status).toBe(503);
+    expect(list.body.data).toBeUndefined();
+  });
+
   it.each(["assets", "hubs", "devices", "sensors"])(
     "filters foreign %s lists and denies direct reads/writes",
     async (name) => {
