@@ -212,3 +212,149 @@ export function vendorHrv(data: CareSeries): VendorHrv | null {
   }
   return { points: data.hrv, definition, line, sampleIndices };
 }
+
+export interface ReportTemperatureStream {
+  id: string;
+  label: string;
+  points: { at: string; value: number | null }[];
+  line: [number, number | null][];
+}
+
+export interface ReportTemperature {
+  availability: "available" | "no_data" | "unavailable" | "limited";
+  streams: ReportTemperatureStream[];
+}
+
+/** Wrap canvas tooltip text without losing labels, timestamps or disclaimers. */
+export function wrapGraphTooltip(
+  text: string,
+  maximumWidth: number,
+  measure: (text: string) => number,
+): string {
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    let line = "";
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (measure(candidate) <= maximumWidth) {
+        line = candidate;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = "";
+      for (const character of word) {
+        if (line && measure(line + character) > maximumWidth) {
+          lines.push(line);
+          line = "";
+        }
+        line += character;
+      }
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+function temperatureInstant(value: unknown): number | null {
+  if (
+    typeof value !== "string" ||
+    !/^(?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+  )
+    return null;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString() === value
+    ? time
+    : null;
+}
+
+/** Historical temperature is optional and never supplies a current-value fallback. */
+export function reportTemperature(data: CareSeries): ReportTemperature {
+  const unavailable = (): ReportTemperature => ({
+    availability: "unavailable",
+    streams: [],
+  });
+  const definition = data.temperatureDefinition;
+  if (
+    !definition ||
+    definition.source !== "stored_bedtemp_max" ||
+    definition.unit !== "°C" ||
+    definition.gapThresholdSeconds !== 120 ||
+    !["available", "no_data", "unavailable", "limited"].includes(
+      definition.availability,
+    )
+  )
+    return unavailable();
+  if (
+    definition.availability === "unavailable" ||
+    definition.availability === "limited"
+  )
+    return { availability: definition.availability, streams: [] };
+  if (
+    !Array.isArray(data.temperatureStreams) ||
+    data.temperatureStreams.length > 8
+  )
+    return unavailable();
+  const start = temperatureInstant(data.range.start),
+    end = temperatureInstant(data.range.endExclusive),
+    periodStart = temperatureInstant(data.period.start),
+    periodEnd = temperatureInstant(data.period.endExclusive);
+  if (
+    start === null ||
+    end === null ||
+    periodStart === null ||
+    periodEnd === null ||
+    !(periodStart <= start && start < end && end <= periodEnd)
+  )
+    return unavailable();
+  const ids = new Set<string>();
+  const streams: ReportTemperatureStream[] = [];
+  let pointCount = 0,
+    measured = false;
+  for (const [index, stream] of data.temperatureStreams.entries()) {
+    const label =
+      data.temperatureStreams.length === 1
+        ? "Bed temperature"
+        : `Bed temperature ${index + 1}`;
+    if (
+      !stream ||
+      typeof stream.id !== "string" ||
+      !/^[1-9]\d{0,18}$/.test(stream.id) ||
+      BigInt(stream.id) > 9223372036854775807n ||
+      ids.has(stream.id) ||
+      stream.label !== label ||
+      !Array.isArray(stream.points) ||
+      stream.points.length > 5000
+    )
+      return unavailable();
+    ids.add(stream.id);
+    pointCount += stream.points.length;
+    if (pointCount > 10000) return unavailable();
+    let previous = -Infinity;
+    const line: ReportTemperatureStream["line"] = [];
+    for (const point of stream.points) {
+      if (!point) return unavailable();
+      const at = temperatureInstant(point.at);
+      if (
+        at === null ||
+        !(start <= at && at < end && previous < at) ||
+        !(
+          point.value === null ||
+          (typeof point.value === "number" &&
+            Number.isFinite(point.value) &&
+            point.value >= -50 &&
+            point.value <= 150)
+        )
+      )
+        return unavailable();
+      // A null separator breaks the line, without fabricating a reading or interval.
+      if (line.length && at - previous >= 120_000) line.push([at, null]);
+      line.push([at, point.value]);
+      previous = at;
+      measured ||= point.value !== null;
+    }
+    streams.push({ id: stream.id, label, points: stream.points, line });
+  }
+  if (definition.availability === "no_data")
+    return measured ? unavailable() : { availability: "no_data", streams: [] };
+  return measured ? { availability: "available", streams } : unavailable();
+}

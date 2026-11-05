@@ -39,6 +39,9 @@
 .care-graph-with-hrv .care-report-chart {
   height: 995px;
 }
+.care-graph-with-temperature .care-report-chart {
+  height: 1175px;
+}
 .care-graph-hrv-option {
   margin: 18px 0;
 }
@@ -95,6 +98,9 @@
 }
 .care-graph-panel-4 {
   top: 790px;
+}
+.care-graph-panel-5 {
+  top: 970px;
 }
 .care-graph-legend {
   display: flex;

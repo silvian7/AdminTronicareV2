@@ -12,9 +12,9 @@ import {
 test.use({ timezoneId: "America/New_York" });
 
 const fourPanels =
-  "Bed presence, heart rate, respiration, movement and HRV over time";
+  "Bed presence, heart rate, HRV, respiration, movement and bed temperature over time";
 const fivePanels =
-  "Bed presence, heart rate, respiration, movement and HRV over time";
+  "Bed presence, heart rate, HRV, respiration, movement and bed temperature over time";
 const graphRegion = (page: Page) =>
   page.getByRole("region", { name: "Report graphs", exact: true });
 

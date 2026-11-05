@@ -152,7 +152,7 @@ ingestion, parsing and measurement timestamps stay separate.
 | Movement markers — vital_parameters.py           | Exact detail.status ==34 event flag; false, true and unknown stay distinct. Default panel, never a count or continuous-activity claim.                                                          |
 | HRV — hrv.py                                     | analysis.maxReport.hrvArray, validated UTC anchors, five-minute vendor samples in ms; not RMSSD. Optional panel preserves finite values, zero and null gaps.                                    |
 | Breath — breath.py / caregiver_summary           | Nonnegative stored ahi_count events/report. Each vendor stream uses strict latest report start minus 28 days; no event timestamps. Implemented historical counts and exact report links.        |
-| Bed Temperature — bed_temperature.py             | BedTempMax channels, °C [-50,150], highest valid same-record channel; not body temperature/daily maximum; gaps >=2 min break lines. Deferred: authorized period-specific source/binding absent. |
+| Bed Temperature — bed_temperature.py             | Configured BedTempMax channels from asset-stamped history within the selected report's verified binding and UTC period. Celsius [-50,150]; separate point streams, with invalid readings and gaps >=2 min breaking lines. No current-value substitution. |
 | Recorded movement — queries.load_movement_counts | Nonnegative recorded counts summed per UTC minute; missing is not zero. Deferred: independent verified source/binding absent; status-34 is not a substitute.                                    |
 | Workbook archive/trend/risk tables               | Stored comparable daily values implemented. Rolling average needs >=3 valid values across seven rows; clinical/risk interpretation and new scores excluded.                                     |
 
@@ -1074,3 +1074,28 @@ header button, no content duplicate, current-filter refresh with exactly one
 list request, unchanged URL/results and no inactive-query refresh. Report pages
 have no Refresh button. Reviewed the tablet screenshot for header alignment,
 containment and removal of the previous gap. Temporary preview was stopped.
+
+## Bed temperature report graphs — 5 November 2026
+
+The sixth coordinated graph reads recorded BedTempMax measurements from the
+existing reports database. The caregiver API rechecks the selected report's
+asset, organization and immutable whole-period binding before reading history
+stamped to that asset in the selected UTC `[start, endExclusive)` interval.
+Each eligible sensor remains a separate point stream. Celsius values outside
+[-50,150], conflicting simultaneous readings and gaps of at least two minutes
+break the line; the graph never substitutes a current reading or holds a point
+as an observed interval.
+
+`CORE_CARE_BEDTEMP_MAX_SENSOR_TYPE_IDS` selects exact, verified maximum-channel
+catalog IDs. The default empty array disables the source. Localhost uses the
+verified catalog shared with the ingester. The existing read-only reports role
+has SELECT on only the five required columns of each of `sensors` and
+`history_bed_temp`; its other privileges, role settings and database data are
+preserved. The existing sensor/time index serves the bounded history query.
+Reads are limited to eight streams, 5,000 raw points per stream and 10,000 raw
+points total; an error or overflow affects temperature availability only.
+
+The frontend independently validates this optional channel, shares zoom and
+the cursor with the existing panels, and wraps tooltips to fit narrow screens.
+The local API and Admin are updated together; public VPS5 application images
+are unchanged.

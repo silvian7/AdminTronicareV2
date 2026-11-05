@@ -1,4 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { CareReport } from "../../shared/care";
+import { formatDisplayDateTime } from "../../shared/date-time";
 import {
   installCareFixtures,
   syntheticCareSeries,
@@ -9,7 +11,7 @@ import {
 
 test.use({ timezoneId: "America/New_York" });
 const chartName =
-  "Bed presence, heart rate, respiration, movement and HRV over time";
+  "Bed presence, heart rate, HRV, respiration, movement and bed temperature over time";
 
 async function openReport(page: Page) {
   const fixture = await installCareFixtures(page);
@@ -32,6 +34,249 @@ async function bounds(graphs: Locator) {
     .evaluateAll((times) =>
       times.map((time) => Date.parse(time.getAttribute("datetime")!)),
     );
+}
+
+function bedTemperatureSeries(report: CareReport) {
+  const source = syntheticCareSeries(report);
+  const middle =
+    (Date.parse(report.period.start) + Date.parse(report.period.endExclusive)) /
+    2;
+  const at = (minutes: number) =>
+    new Date(middle + minutes * 60_000).toISOString();
+  return {
+    ...source,
+    temperatureDefinition: {
+      source: "stored_bedtemp_max" as const,
+      unit: "°C" as const,
+      gapThresholdSeconds: 120,
+      availability: "available" as const,
+    },
+    temperatureStreams: [
+      {
+        id: "9223372036854775807",
+        label: "Bed temperature 1",
+        points: [
+          { at: at(-15), value: 31.4 },
+          { at: at(-14), value: 31.8 },
+          { at: at(90), value: 32.6 },
+          { at: at(91), value: null },
+          { at: at(92), value: 33.1 },
+        ],
+      },
+      {
+        id: "9223372036854775806",
+        label: "Bed temperature 2",
+        points: [
+          { at: at(-5), value: 29.4 },
+          { at: at(40), value: 29.5 },
+        ],
+      },
+    ],
+  };
+}
+
+/** Observe text actually painted by the rich-text canvas tooltip. */
+async function captureCanvasText(page: Page) {
+  await page.addInitScript(() => {
+    const state = window as typeof window & { syntheticPaintedText?: string[] };
+    state.syntheticPaintedText = [];
+    const original = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (
+      value: string,
+      x: number,
+      y: number,
+      maximum?: number,
+    ) {
+      state.syntheticPaintedText!.push(String(value));
+      if (state.syntheticPaintedText!.length > 2000)
+        state.syntheticPaintedText!.shift();
+      if (maximum === undefined) original.call(this, value, x, y);
+      else original.call(this, value, x, y, maximum);
+    };
+  });
+}
+
+async function paintedText(page: Page) {
+  return page.evaluate(() =>
+    (
+      (window as typeof window & { syntheticPaintedText?: string[] })
+        .syntheticPaintedText ?? []
+    )
+      .join(" ")
+      .replace(/\s+/g, " "),
+  );
+}
+
+async function hoverTemperatureMiddle(page: Page, graphs: Locator) {
+  const title = graphs.getByRole("heading", { name: /^Bed temperature/ });
+  await title.scrollIntoViewIfNeeded();
+  const heading = await title.boundingBox();
+  const chart = await graphs.locator(".care-report-chart").boundingBox();
+  if (!heading || !chart)
+    throw new Error("Synthetic temperature graph is unavailable.");
+  await page.evaluate(() => {
+    (
+      window as typeof window & { syntheticPaintedText?: string[] }
+    ).syntheticPaintedText = [];
+  });
+  await page.mouse.move(chart.x + 54 + (chart.width - 74) / 2, heading.y + 90);
+}
+
+test("stored BedTempMax streams render a sixth canvas panel with actual sample times and shared native zoom", async ({
+  page,
+}, testInfo) => {
+  await captureCanvasText(page);
+  const fixture = await installCareFixtures(page);
+  const subject = fixture.subjects[0],
+    report = fixture.histories.get(subject.id)![0];
+  const series = bedTemperatureSeries(report);
+  fixture.override(
+    "GET",
+    `/api/care/subjects/${subject.id}/reports/${report.id}/series`,
+    { data: series },
+  );
+  await page.goto(`/care/subjects/${subject.id}/reports/${report.id}`);
+  const graphs = page.getByRole("region", {
+    name: "Report graphs",
+    exact: true,
+  });
+  await expect(
+    graphs.getByRole("img", { name: chartName, exact: true }),
+  ).toBeVisible();
+  await expect(graphs.locator(".care-graph-panel-title")).toHaveCount(6);
+  await expect(
+    graphs.getByRole("heading", { name: /^Bed temperature/ }),
+  ).toContainText("°C");
+  await expect(graphs.locator("canvas").first()).toBeVisible();
+  const reads = fixture.calls.length;
+  const full = await bounds(graphs);
+  await hoverTemperatureMiddle(page, graphs);
+  await expect
+    .poll(() => paintedText(page))
+    .toContain("Nearest bed temperature sample; not a reading at the cursor.");
+  await expect.poll(() => paintedText(page)).toContain("31.8 °C");
+  await expect.poll(() => paintedText(page)).toContain("29.4 °C");
+  const expectedTime = formatDisplayDateTime(
+    series.temperatureStreams[0].points[1].at,
+    { timeZoneName: "shortOffset" },
+  );
+  await expect.poll(() => paintedText(page)).toContain(expectedTime);
+  expect(await paintedText(page)).not.toContain(
+    series.temperatureStreams[0].id,
+  );
+  expect(await bounds(graphs)).toEqual(full);
+  await zoomCareGraph(page, graphs, "temperature");
+  await expect.poll(() => bounds(graphs)).not.toEqual(full);
+  await panCareGraph(page, graphs, "earlier");
+  await resetCareGraph(page, graphs, full);
+  expect(fixture.calls).toHaveLength(reads);
+  expect(fixture.unexpected).toEqual([]);
+  await graphs.screenshot({
+    path: testInfo.outputPath("care-bed-temperature-streams.png"),
+  });
+});
+
+for (const availability of [
+  "legacy",
+  "unavailable",
+  "no_data",
+  "limited",
+] as const) {
+  test(`${availability} temperature source preserves the other five report panels`, async ({
+    page,
+  }) => {
+    const fixture = await installCareFixtures(page);
+    const subject = fixture.subjects[0],
+      report = fixture.histories.get(subject.id)![0];
+    const base = syntheticCareSeries(report);
+    const data =
+      availability === "legacy"
+        ? base
+        : {
+            ...base,
+            temperatureDefinition: {
+              source: "stored_bedtemp_max",
+              unit: "°C",
+              gapThresholdSeconds: 120,
+              availability,
+            },
+            temperatureStreams: [],
+          };
+    fixture.override(
+      "GET",
+      `/api/care/subjects/${subject.id}/reports/${report.id}/series`,
+      { data },
+    );
+    await page.goto(`/care/subjects/${subject.id}/reports/${report.id}`);
+    const graphs = page.getByRole("region", {
+      name: "Report graphs",
+      exact: true,
+    });
+    await expect(
+      graphs.getByRole("img", { name: chartName, exact: true }),
+    ).toBeVisible();
+    for (const title of [
+      "Bed presence",
+      "Heart rate",
+      "Respiration",
+      "Movement",
+      "HRV",
+    ])
+      await expect(
+        graphs.getByRole("heading", { name: new RegExp(`^${title}`) }),
+      ).toBeVisible();
+    await expect(
+      graphs.getByRole("heading", { name: /^Bed temperature/ }),
+    ).toContainText("Not available");
+    await expect(graphs.locator(".care-graph-panel-title")).toHaveCount(6);
+    expect(
+      fixture.calls.filter((call) => call.path.endsWith("/series")),
+    ).toHaveLength(1);
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
+
+for (const width of [390, 768]) {
+  test(`temperature panel remains contained and synchronized at ${width}px without refetching`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 1024 });
+    const fixture = await installCareFixtures(page);
+    const subject = fixture.subjects[0],
+      report = fixture.histories.get(subject.id)![0];
+    fixture.override(
+      "GET",
+      `/api/care/subjects/${subject.id}/reports/${report.id}/series`,
+      { data: bedTemperatureSeries(report) },
+    );
+    await page.goto(`/care/subjects/${subject.id}/reports/${report.id}`);
+    const graphs = page.getByRole("region", {
+      name: "Report graphs",
+      exact: true,
+    });
+    await expect(
+      graphs.getByRole("heading", { name: /^Bed temperature/ }),
+    ).toContainText("°C");
+    const reads = fixture.calls.length;
+    const full = await bounds(graphs);
+    await zoomCareGraph(page, graphs, "temperature");
+    await expect.poll(() => bounds(graphs)).not.toEqual(full);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      ),
+    ).toBe(false);
+    const panel = await graphs
+      .getByRole("heading", { name: /^Bed temperature/ })
+      .boundingBox();
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(width + 1);
+    expect(fixture.calls).toHaveLength(reads);
+    expect(fixture.unexpected).toEqual([]);
+    await graphs.screenshot({
+      path: testInfo.outputPath(`care-bed-temperature-${width}.png`),
+    });
+  });
 }
 
 test("report neighbors, browser back/forward and reload retain explicit report identity", async ({
@@ -149,17 +394,22 @@ test("report selector and legacy dated links select stored history without repla
   expect(fixture.unexpected).toEqual([]);
 });
 
-test("five coordinated panels remain visible while inspection and bed-exit sections are hidden", async ({
+test("six coordinated panels remain visible while inspection and bed-exit sections are hidden", async ({
   page,
 }) => {
   const { fixture, graphs } = await openReport(page);
-  for (const title of [
+  const panelTitles = [
     "Bed presence",
     "Heart rate",
+    "HRV",
     "Respiration",
     "Movement",
-    "HRV",
-  ]) {
+    "Bed temperature",
+  ];
+  await expect(graphs.locator(".care-graph-panel-title")).toHaveText(
+    panelTitles.map((title) => new RegExp(`^${title}`)),
+  );
+  for (const title of panelTitles) {
     await expect(
       graphs.getByRole("heading", { name: new RegExp(`^${title}`) }),
     ).toBeVisible();
@@ -391,7 +641,7 @@ test("HRV is always visible and shares zoom without an inspection section", asyn
   expect(await graphs.innerText()).not.toMatch(/\bVendor\b/i);
   await expect(
     graphs.getByRole("img", {
-      name: "Bed presence, heart rate, respiration, movement and HRV over time",
+      name: chartName,
       exact: true,
     }),
   ).toBeVisible();

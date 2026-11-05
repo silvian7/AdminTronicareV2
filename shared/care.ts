@@ -85,6 +85,17 @@ export interface CareSeries {
     intervalSeconds?: number;
   };
   temperature: { at: string; endExclusive: string; value: number | null }[];
+  temperatureDefinition?: {
+    source: "stored_bedtemp_max";
+    unit: "°C";
+    gapThresholdSeconds: 120;
+    availability: "available" | "no_data" | "unavailable" | "limited";
+  };
+  temperatureStreams?: {
+    id: string;
+    label: string;
+    points: { at: string; value: number | null }[];
+  }[];
 }
 export interface CareReports {
   data: CareReport[];

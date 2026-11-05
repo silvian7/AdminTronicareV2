@@ -6,7 +6,9 @@ import {
   boundSeries,
   graphRange,
   nearestSample,
+  reportTemperature,
   vendorHrv,
+  wrapGraphTooltip,
 } from "../src/care/report-graph-data";
 
 const subjectId = "9223372036854775806";
@@ -88,6 +90,212 @@ function series(): CareSeries {
     temperature: [],
   };
 }
+
+function withTemperature(): CareSeries {
+  const data = series();
+  data.temperatureDefinition = {
+    source: "stored_bedtemp_max",
+    unit: "°C",
+    gapThresholdSeconds: 120,
+    availability: "available",
+  };
+  data.temperatureStreams = [
+    {
+      id: "9223372036854775805",
+      label: "Bed temperature",
+      points: [
+        { at: "2026-10-25T05:00:00.000Z", value: 0 },
+        { at: "2026-10-25T05:01:00.000Z", value: 23.5 },
+      ],
+    },
+  ];
+  return data;
+}
+
+describe("responsive canvas graph tooltip", () => {
+  it("keeps every label, actual timestamp and nearest-sample disclaimer within the measured width", () => {
+    const text =
+      "Bed temperature 1 sample: 27/10/2026, 17:45:00 CET\nBed temperature 1: 31.4 °C\nNearest bed temperature sample; not a reading at the cursor.";
+    const wrapped = wrapGraphTooltip(text, 28, (line) => line.length);
+    expect(wrapped.split("\n").every((line) => line.length <= 28)).toBe(true);
+    expect(wrapped.replace(/\s+/g, " ")).toBe(text.replace(/\s+/g, " "));
+    expect(wrapped).toContain("\n");
+  });
+
+  it("uses the current width and retains words even when one needs multiple lines", () => {
+    const measure = (line: string) => line.length;
+    expect(wrapGraphTooltip("Cursor: 17:45:00", 100, measure)).toBe(
+      "Cursor: 17:45:00",
+    );
+    expect(wrapGraphTooltip("abcdefghi", 4, measure)).toBe("abcd\nefgh\ni");
+    expect(wrapGraphTooltip("First line\n\nLast line", 100, measure)).toBe(
+      "First line\n\nLast line",
+    );
+  });
+});
+
+describe("optional report-period bed temperature", () => {
+  it("preserves exact stream identity, actual times, zero and finite boundary values", () => {
+    const data = withTemperature();
+    data.temperatureStreams![0].points = [
+      { at: report.period.start, value: -50 },
+      { at: "2026-10-25T05:00:30.000Z", value: 0 },
+      { at: "2026-10-25T05:01:00.000Z", value: 150 },
+    ];
+    const original = structuredClone(data);
+    const channel = reportTemperature(data);
+    expect(channel.availability).toBe("available");
+    expect(channel.streams[0]).toMatchObject({
+      id: "9223372036854775805",
+      label: "Bed temperature",
+      points: data.temperatureStreams![0].points,
+      line: [
+        [Date.parse(report.period.start), -50],
+        [Date.parse("2026-10-25T05:00:30.000Z"), 0],
+        [Date.parse("2026-10-25T05:01:00.000Z"), 150],
+      ],
+    });
+    expect(data).toEqual(original);
+  });
+
+  it("breaks at null readings and gaps of exactly two minutes without manufacturing a sample", () => {
+    const data = withTemperature();
+    const points = [
+      { at: "2026-10-25T05:00:00.000Z", value: 21 },
+      { at: "2026-10-25T05:01:59.999Z", value: 22 },
+      { at: "2026-10-25T05:03:59.999Z", value: 23 },
+      { at: "2026-10-25T05:04:00.000Z", value: null },
+      { at: "2026-10-25T05:04:30.000Z", value: 24 },
+    ];
+    data.temperatureStreams![0].points = points;
+    const stream = reportTemperature(data).streams[0];
+    expect(stream.points).toBe(points);
+    expect(stream.line).toEqual([
+      [Date.parse(points[0].at), 21],
+      [Date.parse(points[1].at), 22],
+      [Date.parse(points[2].at), null],
+      [Date.parse(points[2].at), 23],
+      [Date.parse(points[3].at), null],
+      [Date.parse(points[4].at), 24],
+    ]);
+    expect(points).toHaveLength(5);
+  });
+
+  it.each([
+    ["source", { source: "current_sensor_value" }],
+    ["unit", { unit: "°F" }],
+    ["gap rule", { gapThresholdSeconds: 60 }],
+    ["availability", { availability: "invented" }],
+  ])(
+    "disables only temperature for unsupported %s metadata",
+    (_name, change) => {
+      const data = withTemperature();
+      Object.assign(data.temperatureDefinition!, change);
+      expect(reportTemperature(data)).toEqual({
+        availability: "unavailable",
+        streams: [],
+      });
+      expect(boundSeries(data, subjectId, report)).toBe(data);
+    },
+  );
+
+  it.each([NaN, Infinity, -Infinity, -50.001, 150.001, "23.5", undefined])(
+    "does not plot an invalid temperature reading %s",
+    (value) => {
+      const data = withTemperature();
+      Object.assign(data.temperatureStreams![0].points[0], { value });
+      expect(reportTemperature(data).streams).toEqual([]);
+      expect(boundSeries(data, subjectId, report)).toBe(data);
+    },
+  );
+
+  it.each([
+    "2026-10-25T04:59:59.999Z",
+    report.period.endExclusive,
+    "2026-02-30T05:00:00.000Z",
+    "2026-10-25T05:00:00.000+00:00",
+    "2026-10-25T05:00:00.000000Z",
+  ])("rejects invalid or out-of-window observation time %s", (at) => {
+    const data = withTemperature();
+    data.temperatureStreams![0].points[0].at = at;
+    expect(reportTemperature(data).streams).toEqual([]);
+  });
+
+  it("honors the half-open selected range and requires ordered unique observation times", () => {
+    const data = withTemperature();
+    data.range.start = "2026-10-25T05:00:30.000Z";
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.range.start = report.period.start;
+    data.range.endExclusive = "2026-10-25T05:01:00.000Z";
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.range.endExclusive = report.period.endExclusive;
+    data.temperatureStreams![0].points.reverse();
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.temperatureStreams![0].points[0].at =
+      data.temperatureStreams![0].points[1].at;
+    expect(reportTemperature(data).streams).toEqual([]);
+  });
+
+  it("does not merge streams or expose nongeneric labels and duplicate identities", () => {
+    const data = withTemperature();
+    const first = data.temperatureStreams![0];
+    data.temperatureStreams = [
+      { ...first, label: "Bed temperature 1" },
+      { ...first, id: "9223372036854775804", label: "Bed temperature 2" },
+    ];
+    expect(reportTemperature(data).streams).toHaveLength(2);
+    data.temperatureStreams[1].id = first.id;
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.temperatureStreams = [{ ...first, label: "Private sensor label" }];
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.temperatureStreams = [{ ...first, id: "9223372036854775808" }];
+    expect(reportTemperature(data).streams).toEqual([]);
+  });
+
+  it("bounds stream, per-stream and combined point counts independently", () => {
+    const data = withTemperature();
+    const first = data.temperatureStreams![0];
+    const points = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        at: new Date(Date.parse(report.period.start) + index).toISOString(),
+        value: 20,
+      }));
+    first.points = points(5000);
+    expect(reportTemperature(data).streams).toHaveLength(1);
+    first.points.push(points(5001)[5000]);
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.temperatureStreams = Array.from({ length: 9 }, (_, index) => ({
+      id: String(index + 1),
+      label: `Bed temperature ${index + 1}`,
+      points: points(1),
+    }));
+    expect(reportTemperature(data).streams).toEqual([]);
+    data.temperatureStreams = Array.from({ length: 3 }, (_, index) => ({
+      id: String(index + 1),
+      label: `Bed temperature ${index + 1}`,
+      points: points(3333 + (index < 2 ? 1 : 0)),
+    }));
+    expect(reportTemperature(data).streams).toEqual([]);
+  });
+
+  it("keeps missing, no-data, unavailable and limited history empty without latest-value fallback", () => {
+    expect(reportTemperature(series())).toEqual({
+      availability: "unavailable",
+      streams: [],
+    });
+    for (const availability of ["no_data", "unavailable", "limited"] as const) {
+      const data = withTemperature();
+      data.temperatureDefinition!.availability = availability;
+      data.temperatureStreams![0].points = [
+        { at: report.period.start, value: null },
+      ];
+      expect(reportTemperature(data)).toEqual({ availability, streams: [] });
+    }
+    const invalid = withTemperature();
+    invalid.temperatureStreams![0].points = [];
+    expect(reportTemperature(invalid).streams).toEqual([]);
+  });
+});
 
 describe("care report graph semantics", () => {
   const withHrv = () => {

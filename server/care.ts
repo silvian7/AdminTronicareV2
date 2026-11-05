@@ -13,6 +13,7 @@ const quantitativeKeys = new Set([
   "flagInvalid",
   "errorCode",
   "intervalSeconds",
+  "gapThresholdSeconds",
   "windowDays",
   "heartRate",
   "breathRate",

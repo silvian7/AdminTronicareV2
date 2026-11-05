@@ -568,15 +568,24 @@ const graphBounds = (graphs: Locator) =>
 async function graphPointer(
   page: Page,
   graphs: Locator,
-  panel: "heart" | "hrv" = "heart",
+  panel: "heart" | "hrv" | "temperature" = "heart",
 ) {
   const chart = graphs.locator(".care-report-chart");
-  await chart.scrollIntoViewIfNeeded();
+  const heading = graphs.getByRole("heading", {
+    name:
+      panel === "heart"
+        ? /^Heart rate/
+        : panel === "hrv"
+          ? /^HRV/
+          : /^Bed temperature/,
+  });
+  await heading.scrollIntoViewIfNeeded();
   const box = await chart.boundingBox();
-  if (!box) throw new Error("Report chart is unavailable.");
+  const title = await heading.boundingBox();
+  if (!box || !title) throw new Error("Report chart is unavailable.");
   const point = {
     x: box.x + box.width / 2,
-    y: box.y + box.height * (panel === "hrv" ? 0.9 : 0.35),
+    y: title.y + 90,
   };
   await page.mouse.move(point.x, point.y);
   return { ...point, width: box.width };
@@ -586,7 +595,7 @@ async function graphPointer(
 export async function zoomCareGraph(
   page: Page,
   graphs: Locator,
-  panel: "heart" | "hrv" = "heart",
+  panel: "heart" | "hrv" | "temperature" = "heart",
 ) {
   await graphPointer(page, graphs, panel);
   for (let step = 0; step < 4; step++) {
