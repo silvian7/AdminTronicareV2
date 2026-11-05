@@ -2,14 +2,18 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, Button, Card, Empty, Skeleton, Space, Table, Tag } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
+import { Link, useNavigate } from "react-router";
 import {
   decodeUnregisteredHubs,
   type UnregisteredHub,
 } from "../../shared/unregistered-hubs";
 import { formatDisplayDateTime } from "../../shared/date-time";
+import { hubRegistrationPath } from "../../shared/hub-registration";
+import { resourceMap } from "../../shared/resources";
 import { getSessionEpoch, request } from "../api";
 import { useAdmin } from "../context";
 import { LastRefreshed, useOperationalRefresh } from "./operational-freshness";
+import { navigationRow } from "./record-row";
 
 const dateTime = (value: string) => (
   <time dateTime={value}>{formatDisplayDateTime(value)}</time>
@@ -20,7 +24,9 @@ export function UnregisteredHubs({
 }: {
   refreshVersion: number;
 }) {
-  const { identity } = useAdmin();
+  const { identity, can } = useAdmin();
+  const navigate = useNavigate();
+  const canRegister = can(resourceMap.hubs, "create");
   const enabled =
     identity.level >= 90 &&
     !identity.mustChangePassword &&
@@ -104,6 +110,14 @@ export function UnregisteredHubs({
           {data.data.length ? (
             <Table<UnregisteredHub>
               rowKey={(row) => JSON.stringify([row.hubKind, row.serialNumber])}
+              onRow={(row) =>
+                canRegister
+                  ? navigationRow(
+                      () => navigate(hubRegistrationPath(row)),
+                      `Register hub ${row.serialNumber}`,
+                    )
+                  : {}
+              }
               dataSource={data.data}
               pagination={{
                 pageSize: 5,
@@ -134,6 +148,14 @@ export function UnregisteredHubs({
                   title: "Serial number",
                   dataIndex: "serialNumber",
                   width: 220,
+                  render: (serial: string, row) =>
+                    canRegister ? (
+                      <Link to={hubRegistrationPath(row)} title="Register hub">
+                        {serial}
+                      </Link>
+                    ) : (
+                      serial
+                    ),
                 },
                 {
                   title: "First received",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getDefaultSortOrder, useTable } from "@refinedev/antd";
-import { focusManager, useQueryClient } from "@tanstack/react-query";
+import { focusManager, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useList,
   useOne,
@@ -70,6 +70,10 @@ import {
   type AssetAssignmentKind,
 } from "../../shared/resources";
 import { useAdmin } from "../context";
+import {
+  matchRegistrationHubType,
+  readHubRegistration,
+} from "../../shared/hub-registration";
 import {
   ErrorNotice,
   AssetIdentity,
@@ -2539,12 +2543,57 @@ export function ResourceEditor({
   resource: Resource;
   mode: "create" | "edit";
 }) {
+  const queryClient = useQueryClient();
   const { id } = useParams();
   const { organization, identity, can, registerOrganizationChangeGuard } =
     useAdmin();
   const navigate = useNavigate();
   const { message, modal } = App.useApp();
   const [params] = useSearchParams();
+  const hubCreate = resource.name === "hubs" && mode === "create";
+  const hubRegistration = useMemo(
+    () =>
+      hubCreate ? readHubRegistration(params) : { state: "absent" as const },
+    [hubCreate, params],
+  );
+  const registeringHub = hubRegistration.state !== "absent";
+  const hubRegistrationKey = registeringHub
+    ? JSON.stringify([params.getAll("hubKind"), params.getAll("serialNumber")])
+    : "";
+  const canReadHubTypes = can(resourceMap.hubtypes, "list");
+  const registrationTypes = useQuery({
+    queryKey: [
+      "hub-registration-types",
+      getSessionEpoch(),
+      organization,
+      hubRegistrationKey,
+    ],
+    queryFn: ({ signal }) => {
+      const search = new URLSearchParams({ _page: "1", _pageSize: "10000" });
+      if (organization) search.set("_organization", organization);
+      return request<unknown>(`/api/resources/hubtypes?${search}`, { signal });
+    },
+    enabled:
+      hubRegistration.state === "valid" &&
+      can(resource, "create") &&
+      canReadHubTypes,
+    retry: false,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+  });
+  const registrationType =
+    hubRegistration.state === "valid" &&
+    canReadHubTypes &&
+    registrationTypes.isSuccess &&
+    registrationTypes.isFetchedAfterMount &&
+    !registrationTypes.isFetching &&
+    !registrationTypes.isPlaceholderData
+      ? matchRegistrationHubType(
+          registrationTypes.data,
+          hubRegistration.hubKind,
+        )
+      : undefined;
   const copySupported =
     ["rules", "actions"].includes(resource.name) && mode === "create";
   const reverseParameter =
@@ -2578,7 +2627,8 @@ export function ResourceEditor({
   const copySaveLocked = useRef<symbol | null>(null);
   const editorMounted = useRef(false);
   const editorEpoch = getSessionEpoch();
-  const editorScope = `${resource.name}:${id ?? "new"}:${mode}:${copyingRecord ? `${sourceParameter}:${sourceRecordId}` : ""}:${organization}:${editorEpoch}`;
+  const initializationKey = `${resource.name}:${id ?? "new"}:${mode}:${copyingRecord ? `${sourceParameter}:${sourceRecordId}` : ""}:${hubRegistrationKey}`;
+  const editorScope = `${initializationKey}:${organization}:${editorEpoch}`;
   const currentEditorScope = useRef(editorScope);
   currentEditorScope.current = editorScope;
   useEffect(() => {
@@ -2601,7 +2651,8 @@ export function ResourceEditor({
       dirty &&
       !saved.current &&
       (currentLocation.pathname !== nextLocation.pathname ||
-        (copyingRecord && currentLocation.search !== nextLocation.search)),
+        ((copyingRecord || hubCreate) &&
+          currentLocation.search !== nextLocation.search)),
   );
   useEffect(() => {
     if (blocker.state !== "blocked") return;
@@ -2711,7 +2762,7 @@ export function ResourceEditor({
     };
   }, [registerOrganizationChangeGuard, dirty, saving, message, modal]);
   useEffect(() => {
-    const key = `${resource.name}:${id ?? "new"}:${mode}:${copyingRecord ? `${sourceParameter}:${sourceRecordId}` : ""}`;
+    const key = initializationKey;
     if (initialized.current === key) return;
     if (!can(resource, mode) || (mode === "edit" && !can(resource, "show")))
       return;
@@ -2775,6 +2826,11 @@ export function ResourceEditor({
           params.get("template") === "true"
         )
           initial[f.key] = true;
+        if (
+          hubRegistration.state === "valid" &&
+          canonical(f.key) === "SerialNr"
+        )
+          initial[f.key] = hubRegistration.serialNumber;
       }
     form.setFieldsValue(initial);
     setDirty(false);
@@ -2796,6 +2852,30 @@ export function ResourceEditor({
     validSourceRecord,
     sourceRecord.result,
     sourceRecord.query.isFetching,
+    initializationKey,
+    hubRegistration,
+  ]);
+  const registrationTypeField = fields.find(
+    (field) => canonical(field.key) === "IDHubType",
+  )?.key;
+  useEffect(() => {
+    if (
+      hubRegistration.state !== "valid" ||
+      registrationType?.state !== "matched" ||
+      !registrationTypeField ||
+      initialized.current !== initializationKey ||
+      form.isFieldTouched(registrationTypeField) ||
+      form.getFieldValue(registrationTypeField) != null
+    )
+      return;
+    form.setFieldValue(registrationTypeField, registrationType.id);
+  }, [
+    hubRegistration,
+    registrationType?.state,
+    registrationType?.state === "matched" ? registrationType.id : undefined,
+    registrationTypeField,
+    initializationKey,
+    form,
   ]);
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -2824,6 +2904,14 @@ export function ResourceEditor({
         status="403"
         title="Changes are unavailable"
         subTitle="Your permissions or the service's write settings do not allow this operation."
+      />
+    );
+  if (hubRegistration.state === "invalid")
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="Invalid hub registration details. Return to Overview and select the hub again."
       />
     );
   if (mode === "edit" && detail.query.error)
@@ -2902,11 +2990,13 @@ export function ResourceEditor({
           ) : undefined
         }
         title={
-          creatingTemplate
-            ? `Create template from ${resource.singular.toLowerCase()}`
-            : copyingRecord
-              ? `Create ${resource.singular.toLowerCase()} from template`
-              : `${mode === "create" ? "Add" : "Edit"} ${resource.singular.toLowerCase()}`
+          registeringHub
+            ? "Register hub"
+            : creatingTemplate
+              ? `Create template from ${resource.singular.toLowerCase()}`
+              : copyingRecord
+                ? `Create ${resource.singular.toLowerCase()} from template`
+                : `${mode === "create" ? "Add" : "Edit"} ${resource.singular.toLowerCase()}`
         }
         extra={
           <Button icon={<ArrowLeftOutlined />} onClick={leave}>
@@ -2918,6 +3008,34 @@ export function ResourceEditor({
         error={detail.query.error}
         retry={() => detail.query.refetch()}
       />
+      {hubRegistration.state === "valid" &&
+        (!canReadHubTypes ||
+          registrationTypes.isError ||
+          (registrationType && registrationType.state !== "matched")) && (
+          <Alert
+            className="page-alert"
+            type="warning"
+            showIcon
+            message={
+              registrationType?.state === "missing"
+                ? `Hub type "${hubRegistration.hubKind}" is not registered. Add the matching type in Hub types, then refresh and choose it here.`
+                : registrationType?.state === "ambiguous"
+                  ? `More than one hub type uses "${hubRegistration.hubKind}". Resolve the duplicate kinds in Hub types before registering this hub.`
+                  : `The complete hub type catalog is unavailable. Verify and choose the type for "${hubRegistration.hubKind}" before saving.`
+            }
+            action={
+              canReadHubTypes ? (
+                <Button
+                  disabled={saving}
+                  loading={registrationTypes.isFetching}
+                  onClick={() => void registrationTypes.refetch()}
+                >
+                  Refresh hub types
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
       {resource.name === "users" &&
         mode === "edit" &&
         can(resource, "show") &&
@@ -3131,6 +3249,10 @@ export function ResourceEditor({
             if (copyingRecord && !currentCopy()) return;
             saved.current = true;
             setDirty(false);
+            if (hubCreate)
+              await queryClient.invalidateQueries({
+                queryKey: ["core-unregistered-hubs", epoch],
+              });
             message.success(`${resource.singular} saved.`);
             navigate(`/${resource.name}/${result.data.id}`);
           } catch (e) {
