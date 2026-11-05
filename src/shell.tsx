@@ -36,6 +36,7 @@ import {
 import { useAdmin } from "./context";
 import { getSession } from "./api";
 import { OrganizationSelector } from "./components/organization-selector";
+import { AppVersion } from "./components/app-version";
 
 const groupIcons: Record<string, React.ReactNode> = {
   "People & assets": <TeamOutlined />,
@@ -294,6 +295,7 @@ export function Shell() {
         <Layout.Footer className="app-footer">
           Tronicare administration{" "}
           <span>Connected to your configured services</span>
+          <AppVersion />
         </Layout.Footer>
       </Layout>
     </Layout>

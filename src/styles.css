@@ -16,6 +16,12 @@ input {
 a {
   color: #087f8c;
 }
+.app-version {
+  color: #577183;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
 .app-layout {
   min-height: 100vh;
 }
@@ -515,6 +521,10 @@ a {
 .login-form {
   width: 100%;
   max-width: 385px;
+}
+.login-version {
+  margin-top: 16px;
+  text-align: center;
 }
 .login-form h2 {
   font-size: 31px !important;

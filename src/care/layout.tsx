@@ -19,6 +19,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useAdmin } from "../context";
 import { getSession } from "../api";
 import { OrganizationSelector } from "../components/organization-selector";
+import { AppVersion } from "../components/app-version";
 import {
   resourceMap,
   translated,
@@ -228,7 +229,8 @@ export function CareLayout() {
         )}
       </main>
       <footer className="care-footer">
-        TroniCare · Observations and stored reports
+        <span>TroniCare · Observations and stored reports</span>
+        <AppVersion />
       </footer>
     </Layout>
   );

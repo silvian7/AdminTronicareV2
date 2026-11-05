@@ -573,6 +573,13 @@ export function ResourceList({ resource }: { resource: Resource }) {
           ]
         : []),
       ...selectedColumns(resource)
+        .concat(
+          resource.name === "hubs"
+            ? resource.fields.filter(
+                (field) => canonical(field.key) === "ThingId",
+              )
+            : [],
+        )
         .filter((f) => !["Label", "Tag"].includes(canonical(f.key)))
         .filter(
           (field) =>
@@ -580,11 +587,14 @@ export function ResourceList({ resource }: { resource: Resource }) {
         )
         .map((f) => ({
           title:
-            (resource.name === "actions" &&
-              canonical(f.key) === "IDActionType") ||
-            (resource.name === "rules" && canonical(f.key) === "IDRuleType")
-              ? "Type"
-              : fieldLabel(f.key),
+            resource.name === "hubs" && canonical(f.key) === "ThingId"
+              ? "Thing ID"
+              : (resource.name === "actions" &&
+                    canonical(f.key) === "IDActionType") ||
+                  (resource.name === "rules" &&
+                    canonical(f.key) === "IDRuleType")
+                ? "Type"
+                : fieldLabel(f.key),
           dataIndex: f.key,
           key: f.key,
           sorter: true,

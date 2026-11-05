@@ -93,6 +93,11 @@
   min-height: 250px;
 }
 .care-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
   padding: 16px 32px;
   color: #577183;
   border-top: 1px solid #dce6eb;

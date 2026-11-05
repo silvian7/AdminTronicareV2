@@ -21,6 +21,7 @@ import {
 import { getSession, loadSession, request, sessionLanding } from "../api";
 import { useAdmin } from "../context";
 import { careLoginDestination, careLoginReturnTo } from "../care/login-return";
+import { AppVersion } from "../components/app-version";
 
 export function Login() {
   const location = useLocation();
@@ -158,6 +159,9 @@ export function Login() {
           >
             Forgot your password?
           </Button>
+          <div className="login-version">
+            <AppVersion />
+          </div>
         </div>
       </div>
       <Modal
