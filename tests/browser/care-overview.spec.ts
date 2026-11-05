@@ -385,6 +385,174 @@ test("search and pagination request bounded server pages without per-row reads",
   expect(fixture.unexpected).toEqual([]);
 });
 
+test("the caregiver list refreshes each visible minute while unfocused and shares pending refreshes without changing scope or navigation", async ({
+  page,
+}) => {
+  const now = new Date("2026-10-29T12:00:00.000Z");
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now);
+  await page.addInitScript(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    Object.defineProperty(document, "hasFocus", {
+      configurable: true,
+      value: () => false,
+    });
+  });
+  const fixture = await installCareFixtures(page, { caregiver: false });
+  fixture.session.activeOrganizationId = "1";
+  const collectionReads: URL[] = [];
+  let holdNext: Promise<void> | undefined;
+  let activeReads = 0;
+  let maximumActiveReads = 0;
+  await page.route("**/api/care/subjects?**", async (route) => {
+    collectionReads.push(new URL(route.request().url()));
+    activeReads++;
+    maximumActiveReads = Math.max(maximumActiveReads, activeReads);
+    try {
+      const hold = holdNext;
+      holdNext = undefined;
+      if (hold) await hold;
+      await route.fallback();
+    } finally {
+      activeReads--;
+    }
+  });
+  const subject = fixture.subjects[10];
+  const originalTag = subject.tag;
+  await page.goto("/care?q=SYNTHETIC-ASSET&page=2&size=10");
+  const visible = async (label: string) =>
+    expect
+      .poll(async () => {
+        await page.clock.runFor(0);
+        return page.getByRole("link", { name: label, exact: true }).isVisible();
+      })
+      .toBe(true);
+  await visible(originalTag);
+  const address = page.url();
+  const initialReads = collectionReads.length;
+  const query = collectionReads.at(-1)!.search;
+  expect(collectionReads.at(-1)!.searchParams.get("q")).toBe("SYNTHETIC-ASSET");
+  expect(collectionReads.at(-1)!.searchParams.get("page")).toBe("2");
+  expect(collectionReads.at(-1)!.searchParams.get("size")).toBe("10");
+  expect(collectionReads.at(-1)!.searchParams.get("organization")).toBe("1");
+  await page.evaluate(() => {
+    document.documentElement.dataset.syntheticCareDocument = "same-document";
+    window.dispatchEvent(new Event("blur"));
+  });
+  subject.tag = `${originalTag}-REFRESHED`;
+  subject.bed.lastObservedState = "in_bed";
+  subject.bed.observedAt = "2026-10-29T12:00:00.000Z";
+  const report = subject.latestReport!;
+  report.id = (BigInt(report.id) + 100n).toString();
+  report.period = {
+    ...report.period,
+    start: "2026-10-28T05:00:00.000Z",
+    endExclusive: "2026-10-29T05:00:00.000Z",
+    reportDate: "2026-10-28",
+  };
+  await page.clock.runFor(59_999);
+  expect(collectionReads).toHaveLength(initialReads);
+  await expect(
+    page.getByRole("link", { name: originalTag, exact: true }),
+  ).toBeVisible();
+  await page.clock.runFor(1);
+  await expect.poll(() => collectionReads.length).toBe(initialReads + 1);
+  await page.clock.runFor(1);
+  await visible(subject.tag);
+  const row = page.locator(`tr[data-row-key="${subject.id}"]`);
+  await expect(
+    row.getByRole("img", { name: "In bed", exact: true }),
+  ).toBeVisible();
+  await expect(
+    row.getByRole("link", { name: subject.tag, exact: true }),
+  ).toHaveAttribute(
+    "href",
+    `/care/subjects/${subject.id}/reports/${report.id}`,
+  );
+  await expect(row.locator(".care-latest-report time").nth(0)).toHaveAttribute(
+    "datetime",
+    report.period.start,
+  );
+  await expect(row.locator(".care-latest-report time").nth(1)).toHaveAttribute(
+    "datetime",
+    report.period.endExclusive,
+  );
+  expect(await page.evaluate(() => document.visibilityState)).toBe("visible");
+  expect(await page.evaluate(() => document.hasFocus())).toBe(false);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("blur"));
+  });
+  await page.clock.runFor(120_000);
+  expect(collectionReads).toHaveLength(initialReads + 1);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(collectionReads).toHaveLength(initialReads + 1);
+  let release!: () => void;
+  holdNext = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  maximumActiveReads = 0;
+  try {
+    await page
+      .getByRole("banner")
+      .getByRole("button", { name: /Refresh$/ })
+      .click();
+    await expect.poll(() => collectionReads.length).toBe(initialReads + 2);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(120_000);
+    expect(collectionReads).toHaveLength(initialReads + 2);
+    release();
+    await expect.poll(() => activeReads).toBe(0);
+    await page.clock.runFor(1);
+    await visible(subject.tag);
+    expect(maximumActiveReads).toBe(1);
+  } finally {
+    release();
+  }
+  expect(
+    collectionReads.slice(initialReads).map((read) => read.search),
+  ).toEqual([query, query]);
+  await expect(page).toHaveURL(address);
+  await expect(
+    page.getByRole("searchbox", { name: "Search assets", exact: true }),
+  ).toHaveValue("SYNTHETIC-ASSET");
+  await expect(page.locator(".ant-pagination-item-2")).toHaveClass(
+    /ant-pagination-item-active/,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.syntheticCareDocument,
+    ),
+  ).toBe("same-document");
+  expect(fixture.calls.filter((call) => call.method !== "GET")).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 test("desktop resident rows open the exact latest graphs while selection, modifiers and nested links retain their behavior", async ({
   page,
 }) => {
@@ -629,9 +797,28 @@ test("direct report URL and reload preserve exact subject/report identities", as
   await expect(page.getByText(subject.id, { exact: true })).toHaveCount(0);
   await expect(
     page.getByText(/Dates and times shown in Europe\/Brussels\./),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  const periodCard = page.locator(".ant-card").filter({
+    has: page.getByRole("heading", { name: "Reporting period", exact: true }),
+  });
+  await expect(periodCard.locator(".care-period dt")).toHaveText([
+    "Start",
+    "End",
+  ]);
+  const periodTimes = periodCard.locator(".care-period time");
+  await expect(periodTimes).toHaveCount(2);
+  await expect(periodTimes.nth(0)).toHaveAttribute(
+    "datetime",
+    report.period.start,
+  );
+  await expect(periodTimes.nth(1)).toHaveAttribute(
+    "datetime",
+    report.period.endExclusive,
+  );
+  for (const time of [periodTimes.nth(0), periodTimes.nth(1)])
+    await expect(time).not.toContainText(/\bCE(?:S)?T\b/);
   await expect(
-    page.locator('.care-period time[datetime="2026-10-27T05:00:00.000Z"]'),
+    periodCard.locator('time[datetime="2026-10-27T05:00:00.000Z"]'),
   ).toContainText("06:00");
   await expect(
     page.getByRole("img", { name: coordinatedGraphs }),

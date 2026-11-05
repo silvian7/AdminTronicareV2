@@ -324,50 +324,6 @@ function GraphView({ data }: { data: CareSeries }) {
   }, [data, start, end, hrv]);
   return (
     <>
-      <div className="care-graph-toolbar" aria-label="Graph time controls">
-        <Button
-          onClick={() => {
-            const width = (visible.end - visible.start) / 2,
-              center = (visible.start + visible.end) / 2;
-            focusRange(center - width / 2, center + width / 2);
-          }}
-        >
-          Zoom in
-        </Button>
-        <Button
-          onClick={() => {
-            const width = Math.min(
-                end - start,
-                (visible.end - visible.start) * 2,
-              ),
-              center = (visible.start + visible.end) / 2;
-            focusRange(center - width / 2, center + width / 2);
-          }}
-        >
-          Zoom out
-        </Button>
-        <Button
-          onClick={() =>
-            focusRange(
-              visible.start - (visible.end - visible.start) / 4,
-              visible.end - (visible.end - visible.start) / 4,
-            )
-          }
-        >
-          Pan earlier
-        </Button>
-        <Button
-          onClick={() =>
-            focusRange(
-              visible.start + (visible.end - visible.start) / 4,
-              visible.end + (visible.end - visible.start) / 4,
-            )
-          }
-        >
-          Pan later
-        </Button>
-        <Button onClick={() => focusRange(start, end)}>Reset view</Button>
-      </div>
       <p
         className="care-note care-graph-visible-range"
         role="status"
@@ -376,11 +332,11 @@ function GraphView({ data }: { data: CareSeries }) {
       >
         Visible range:{" "}
         <time dateTime={new Date(visible.start).toISOString()}>
-          {sampleTime(visible.start)}
+          {formatDisplayDateTime(visible.start)}
         </time>{" "}
         to{" "}
         <time dateTime={new Date(visible.end).toISOString()}>
-          {sampleTime(visible.end)}
+          {formatDisplayDateTime(visible.end)}
         </time>
         .
       </p>
@@ -427,11 +383,6 @@ function GraphView({ data }: { data: CareSeries }) {
           </span>
         ))}
       </div>
-      <p className="care-note">
-        Scroll or pinch to zoom; drag to pan. All visible panels share the same
-        time window. Missing readings remain gaps. Movement shows the status-34
-        event flag, not a movement count or continuous activity measurement.
-      </p>
     </>
   );
 }
@@ -456,7 +407,6 @@ export default function ReportGraphs({
       className="care-report-graphs"
       role="region"
       aria-label="Report graphs"
-      title={<h2 className="care-card-heading">Report graphs</h2>}
     >
       {query.isError ? (
         <Alert
@@ -489,21 +439,6 @@ export default function ReportGraphs({
         />
       ) : (
         <>
-          <p className="care-note">
-            {data.points.length} retained samples. Source sampling interval:{" "}
-            {data.sampling.intervalSeconds === null
-              ? "not recorded"
-              : `${data.sampling.intervalSeconds} seconds`}
-            . Source window:{" "}
-            <time dateTime={data.range.start}>
-              {sampleTime(data.range.start)}
-            </time>{" "}
-            to{" "}
-            <time dateTime={data.range.endExclusive}>
-              {sampleTime(data.range.endExclusive)}
-            </time>{" "}
-            (exclusive).
-          </p>
           {data.sampling.limited && (
             <Alert
               type="info"

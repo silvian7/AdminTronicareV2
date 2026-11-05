@@ -50,6 +50,7 @@ export function Shell() {
   const { mutate: logout } = useLogout();
   const location = useLocation();
   const navigate = useNavigate();
+  const canOpenCare = can(resourceMap.assets, "list");
   const [mobile, setMobile] = useState(false);
   const [switchingOrganization, setSwitchingOrganization] = useState(false);
   const membershipSelector = Array.isArray(
@@ -77,7 +78,7 @@ export function Shell() {
         ]
       : []),
     { key: "/", icon: <AppstoreOutlined />, label: "Overview" },
-    ...(can(resourceMap.assets, "list")
+    ...(canOpenCare
       ? [
           {
             key: "/care",
@@ -153,11 +154,11 @@ export function Shell() {
       </Drawer>
       <Layout>
         <Layout.Header
-          className={`topbar${membershipSelector ? " organization-topbar" : ""}`}
+          className={`topbar${membershipSelector || canOpenCare ? " organization-topbar" : ""}`}
         >
           <Space
             size="middle"
-            wrap={membershipSelector}
+            wrap={membershipSelector || canOpenCare}
             className="workspace-controls"
           >
             <Button
@@ -226,6 +227,15 @@ export function Shell() {
                   ]}
                 />
               </>
+            )}
+            {canOpenCare && (
+              <Button
+                icon={<TeamOutlined aria-hidden="true" />}
+                disabled={switchingOrganization}
+                onClick={() => navigate("/care")}
+              >
+                Caregiver portal
+              </Button>
             )}
           </Space>
           <Dropdown

@@ -1,6 +1,7 @@
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSessionEpoch, request } from "../api";
 import { useAdmin } from "../context";
+import { useOperationalRefresh } from "../components/operational-freshness";
 import {
   DISPLAY_TIME_ZONE,
   formatDisplayDateTime,
@@ -65,13 +66,13 @@ export function useCareSubjects(filters: {
   if (filters.organization && validCareId(filters.organization))
     params.set("organization", filters.organization);
   const query = params.toString();
-  return useQuery<CareSubjects, CareFailure>({
+  const subjects = useQuery<CareSubjects, CareFailure>({
     queryKey: [...scope, "subjects", query],
     queryFn: ({ signal }) => request(`/api/care/subjects?${query}`, { signal }),
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
+  useOperationalRefresh(true, subjects.refetch, 60_000);
+  return subjects;
 }
 export function useCareSubjectsRefresh() {
   const scope = useCareScope();
@@ -80,7 +81,11 @@ export function useCareSubjectsRefresh() {
   const isFetching = useIsFetching({ queryKey }) > 0;
   return {
     isFetching,
-    refresh: () => queryClient.refetchQueries({ queryKey, type: "active" }),
+    refresh: () =>
+      queryClient.refetchQueries(
+        { queryKey, type: "active" },
+        { cancelRefetch: false },
+      ),
   };
 }
 export interface CareSubjectResponse {

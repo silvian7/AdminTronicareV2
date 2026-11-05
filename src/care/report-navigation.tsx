@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Select, Space, Typography } from "antd";
+import { Alert, Button, Card, Select, Space } from "antd";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router";
 import type { CareReportDetail, CareSubject } from "../../shared/care";
@@ -61,21 +61,21 @@ export function ReportNavigation({
         className="care-report-navigation"
         style={{ display: "flex", marginBottom: 16 }}
       >
-        <label>
-          Reporting period
-          <Select
-            aria-label="Reporting period"
-            value={report?.id}
-            placeholder="Select a completed report"
-            style={{ minWidth: 240, display: "block" }}
-            loading={query.isFetching}
-            options={reports.map((entry) => ({
-              value: entry.id,
-              label: `${careDate(entry.period.reportDate)} · ${entry.id}`,
-            }))}
-            onChange={open}
-          />
-        </label>
+        <Select
+          aria-label="Reporting period"
+          value={report?.id}
+          placeholder="Select a completed report"
+          style={{ width: 160, height: 40, display: "block" }}
+          loading={query.isFetching}
+          options={reports.map((entry) => ({
+            value: entry.id,
+            label: careDate(entry.period.reportDate),
+          }))}
+          labelRender={({ label }) =>
+            label ?? (report ? careDate(report.period.reportDate) : "")
+          }
+          onChange={open}
+        />
         <Button
           disabled={!subject.latestReport}
           onClick={() => subject.latestReport && open(subject.latestReport.id)}
@@ -97,10 +97,6 @@ export function ReportNavigation({
           Next report
         </Button>
       </Space>
-      <Typography.Paragraph className="care-note">
-        The selector lists completed reports from the 31 days through{" "}
-        {careDate(anchor)}. Previous and next move within this window.
-      </Typography.Paragraph>
       {query.isError && (
         <Alert
           type="error"

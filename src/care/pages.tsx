@@ -15,10 +15,10 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { CarePeriod, CareReport, CareSubject } from "../../shared/care";
 import { translated } from "../../shared/resources";
+import { formatDisplayDateTime } from "../../shared/date-time";
 import { useAdmin } from "../context";
 import {
   careDateTime,
-  careDisplayTimezone,
   careSubjectUrl,
   useCareReport,
   useCareReports,
@@ -67,27 +67,43 @@ function knownReport(report: CareReport | null | undefined, subjectId: string) {
   );
 }
 
-function Moment({ value }: { value: string | null | undefined }) {
+function Moment({
+  value,
+  showZone = true,
+}: {
+  value: string | null | undefined;
+  showZone?: boolean;
+}) {
   return value && Number.isFinite(Date.parse(value)) ? (
-    <time dateTime={value}>{careDateTime(value)}</time>
+    <time dateTime={value}>
+      {showZone ? careDateTime(value) : formatDisplayDateTime(value)}
+    </time>
   ) : (
     <span>Not available</span>
   );
 }
 
-function Period({ period }: { period: CarePeriod }) {
+function Period({
+  period,
+  compact = false,
+  inline = false,
+}: {
+  period: CarePeriod;
+  compact?: boolean;
+  inline?: boolean;
+}) {
   return (
-    <dl className="care-period">
+    <dl className={inline ? "care-period care-period-inline" : "care-period"}>
       <div>
         <dt>Start</dt>
         <dd>
-          <Moment value={period.start} />
+          <Moment value={period.start} showZone={!compact} />
         </dd>
       </div>
       <div>
-        <dt>End (exclusive)</dt>
+        <dt>{compact ? "End" : "End (exclusive)"}</dt>
         <dd>
-          <Moment value={period.endExclusive} />
+          <Moment value={period.endExclusive} showZone={!compact} />
         </dd>
       </div>
     </dl>
@@ -161,7 +177,7 @@ function LatestReport({
     );
   return (
     <div className="care-latest-report">
-      <Period period={report.period} />
+      <Period period={report.period} compact />
     </div>
   );
 }
@@ -270,7 +286,8 @@ export function CareOverview() {
     {
       title: "Resident",
       key: "asset",
-      width: "25%",
+      width: "20%",
+      minWidth: 230,
       render: (_, row) => assetIdentity(row),
     },
     {
@@ -290,7 +307,6 @@ export function CareOverview() {
   return (
     <div className="care-page care-overview">
       <Card className="care-search-card">
-        <label htmlFor="care-search">Find an asset</label>
         <Input.Search
           id="care-search"
           aria-label="Search assets"
@@ -582,11 +598,7 @@ export function CareDetail() {
                   </Tag>
                 }
               >
-                <Period period={report.period} />
-                <p className="care-time-note">
-                  Dates and times shown in {careDisplayTimezone()}. The end
-                  marks the start of the next period.
-                </p>
+                <Period period={report.period} compact inline />
               </Card>
               <Suspense
                 fallback={

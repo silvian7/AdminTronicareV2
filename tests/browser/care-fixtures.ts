@@ -1,5 +1,11 @@
 /** Labelled synthetic caregiver data. Every API request is intercepted locally. */
-import type { BrowserContext, Page, Route } from "@playwright/test";
+import {
+  expect,
+  type BrowserContext,
+  type Locator,
+  type Page,
+  type Route,
+} from "@playwright/test";
 import type {
   CareReport,
   CareReportDetail,
@@ -535,4 +541,80 @@ export async function installCareFixtures(
       overrides.delete(`${method} ${path}`);
     },
   };
+}
+
+const graphBounds = (graphs: Locator) =>
+  graphs
+    .getByRole("status", { name: "Visible range", exact: true })
+    .locator("time")
+    .evaluateAll((times) =>
+      times.map((time) => Date.parse(time.getAttribute("datetime")!)),
+    );
+
+async function graphPointer(
+  page: Page,
+  graphs: Locator,
+  panel: "heart" | "hrv" = "heart",
+) {
+  const chart = graphs.locator(".care-report-chart");
+  await chart.scrollIntoViewIfNeeded();
+  const box = await chart.boundingBox();
+  if (!box) throw new Error("Report chart is unavailable.");
+  const point = {
+    x: box.x + box.width / 2,
+    y: box.y + box.height * (panel === "hrv" ? 0.9 : 0.35),
+  };
+  await page.mouse.move(point.x, point.y);
+  return { ...point, width: box.width };
+}
+
+/** Use native chart gestures; no ECharts internals or application actions. */
+export async function zoomCareGraph(
+  page: Page,
+  graphs: Locator,
+  panel: "heart" | "hrv" = "heart",
+) {
+  await graphPointer(page, graphs, panel);
+  for (let step = 0; step < 4; step++) {
+    const previous = await graphBounds(graphs);
+    await page.mouse.wheel(0, -240);
+    await expect
+      .poll(async () => {
+        const current = await graphBounds(graphs);
+        return current[1] - current[0];
+      })
+      .toBeLessThan(previous[1] - previous[0]);
+  }
+}
+
+export async function panCareGraph(
+  page: Page,
+  graphs: Locator,
+  direction: "earlier" | "later",
+) {
+  const point = await graphPointer(page, graphs);
+  const previous = await graphBounds(graphs);
+  const distance =
+    Math.min(40, point.width * 0.05) * (direction === "earlier" ? 1 : -1);
+  await page.mouse.down();
+  await page.mouse.move(point.x + distance, point.y, { steps: 10 });
+  await page.mouse.up();
+  const currentStart = expect.poll(async () => (await graphBounds(graphs))[0]);
+  if (direction === "earlier") await currentStart.toBeLessThan(previous[0]);
+  else await currentStart.toBeGreaterThan(previous[0]);
+}
+
+export async function resetCareGraph(
+  page: Page,
+  graphs: Locator,
+  full: readonly number[],
+) {
+  await graphPointer(page, graphs);
+  for (let step = 0; step < 12; step++) {
+    const previous = await graphBounds(graphs);
+    if (previous[0] === full[0] && previous[1] === full[1]) break;
+    await page.mouse.wheel(0, 240);
+    await expect.poll(() => graphBounds(graphs)).not.toEqual(previous);
+  }
+  await expect.poll(() => graphBounds(graphs)).toEqual(full);
 }

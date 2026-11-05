@@ -15,6 +15,7 @@ interface OperationalQuery {
 export function useOperationalRefresh(
   enabled: boolean,
   refetch: OperationalQuery["refetch"],
+  intervalMs = 15_000,
 ) {
   useEffect(() => {
     if (!enabled) return;
@@ -23,7 +24,7 @@ export function useOperationalRefresh(
       // Focus, timer and manual requests share the query's current in-flight work.
       void refetch({ cancelRefetch: false }).catch(() => {});
     };
-    const timer = window.setInterval(refresh, 15_000);
+    const timer = window.setInterval(refresh, intervalMs);
     const unsubscribe = focusManager.subscribe((focused) => {
       if (focused) refresh();
     });
@@ -31,7 +32,7 @@ export function useOperationalRefresh(
       window.clearInterval(timer);
       unsubscribe();
     };
-  }, [enabled, refetch]);
+  }, [enabled, refetch, intervalMs]);
 }
 
 export function LastRefreshed({

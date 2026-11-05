@@ -1,5 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { installCareFixtures, syntheticCareSeries } from "./care-fixtures";
+import {
+  installCareFixtures,
+  syntheticCareSeries,
+  zoomCareGraph,
+  panCareGraph,
+  resetCareGraph,
+} from "./care-fixtures";
 
 test.use({ timezoneId: "America/New_York" });
 const chartName =
@@ -212,23 +218,33 @@ test("zoom, pan and reset share one visible Brussels range without extra data re
     call.path.endsWith("/series"),
   ).length;
   await expect.poll(() => bounds(graphs)).toEqual([start, end]);
-  await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await zoomCareGraph(page, graphs);
   await expect
     .poll(async () => {
       const range = await bounds(graphs);
       return range[1] - range[0];
     })
-    .toBe((end - start) / 2);
+    .toBeLessThan(end - start);
   const previous = await bounds(graphs);
-  await graphs
-    .getByRole("button", { name: "Pan earlier", exact: true })
-    .click();
+  expect(previous[0]).toBeGreaterThan(start);
+  expect(previous[1]).toBeLessThan(end);
+  await panCareGraph(page, graphs, "earlier");
   await expect
     .poll(async () => (await bounds(graphs))[0])
     .toBeLessThan(previous[0]);
-  await graphs.getByRole("button", { name: "Pan later", exact: true }).click();
-  await expect.poll(() => bounds(graphs)).toEqual(previous);
-  await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
+  const earlier = await bounds(graphs);
+  await panCareGraph(page, graphs, "later");
+  await expect
+    .poll(async () => (await bounds(graphs))[0])
+    .toBeGreaterThan(earlier[0]);
+  expect(
+    Math.abs(
+      (await bounds(graphs))[1] -
+        (await bounds(graphs))[0] -
+        (previous[1] - previous[0]),
+    ),
+  ).toBeLessThanOrEqual(2);
+  await resetCareGraph(page, graphs, [start, end]);
   await expect.poll(() => bounds(graphs)).toEqual([start, end]);
   expect(
     fixture.calls.filter((call) => call.path.endsWith("/series")),
@@ -324,12 +340,17 @@ test("a different subject URL cannot retain the previous subject report or measu
 test("desktop and tablet graph layouts resize without clipping and preserve visible range", async ({
   page,
 }, testInfo) => {
-  const { fixture, graphs } = await openReport(page);
-  await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
+  const { fixture, graphs, report } = await openReport(page);
+  await expect
+    .poll(() => bounds(graphs))
+    .toEqual([
+      Date.parse(report.period.start),
+      Date.parse(report.period.endExclusive),
+    ]);
   await graphs.screenshot({
     path: testInfo.outputPath("care-report-full-period.png"),
   });
-  await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await zoomCareGraph(page, graphs);
   const selected = await bounds(graphs);
   await graphs.scrollIntoViewIfNeeded();
   await graphs.screenshot({
@@ -358,7 +379,7 @@ test("HRV is always visible and shares zoom without an inspection section", asyn
   await expect
     .poll(() => bounds(graphs))
     .toEqual([Date.parse(start), Date.parse(end)]);
-  await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await zoomCareGraph(page, graphs, "hrv");
   const before = await bounds(graphs);
   const seriesCalls = fixture.calls.filter((call) =>
     call.path.endsWith("/series"),
@@ -384,20 +405,22 @@ test("HRV is always visible and shares zoom without an inspection section", asyn
       exact: true,
     }),
   ).toHaveCount(0);
-  await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
+  await resetCareGraph(page, graphs, [Date.parse(start), Date.parse(end)]);
   await expect
     .poll(() => bounds(graphs))
     .toEqual([Date.parse(start), Date.parse(end)]);
   await graphs
-    .getByRole("heading", { name: "Report graphs", exact: true })
+    .getByRole("status", { name: "Visible range", exact: true })
     .hover();
   await graphs.screenshot({ path: testInfo.outputPath("care-vendor-hrv.png") });
   await page.setViewportSize({ width: 768, height: 1024 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth > innerWidth + 1,
-    ),
-  ).toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      ),
+    )
+    .toBe(false);
   await graphs.screenshot({
     path: testInfo.outputPath("care-vendor-hrv-tablet.png"),
   });

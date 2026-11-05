@@ -356,12 +356,6 @@ export default function CareTrendsPage() {
               </form>
             )}
             {rangeError && <Alert type="error" message={rangeError} showIcon />}
-            <p className="care-note">
-              Each day shows an unambiguous eligible completed report. Times use
-              Brussels local time. Missing, unverified or ambiguous days are
-              unavailable; incomplete reports are shown separately. These states
-              are not zero. Open a report to inspect its exact period.
-            </p>
           </Card>
           {query.isError ? (
             errorView(query.error.message, () => void query.refetch())
@@ -378,10 +372,10 @@ export default function CareTrendsPage() {
             />
           ) : (
             <>
-              <Card title={<h2 className="care-card-heading">Daily values</h2>}>
+              <Card>
                 {metric ? (
                   <>
-                    <label>
+                    <label className="care-trend-metric-field">
                       Trend metric
                       <Select
                         className="care-trend-metric"
@@ -402,11 +396,6 @@ export default function CareTrendsPage() {
                       metric={metric}
                       onReport={openReport}
                     />
-                    <p className="care-note">
-                      Stored daily values; no rolling average or interpolation
-                      across missing days. Select a plotted point or use its
-                      report link below.
-                    </p>
                   </>
                 ) : (
                   <Empty description="No eligible completed report values in this date range." />
@@ -414,7 +403,9 @@ export default function CareTrendsPage() {
                 <Table
                   className="care-trend-data"
                   rowKey="date"
-                  dataSource={data.days}
+                  dataSource={[...data.days].sort((a, b) =>
+                    b.date.localeCompare(a.date),
+                  )}
                   pagination={false}
                   size="small"
                   columns={[

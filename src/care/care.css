@@ -40,6 +40,20 @@
   padding: 6px;
   font-weight: 550;
 }
+.care-account-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.care-account-context > a {
+  flex-shrink: 0;
+}
+.care-account-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .care-header .ant-btn {
   min-height: 44px;
 }

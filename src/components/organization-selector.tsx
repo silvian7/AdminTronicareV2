@@ -23,11 +23,13 @@ export function OrganizationSelector({
   onBusyChange,
   showLabel = true,
   showIds = true,
+  showRole = true,
 }: {
   organizations: readonly RecordData[];
   onBusyChange: (busy: boolean) => void;
   showLabel?: boolean;
   showIds?: boolean;
+  showRole?: boolean;
 }) {
   const session = getSession()!;
   const { identity, can, confirmOrganizationChange } = useAdmin();
@@ -50,7 +52,7 @@ export function OrganizationSelector({
     resource: "usertypes",
     pagination: { mode: "off" },
     errorNotification: false,
-    queryOptions: { enabled: can(resourceMap.usertypes, "list") },
+    queryOptions: { enabled: showRole && can(resourceMap.usertypes, "list") },
   });
   const roleTitle = (id: string) => {
     const role =
@@ -149,9 +151,11 @@ export function OrganizationSelector({
         optionRender={(option) => (
           <Space direction="vertical" size={0}>
             <span>{option.data.label}</span>
-            <Typography.Text type="secondary">
-              {option.data.description}
-            </Typography.Text>
+            {showRole && (
+              <Typography.Text type="secondary">
+                {option.data.description}
+              </Typography.Text>
+            )}
           </Space>
         )}
         loading={busy || memberships.isFetching}

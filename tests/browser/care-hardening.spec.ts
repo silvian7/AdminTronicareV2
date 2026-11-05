@@ -4,6 +4,9 @@ import {
   installCareFixtures,
   syntheticCareSeries,
   syntheticCareTrends,
+  zoomCareGraph,
+  panCareGraph,
+  resetCareGraph,
 } from "./care-fixtures";
 
 test.use({ timezoneId: "America/New_York" });
@@ -108,7 +111,7 @@ for (const kind of ["report", "trends"] as const) {
   });
 }
 
-test("Brussels DST labels distinguish repeated local times while UTC report boundaries remain exact", async ({
+test("Brussels DST visible ranges show local dates and clocks without zone suffixes while UTC boundaries remain exact", async ({
   page,
 }, testInfo) => {
   const fixture = await installCareFixtures(page);
@@ -155,15 +158,15 @@ test("Brussels DST labels distinguish repeated local times while UTC report boun
     name: "Visible range",
     exact: true,
   });
-  await expect(visible.locator("time").nth(0)).toContainText(
-    /25\/10\/2026.*02:30:00.*CEST/,
+  await expect(visible.locator("time").nth(0)).toHaveText(
+    "25/10/2026, 02:30:00",
   );
   await expect(visible.locator("time").nth(0)).toHaveAttribute(
     "datetime",
     report.period.start,
   );
-  await expect(visible.locator("time").nth(1)).toContainText(
-    /25\/10\/2026.*02:31:00.*CET/,
+  await expect(visible.locator("time").nth(1)).toHaveText(
+    "25/10/2026, 02:31:00",
   );
   await expect(visible.locator("time").nth(1)).toHaveAttribute(
     "datetime",
@@ -172,8 +175,11 @@ test("Brussels DST labels distinguish repeated local times while UTC report boun
   const seriesReads = fixture.calls.filter((call) =>
     call.path.endsWith("/series"),
   ).length;
-  await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
-  await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
+  await zoomCareGraph(page, graphs);
+  await resetCareGraph(page, graphs, [
+    Date.parse(report.period.start),
+    Date.parse(report.period.endExclusive),
+  ]);
   expect(
     fixture.calls.filter((call) => call.path.endsWith("/series")),
   ).toHaveLength(seriesReads);
@@ -264,7 +270,9 @@ test("maximum bounded series remains operable with 5000 points, 5000 intervals a
   await page.goto(`/care/subjects/${subject.id}/reports/${report.id}`);
   const graphs = graphRegion(page);
   await expect(graphs.getByRole("img", { name: fourPanels })).toBeVisible();
-  await expect(graphs.getByText(/5000 retained samples/)).toBeVisible();
+  await expect(graphs.getByText(/5000 retained samples/)).toHaveCount(0);
+  await expect(graphs.getByText(/Source sampling interval:/)).toHaveCount(0);
+  await expect(graphs.getByText(/Source window:/)).toHaveCount(0);
   await expect(
     graphs.getByText("Reduced sample set", { exact: true }),
   ).toBeVisible();
@@ -277,15 +285,15 @@ test("maximum bounded series remains operable with 5000 points, 5000 intervals a
   await expect(graphs.getByRole("img", { name: fourPanels })).toBeVisible();
   await expect(graphs.getByRole("img", { name: fivePanels })).toBeVisible();
   const fullBounds = await visibleBounds(graphs);
-  await graphs.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await zoomCareGraph(page, graphs);
   await expect.poll(() => visibleBounds(graphs)).not.toEqual(fullBounds);
-  await graphs.getByRole("button", { name: "Pan later", exact: true }).click();
+  await panCareGraph(page, graphs, "later");
   for (const name of ["Sample values", "HRV sample values", "Bed exits"])
     await expect(graphs.getByRole("region", { name, exact: true })).toHaveCount(
       0,
     );
   await expect(graphs.getByRole("heading", { name: /^HRV/ })).toBeVisible();
-  await graphs.getByRole("button", { name: "Reset view", exact: true }).click();
+  await resetCareGraph(page, graphs, fullBounds);
   await expect.poll(() => visibleBounds(graphs)).toEqual(fullBounds);
   expect(
     fixture.calls.filter((call) => call.path.endsWith("/series")),

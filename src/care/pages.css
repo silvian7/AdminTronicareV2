@@ -36,13 +36,17 @@
 .care-page .ant-alert {
   align-items: flex-start;
 }
-.care-search-card label {
-  display: block;
-  margin-bottom: 9px;
-  font-weight: 600;
+.care-page .care-search-card > .ant-card-body {
+  padding: 10px 16px !important;
 }
 .care-search-card .ant-input-search {
-  max-width: 620px;
+  max-width: 310px;
+}
+.care-search-card .ant-input-search .ant-input-affix-wrapper {
+  height: 40px;
+}
+.care-search-card .ant-input-affix-wrapper > .ant-input {
+  min-height: 0;
 }
 .care-search-card .ant-input-search-button {
   min-width: 85px;
@@ -103,12 +107,6 @@
   margin: 6px 0 0;
   line-height: 1.6;
 }
-.care-time-note {
-  color: #577183;
-  font-size: 13px;
-  margin: 0;
-  line-height: 1.6;
-}
 .care-period {
   display: flex;
   flex-direction: column;
@@ -129,8 +127,36 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+.care-period-inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+}
+.care-period-inline > div {
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.care-period-inline dt {
+  min-width: 0;
+  white-space: nowrap;
+}
+.care-period-inline dd {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
 .care-latest-report .care-period > div {
-  display: block;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.care-latest-report .care-period dt {
+  min-width: 36px;
+  white-space: nowrap;
+}
+.care-latest-report .care-period dd {
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 .care-latest-report a {
   min-height: 40px;
@@ -140,7 +166,18 @@
 }
 .care-subject-table .ant-table-cell {
   vertical-align: top;
-  padding: 20px !important;
+  padding: 8px 20px !important;
+}
+.care-subject-table .care-asset-identity,
+.care-subject-table .care-bed-observation,
+.care-subject-table .care-latest-report {
+  gap: 2px;
+}
+.care-subject-table .care-asset-identity a {
+  min-height: 28px;
+}
+.care-subject-table .care-period {
+  gap: 2px;
 }
 .care-subject-table .ant-table-tbody .ant-table-row:hover > td {
   background: #f5fafb;
@@ -212,9 +249,6 @@
 }
 .care-detail .ant-card-extra {
   margin-inline-start: 0;
-}
-.care-detail .care-time-note {
-  margin-top: 16px;
 }
 .care-summary-values {
   margin: 20px 0 0;

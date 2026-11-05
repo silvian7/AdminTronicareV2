@@ -1,8 +1,4 @@
-.care-report-graphs .ant-card-head-title {
-  white-space: normal;
-}
 .care-graph-range-form,
-.care-graph-toolbar,
 .care-graph-sample-controls {
   display: flex;
   flex-wrap: wrap;

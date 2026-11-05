@@ -133,14 +133,19 @@ export function CareLayout() {
               </Link>
             </>
           )}
-          <Link
-            to="/care/account"
-            aria-current={
-              location.pathname === "/care/account" ? "page" : undefined
-            }
-          >
-            <UserOutlined aria-hidden="true" /> My account
-          </Link>
+          <span className="care-account-context">
+            <Link
+              to="/care/account"
+              aria-current={
+                location.pathname === "/care/account" ? "page" : undefined
+              }
+            >
+              <UserOutlined aria-hidden="true" /> My account
+            </Link>
+            <Typography.Text className="care-account-name">
+              {identity.name}
+            </Typography.Text>
+          </span>
           {!identity.caregiverReadOnly && <Link to="/">Administration</Link>}
         </nav>
         <Space wrap>
@@ -153,7 +158,6 @@ export function CareLayout() {
               Refresh
             </Button>
           )}
-          <Typography.Text>{identity.name}</Typography.Text>
           <Button
             icon={<LogoutOutlined aria-hidden="true" />}
             onClick={() => logout()}
@@ -169,6 +173,7 @@ export function CareLayout() {
             onBusyChange={setBusy}
             showLabel={false}
             showIds={false}
+            showRole={false}
           />
         ) : (
           <Typography.Text>
