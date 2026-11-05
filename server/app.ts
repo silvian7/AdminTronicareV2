@@ -26,6 +26,7 @@ import { hubLastEventTime } from "../shared/hub-status";
 import { createUpstream, type Transport } from "./upstream";
 import { registerCareRoutes } from "./care";
 import { coreOutboxes } from "./core-outboxes";
+import { unregisteredHubs } from "./unregistered-hubs";
 import {
   serviceOutboxes,
   pushPartialSuccesses,
@@ -1258,6 +1259,33 @@ export function createApp(
       snapshot: headers.get("X-Tronicare-History-Snapshot"),
       hasMore: data.length === 100,
     });
+  });
+  app.get("/api/core/unregistered-hubs", async (req, res) => {
+    const r = req as AuthRequest;
+    if (!(r.session.identity.level >= 90))
+      throw new ApiError(
+        403,
+        "Unregistered hubs are available to platform administrators.",
+      );
+    if (r.session.identity.mustChangePassword)
+      throw new ApiError(
+        403,
+        "Update your password before viewing unregistered hubs.",
+      );
+    if (req.originalUrl.includes("?"))
+      throw new ApiError(400, "This operation does not accept query parameters.");
+    const { data } = await upstream(
+      "core",
+      "/v1/coreadmin/unregistered-hubs",
+      r.session.token,
+      {
+        // Check identity JSON types before lossless decoding turns numbers into strings.
+        validateResponse: (body) => {
+          unregisteredHubs(JSON.parse(body));
+        },
+      },
+    );
+    res.json(unregisteredHubs(data));
   });
   app.get("/api/core/outboxes", async (req, res) => {
     const r = req as AuthRequest;

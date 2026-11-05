@@ -273,6 +273,13 @@ a {
   grid-template-columns: minmax(0, 2.3fr) minmax(250px, 1fr);
   gap: 24px;
 }
+.unregistered-hubs {
+  margin-bottom: 24px;
+}
+.unregistered-hubs .ant-table-cell {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
 .core-outboxes,
 .service-outboxes {
   margin-top: 24px;

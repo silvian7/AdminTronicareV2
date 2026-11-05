@@ -515,6 +515,20 @@ export async function installCareFixtures(
         });
       }
     }
+    if (
+      !session.identity.caregiverReadOnly &&
+      method === "GET" &&
+      path === "/api/core/unregistered-hubs"
+    )
+      return reply(route, {
+        data: [],
+        limit: 100,
+        hasMore: false,
+        scanLimit: 10000,
+        scannedMessageCount: 0,
+        messagesLimited: false,
+        observedAt: "2026-11-05T12:00:00.000Z",
+      });
     // Normal administrator surfaces can be checked without permitting a real API.
     if (
       !session.identity.caregiverReadOnly &&

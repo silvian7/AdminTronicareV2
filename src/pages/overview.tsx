@@ -47,6 +47,7 @@ import {
   type ServiceOutboxStatus,
 } from "../../shared/service-outboxes";
 import { exceedsTenMinutes, formatLatency } from "../../shared/latency";
+import { UnregisteredHubs } from "../components/unregistered-hubs";
 
 function Metric({
   resource,
@@ -187,6 +188,7 @@ export function Overview() {
             ),
           )}
       </div>
+      <UnregisteredHubs refreshVersion={refreshVersion} />
       <div className="overview-grid">
         <Card
           title="Assets in this workspace"

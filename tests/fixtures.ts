@@ -127,6 +127,16 @@ export function fixtureTransport(identity = testIdentity) {
       return Response.json([
         { m_nIDAsset: "1", m_nIDOrganization: identity.organizationId },
       ]);
+    if (url.pathname === "/v1/coreadmin/unregistered-hubs")
+      return Response.json({
+        data: [],
+        limit: 100,
+        hasMore: false,
+        scanLimit: 10000,
+        scannedMessageCount: 0,
+        messagesLimited: false,
+        observedAt: "2026-11-05T12:00:00.000Z",
+      });
     if (url.pathname === "/v1/coreadmin/info")
       return Response.json({
         Status: true,
