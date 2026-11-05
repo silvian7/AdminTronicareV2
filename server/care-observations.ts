@@ -190,10 +190,16 @@ export async function adminBedObservations(
         beds.set(asset, noObservation("unavailable"));
         continue;
       }
+      const changedAt = sensorLastReadingTime(
+        valueOf(sensor, "DhLastEventChange"),
+      );
       beds.set(asset, {
         ...noObservation("available"),
         lastObservedState: value ? "out_of_bed" : "in_bed",
         observedAt: new Date(timestamp).toISOString(),
+        ...(changedAt !== null && changedAt > 0 && changedAt <= timestamp
+          ? { lastChangedAt: new Date(changedAt).toISOString() }
+          : {}),
         source: "admin_sensor",
       });
     }

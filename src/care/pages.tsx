@@ -110,9 +110,32 @@ function Period({
   );
 }
 
-function BedObservation({ subject }: { subject: CareSubject }) {
+function bedChangeAge(milliseconds: number) {
+  const minutes = Math.floor(milliseconds / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ago`;
+  return `${Math.floor(minutes / (24 * 60))} d ago`;
+}
+
+function BedObservation({
+  subject,
+  now,
+}: {
+  subject: CareSubject;
+  now: number;
+}) {
   const state = subject.bed?.lastObservedState;
   const availability = subject.bed?.availability;
+  const changedAt = subject.bed?.lastChangedAt;
+  const changed = Date.parse(changedAt ?? "");
+  const elapsed =
+    Number.isFinite(changed) &&
+    changed > 0 &&
+    changed <= Date.parse(subject.bed?.observedAt ?? "") &&
+    changed <= now
+      ? now - changed
+      : null;
   const observed =
     (availability === undefined || availability === "available") &&
     !!subject.bed?.observedAt &&
@@ -133,6 +156,17 @@ function BedObservation({ subject }: { subject: CareSubject }) {
         <>
           <div className="care-bed-reading">
             <BedPictogram state={state as "in_bed" | "out_of_bed"} />
+            <span>
+              {state === "in_bed" ? "on bed" : "off bed"}
+              {elapsed !== null && (
+                <>
+                  {" "}
+                  <time dateTime={changedAt!} title={careDateTime(changedAt)}>
+                    {bedChangeAge(elapsed)}
+                  </time>
+                </>
+              )}
+            </span>
           </div>
           <Typography.Text type="secondary">
             <Moment value={subject.bed.observedAt} />
@@ -294,7 +328,7 @@ export function CareOverview() {
       title: "Bed observation",
       key: "bed",
       width: "35%",
-      render: (_, row) => <BedObservation subject={row} />,
+      render: (_, row) => <BedObservation subject={row} now={statusNow} />,
     },
     {
       title: "Latest completed report",
@@ -375,7 +409,7 @@ export function CareOverview() {
                   >
                     {assetIdentity(subject)}
                     <h2>Bed observation</h2>
-                    <BedObservation subject={subject} />
+                    <BedObservation subject={subject} now={statusNow} />
                     <h2>Latest completed report</h2>
                     <LatestReport
                       subject={subject}

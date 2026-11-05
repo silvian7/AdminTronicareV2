@@ -7,7 +7,7 @@ import {
 
 test.use({ locale: "en-US", timezoneId: "America/New_York" });
 const coordinatedGraphs =
-  "Bed presence, heart rate, respiration, movement and HRV over time";
+  "Bed presence, heart rate, HRV, respiration, movement and bed temperature over time";
 
 test("original bed pictograms and Asset event-age discs remain distinct", async ({
   page,
@@ -115,6 +115,100 @@ test("caregiver sign-in opens the read-only overview", async ({ page }) => {
       .filter((call) => call.method !== "GET")
       .map((call) => call.path),
   ).toEqual(["/api/session/login"]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test("bed labels match Flutter state-change ages and update in desktop rows and tablet cards", async ({
+  page,
+}, testInfo) => {
+  const now = new Date("2026-10-29T12:00:00.000Z");
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now);
+  const subjects = syntheticCareSubjects(8);
+  const changes = [
+    "2026-10-29T11:59:30.000Z",
+    "2026-10-29T11:55:00.000Z",
+    "2026-10-29T09:30:00.000Z",
+    "2026-10-27T06:00:00.000Z",
+    null,
+    "invalid",
+    "2026-10-29T12:01:00.000Z",
+    "2026-10-29T11:59:00.000Z",
+  ];
+  const labels = [
+    "on bed just now",
+    "off bed 5 min ago",
+    "on bed 2 h ago",
+    "off bed 2 d ago",
+    "on bed",
+    "off bed",
+    "on bed",
+    "off bed",
+  ];
+  subjects.forEach((subject, index) => {
+    subject.lastEventAt = "2026-10-29T11:59:55.000Z";
+    subject.bed = {
+      ...subject.bed,
+      lastObservedState: index % 2 === 0 ? "in_bed" : "out_of_bed",
+      observedAt: index === 7 ? "2026-10-29T11:58:00.000Z" : now.toISOString(),
+      lastChangedAt: changes[index],
+      availability: "available",
+    };
+  });
+  const fixture = await installCareFixtures(page, { subjects });
+  await page.goto("/care");
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(0);
+      return page
+        .getByRole("row")
+        .filter({ hasText: subjects[0].tag })
+        .locator(".care-bed-reading")
+        .isVisible();
+    })
+    .toBe(true);
+  for (const [index, label] of labels.entries()) {
+    const reading = page
+      .getByRole("row")
+      .filter({ hasText: subjects[index].tag })
+      .locator(".care-bed-reading");
+    await expect(reading).toHaveText(label);
+    await expect(reading.locator("time")).toHaveCount(index < 4 ? 1 : 0);
+  }
+  const firstAge = page
+    .getByRole("row")
+    .filter({ hasText: subjects[0].tag })
+    .locator(".care-bed-reading time");
+  await expect(firstAge).toHaveAttribute("datetime", changes[0]!);
+  await expect(firstAge).toHaveAttribute(
+    "title",
+    /29\/10\/2026.*12:59:30.*CET/,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("care-bed-state-ages-desktop.png"),
+    animations: "disabled",
+  });
+  const reads = fixture.calls.filter(
+    (call) => call.path === "/api/care/subjects",
+  ).length;
+  await page.clock.runFor(45_000);
+  await expect(firstAge).toHaveText("1 min ago");
+  expect(
+    fixture.calls.filter((call) => call.path === "/api/care/subjects"),
+  ).toHaveLength(reads);
+  await page.setViewportSize({ width: 768, height: 1024 });
+  for (const [index, label] of labels.entries()) {
+    const reading = page
+      .locator(".care-subject-card")
+      .filter({ hasText: subjects[index].tag })
+      .locator(".care-bed-reading");
+    await expect(reading).toBeVisible();
+    await expect(reading).toHaveText(index === 0 ? "on bed 1 min ago" : label);
+  }
+  await page.screenshot({
+    path: testInfo.outputPath("care-bed-state-ages-tablet.png"),
+    animations: "disabled",
+  });
   expect(fixture.unexpected).toEqual([]);
 });
 

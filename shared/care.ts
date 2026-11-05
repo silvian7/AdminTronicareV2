@@ -37,6 +37,7 @@ export interface CareSubject {
     state: "unknown";
     lastObservedState: BedState;
     observedAt: string | null;
+    lastChangedAt?: string | null;
     freshness: "unassessed";
     availability?:
       "available" | "unavailable" | "denied" | "ambiguous" | "limited";

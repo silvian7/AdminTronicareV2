@@ -377,6 +377,53 @@ describe("caller-scoped Admin bed observations", () => {
     },
   );
 
+  it.each([
+    ["20260102020000", "2026-01-02T02:00:00.000Z"],
+    ["2026-01-02T03:00:00+01:00", "2026-01-02T02:00:00.000Z"],
+    [observedAt, observedAt],
+  ])(
+    "keeps state-change time %s separate from the latest reading time",
+    async (changedAt, expected) => {
+      const fixture = setup({
+        replies: { sensors: [sensor({ m_dhDhLastEventChange: changedAt })] },
+      });
+      expect(beds(await fixture.run())[0]).toMatchObject({
+        observedAt,
+        lastChangedAt: expected,
+        lastObservedState: "in_bed",
+        availability: "available",
+      });
+    },
+  );
+
+  it.each([
+    null,
+    undefined,
+    "",
+    1767323045,
+    "2026-01-02T02:00:00",
+    "2025-02-30T02:00:00Z",
+    "1970-01-01T00:00:00Z",
+    "1969-12-31T23:59:59Z",
+    "9999-01-01T00:00:00Z",
+    "2026-01-02T03:04:05.124Z",
+    "2026-01-02T02:00:00.123456Z",
+  ])(
+    "omits untrustworthy state-change time %j without substituting reading age",
+    async (changedAt) => {
+      const fixture = setup({
+        replies: { sensors: [sensor({ m_dhDhLastEventChange: changedAt })] },
+      });
+      const bed = beds(await fixture.run())[0];
+      expect(bed).toMatchObject({
+        observedAt,
+        lastObservedState: "in_bed",
+        availability: "available",
+      });
+      expect(bed).not.toHaveProperty("lastChangedAt");
+    },
+  );
+
   it("recognizes the exact trimmed case-insensitive bedoff Boolean type", async () => {
     const fixture = setup({
       replies: { sensortypes: [sensorType({ m_sHardwareType: "  BeDoFf  " })] },
