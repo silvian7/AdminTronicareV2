@@ -1,4 +1,46 @@
-# VPS5 deployment — 3 November 2026
+# VPS5 deployment — 6 November 2026
+
+Admin is live at <https://admin.tronicare.com> from clean commit
+`a6bad31e37f814b1d5d6641b07011c209a0a9aef`.
+
+- Immutable Admin image: `sha256:0d166c64ce94ccffc3d2a7b74c937107d4f3537982bc8277ee27f14a5930782e`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261106-a6bad31.env`.
+- Release files and evidence: `/opt/tronicare-admin/releases/vps5-20261106-a6bad31/`;
+  `/opt/tronicare-admin/current` points to this directory.
+- Previous selection retained: `/opt/tronicare-admin/releases/vps5-20261103-all-assets.env`.
+- Image archive SHA-256: `9d600143a93020473c0647cc7bde50773c882d06d119ed7c45bcccffae89638a`.
+
+Validation passed: 1,243 unit tests (one opt-in Redis test skipped), the 11-document /
+22-resource contract check, TypeScript and Linux production build, zero dependency
+audit vulnerabilities, and 81 browser cases against the release image. Two further
+synthetic browser checks passed against the public HTTPS bundle, covering bed-state
+ages and the tablet asset list. Public `/`, `/care`, `/health/live` and
+`/health/ready` return 200; anonymous `/api/session` and `/api/care/subjects` return
+401. Public HTML, JavaScript and CSS match the release image byte for byte; the
+client entry is `/assets/index-BAFOqEcW.js`.
+
+Only Admin was recreated. Runtime configuration, Redis sessions, caregiver API and
+caregiver PostgreSQL retained their existing settings and container identities.
+No backend rollout or database migration was performed. The existing caregiver
+API image predates temperature streams; this Admin handles that legacy response
+by showing temperature as unavailable while preserving the other report panels.
+
+The first post-rollout verification stopped after the new container became healthy.
+Its receipt is preserved as `rollout.initial-postcheck-stop.json`. Independent
+inspection then verified the exact running image, unchanged runtime/dependencies,
+all loopback routes and public checks; the release pointer was finalized without
+repeating the rollout or rolling back. Final evidence is in `rollout.json`.
+
+For subsequent Admin-only activation, retain both Compose files and existing private
+runtime settings:
+
+```sh
+docker compose --env-file releases/vps5-20261106-a6bad31.env \
+  -p tronicare-admin-vps5 -f compose.yaml -f compose.care.yaml \
+  up -d --no-deps --pull never --wait --wait-timeout 120 admin
+```
+
+The following sections preserve the previous deployment record from 3 November.
 
 Admin is available at <https://admin.tronicare.com> on VPS5 (`217.182.169.207`).
 The temporary `https://vps5.tronicare.com` address redirects to the canonical host.
