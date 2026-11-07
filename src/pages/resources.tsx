@@ -108,6 +108,7 @@ import {
 } from "../components/notification-readiness";
 import { useRecordRow } from "../components/record-row";
 import { HubLinkedAssets } from "../components/hub-linked-assets";
+import { HubOnline } from "../components/hub-online";
 import {
   UserOrganizations,
   useUserOrganizations,
@@ -1929,6 +1930,14 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       return next;
     });
   }
+  function selectHubTab(tab: string) {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (tab === "details") next.delete("tab");
+      else next.set("tab", tab);
+      return next;
+    });
+  }
   function selectUserTab(tab: string) {
     if (!["details", "organizations", "groups"].includes(tab)) return;
     setParams(
@@ -2221,6 +2230,19 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
         />
       ),
     });
+    tabs.push({
+      key: "online",
+      label: "Online",
+      children: (
+        <HubOnline
+          key={`${getSessionEpoch()}:${organization}:${id}`}
+          hubId={id!}
+          ready={
+            query.isSuccess && !query.isPlaceholderData && record?.id === id
+          }
+        />
+      ),
+    });
     if (sharedHub)
       tabs.push({
         key: "assets",
@@ -2295,6 +2317,9 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
       },
     );
   const requestedUserTab = params.get("tab");
+  const selectedHubTab = tabs.some((tab) => tab.key === params.get("tab"))
+    ? params.get("tab")!
+    : "details";
   const selectedUserTab =
     requestedUserTab && tabs.some((tab) => tab.key === requestedUserTab)
       ? requestedUserTab
@@ -2389,13 +2414,23 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                     await deviceSensors.query.refetch();
                   await refreshRecordReferences();
                   if (resource.name === "hubs")
-                    await queryClient.invalidateQueries({
-                      queryKey: [
-                        "hub-linked-assets",
-                        getSessionEpoch(),
-                        organization,
-                      ],
-                    });
+                    await Promise.all([
+                      queryClient.invalidateQueries({
+                        queryKey: [
+                          "hub-linked-assets",
+                          getSessionEpoch(),
+                          organization,
+                        ],
+                      }),
+                      queryClient.invalidateQueries({
+                        queryKey: [
+                          "hub-online",
+                          getSessionEpoch(),
+                          organization,
+                          id,
+                        ],
+                      }),
+                    ]);
                   if (resource.name === "users")
                     await Promise.all([
                       queryClient.invalidateQueries({
@@ -2516,16 +2551,20 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                 ? viewingDeviceSensors
                   ? "sensors"
                   : "details"
-                : resource.name === "users"
-                  ? selectedUserTab
-                  : undefined
+                : resource.name === "hubs"
+                  ? selectedHubTab
+                  : resource.name === "users"
+                    ? selectedUserTab
+                    : undefined
             }
             onChange={
               resource.name === "devices"
                 ? selectDeviceTab
-                : resource.name === "users"
-                  ? selectUserTab
-                  : undefined
+                : resource.name === "hubs"
+                  ? selectHubTab
+                  : resource.name === "users"
+                    ? selectUserTab
+                    : undefined
             }
             destroyOnHidden
           />

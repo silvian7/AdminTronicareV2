@@ -5093,6 +5093,167 @@
         "x-authorization-right": "delete"
       }
     },
+    "/v1/hubs/{id}/online": {
+      "get": {
+        "operationId": "core_hub_online_activity",
+        "summary": "Read retained hub receipt activity in five-minute buckets",
+        "tags": [
+          "hubs"
+        ],
+        "description": "Requires fresh hubs READ authorization, the active authority epoch and exact current hub scope. One-time-password and caregiver-only contexts are denied, including platform scope. Accepts only one optional hours query (24 by default; 24, 48 or 168); unknown or duplicate keys, noncanonical IDs and a GET body are rejected. One read-only repeatable-read transaction checks current hub scope and counts retained Core telemetry items by batch receipt time and resolved hub ID. Core operator-replayed items are excluded. No payloads, sensor values, exact HTTP bodies, error details or current child mappings are read or exposed. Counts describe normalized items admitted to Core, not MQTT packets or physical connection state. Delayed delivery and backfill are not fully distinguishable. Missing receipts and zeros do not establish offline periods or complete coverage. The latest 100000 matching items are retained, with one extra item probed; on truncation, all leading buckets through the oldest included bucket have null counts rather than partial totals. The database statement deadline is eight seconds, the lock timeout one second and the outer deadline ten seconds. Missing privileges, timeouts and unavailable dependencies return 503 instead of an empty graph.",
+        "parameters": [
+          {
+            "name": "IdSession",
+            "in": "header",
+            "required": false,
+            "description": "Optional session identity; if supplied, exactly one bounded visible-ASCII value.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Canonical positive signed 64-bit hub ID, at most 9223372036854775807; no leading zeros.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "description": "Lookback hours from the PostgreSQL observation time. Exactly one canonical decimal query value is accepted.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                24,
+                48,
+                168
+              ],
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dense retained receipt activity buckets.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubOnlineActivity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or rejected identity.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient current method right, stale actor policy, ownership/reference outside scope, one-time-password mutation, or mutation in a read-only authorization/serving profile.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource is absent or outside caller scope.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid ID, query, JSON object, field alias, value, or request size.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority inactive, dependency unavailable, or result cannot be safely completed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          }
+        },
+        "x-authorization-right": "read"
+      }
+    },
     "/_health/live": {
       "get": {
         "operationId": "core_api_health_live",
@@ -6794,6 +6955,620 @@
           },
           "404": {
             "description": "Resource is absent or outside caller scope.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid ID, query, JSON object, field alias, value, or request size.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority inactive, dependency unavailable, or result cannot be safely completed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sensors/{id}/virtual-events": {
+      "get": {
+        "operationId": "core_virtual_sensor_event_capability",
+        "tags": [
+          "Virtual events"
+        ],
+        "summary": "Read capability after normal exact sensor read authorization.",
+        "description": "Disabled by default. Requires an explicitly configured, freshly verified virtual graph. Ordinary and one-time-password callers receive supported=false. No query parameters or body are accepted.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Canonical positive signed 64-bit sensor ID, without leading zeros.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "IdSession",
+            "in": "header",
+            "required": false,
+            "description": "Optional session identity; if supplied, exactly one bounded visible-ASCII value.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current capability.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sensorId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    },
+                    "supported": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "sensorId",
+                    "supported"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or rejected identity.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient current method right, stale actor policy, ownership/reference outside scope, one-time-password mutation, or mutation in a read-only authorization/serving profile.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource is absent or outside caller scope.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "State, sensor-type, or referential-integrity conflict.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid ID, query, JSON object, field alias, value, or request size.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority inactive, dependency unavailable, or result cannot be safely completed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "core_virtual_sensor_event_submit",
+        "tags": [
+          "Virtual events"
+        ],
+        "summary": "Persist and explicitly attempt one bound Boolean virtual event.",
+        "description": "Requires platform sensors update permission and no one-time-password state. An immutable audited intent commits before intake HTTP; one attempt per explicit call, at most ten per operation. Repeated identical operationId retains exact payload, batch ID and server event time; different value/actor/scope conflicts. queued includes live dispatch or uncertain delivery; accepted means durable Core Ingest acceptance, not worker processing. Sensor state, Rules and history update through the normal worker pipeline and policy. No automatic retry or forwarding activation.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Canonical positive signed 64-bit sensor ID, without leading zeros.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "IdSession",
+            "in": "header",
+            "required": false,
+            "description": "Optional session identity; if supplied, exactly one bounded visible-ASCII value.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "boolean"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  }
+                },
+                "required": [
+                  "value",
+                  "operationId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable intent and current delivery state.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sensorId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    },
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "status": {
+                      "enum": [
+                        "queued",
+                        "accepted",
+                        "rejected"
+                      ]
+                    },
+                    "value": {
+                      "type": "boolean"
+                    },
+                    "eventAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "acceptedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "sensorId",
+                    "operationId",
+                    "status",
+                    "value",
+                    "eventAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or rejected identity.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient current method right, stale actor policy, ownership/reference outside scope, one-time-password mutation, or mutation in a read-only authorization/serving profile.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource is absent or outside caller scope.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "State, sensor-type, or referential-integrity conflict.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid ID, query, JSON object, field alias, value, or request size.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authority inactive, dependency unavailable, or result cannot be safely completed.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sensors/{id}/virtual-events/{operation_id}": {
+      "get": {
+        "operationId": "core_virtual_sensor_event_status",
+        "tags": [
+          "Virtual events"
+        ],
+        "summary": "Read this caller's operation without resending it.",
+        "description": "Requires current platform sensor read scope and the same actor/configured graph. No query parameters or body are accepted; internal leases and payload are never returned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Canonical positive signed 64-bit sensor ID, without leading zeros.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "description": "Canonical operation UUID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "IdSession",
+            "in": "header",
+            "required": false,
+            "description": "Optional session identity; if supplied, exactly one bounded visible-ASCII value.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing durable operation.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sensorId": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9223372036854775807
+                    },
+                    "operationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    },
+                    "status": {
+                      "enum": [
+                        "queued",
+                        "accepted",
+                        "rejected"
+                      ]
+                    },
+                    "value": {
+                      "type": "boolean"
+                    },
+                    "eventAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "acceptedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "sensorId",
+                    "operationId",
+                    "status",
+                    "value",
+                    "eventAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or rejected identity.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient current method right, stale actor policy, ownership/reference outside scope, one-time-password mutation, or mutation in a read-only authorization/serving profile.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource is absent or outside caller scope.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Responses are not cached.",
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityFault"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "State, sensor-type, or referential-integrity conflict.",
             "headers": {
               "Cache-Control": {
                 "description": "Responses are not cached.",
@@ -11341,6 +12116,172 @@
           ]
         }
       },
+      "HubOnlineBucket": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "description": "UTC instant with exactly three fractional-second digits and a Z suffix."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "description": "UTC instant with exactly three fractional-second digits and a Z suffix."
+          },
+          "receivedCount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,4}|100000)$",
+                "maxLength": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical nonnegative decimal count of retained normalized Core telemetry items. Null marks a bucket that cannot be counted completely after the scan cap, including the oldest included bucket; it never means zero."
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "receivedCount"
+        ],
+        "additionalProperties": false
+      },
+      "HubOnlineActivity": {
+        "type": "object",
+        "properties": {
+          "hubId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$",
+            "maxLength": 19,
+            "description": "Exact positive signed 64-bit hub identity, at most 9223372036854775807; never a JSON number."
+          },
+          "hours": {
+            "type": "integer",
+            "enum": [
+              24,
+              48,
+              168
+            ]
+          },
+          "rangeStart": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "description": "UTC instant with exactly three fractional-second digits and a Z suffix."
+          },
+          "rangeEnd": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "description": "UTC instant with exactly three fractional-second digits and a Z suffix."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "description": "UTC instant with exactly three fractional-second digits and a Z suffix."
+          },
+          "bucketSeconds": {
+            "const": 300
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubOnlineBucket"
+            },
+            "minItems": 288,
+            "maxItems": 2016,
+            "description": "Exactly hours*12 consecutive five-minute buckets in ascending time order, covering [rangeStart, rangeEnd). The window ends at the PostgreSQL observation time, rounded down to millisecond precision; it is not aligned to clock-minute boundaries."
+          },
+          "coverage": {
+            "const": "retained_only"
+          },
+          "limited": {
+            "type": "boolean"
+          },
+          "scanLimit": {
+            "const": 100000
+          },
+          "scannedItemCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "hubId",
+          "hours",
+          "rangeStart",
+          "rangeEnd",
+          "observedAt",
+          "bucketSeconds",
+          "buckets",
+          "coverage",
+          "limited",
+          "scanLimit",
+          "scannedItemCount"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "hours": {
+                  "const": 24
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "buckets": {
+                  "minItems": 288,
+                  "maxItems": 288
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "hours": {
+                  "const": 48
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "buckets": {
+                  "minItems": 576,
+                  "maxItems": 576
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "hours": {
+                  "const": 168
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "buckets": {
+                  "minItems": 2016,
+                  "maxItems": 2016
+                }
+              }
+            }
+          }
+        ]
+      },
       "OutboxBacklog": {
         "type": "object",
         "properties": {
@@ -11398,12 +12339,16 @@
     "services/core/src/tronicare_core/compat_api/api.py",
     "services/core/src/tronicare_core/compat_api/contracts.py",
     "services/core/src/tronicare_core/adapters/postgres/compat_api.py",
+    "services/core/src/tronicare_core/adapters/postgres/hub_online.py",
     "services/core/src/tronicare_core/adapters/postgres/admin.py",
     "services/core/src/tronicare_core/adapters/postgres/worker_monitoring.py",
     "services/core/src/tronicare_core/application/worker.py",
     "services/core/src/tronicare_core/core_api_composition.py",
     "services/core/src/tronicare_core/adapters/http/users_scope.py",
-    "services/core/src/tronicare_core/adapters/http/legacy_scope.py"
+    "services/core/src/tronicare_core/adapters/http/legacy_scope.py",
+    "services/core/src/tronicare_core/core_api_virtual_events.py",
+    "services/core/src/tronicare_core/adapters/http/virtual_events.py",
+    "services/core/src/tronicare_core/adapters/postgres/virtual_events.py"
   ],
   "x-documentation-scope": "Current Python implementation, including routes hidden from runtime OpenAPI.",
   "security": [

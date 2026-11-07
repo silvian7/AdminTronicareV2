@@ -27,6 +27,8 @@ import { createUpstream, type Transport } from "./upstream";
 import { registerCareRoutes } from "./care";
 import { coreOutboxes } from "./core-outboxes";
 import { unregisteredHubs } from "./unregistered-hubs";
+import { hubOnline } from "./hub-online";
+import { hubOnlineHours, type HubOnlineHours } from "../shared/hub-online";
 import {
   serviceOutboxes,
   pushPartialSuccesses,
@@ -1260,6 +1262,44 @@ export function createApp(
       hasMore: data.length === 100,
     });
   });
+  app.get("/api/hubs/:id/online", async (req, res) => {
+    const r = requirePermission(req, resourceMap.hubs, "show");
+    if (r.session.identity.mustChangePassword)
+      throw new ApiError(
+        403,
+        "Update your password before viewing hub history.",
+      );
+    if (
+      Object.keys(req.query).some(
+        (key) => !["hours", "_organization"].includes(key),
+      )
+    )
+      throw new ApiError(400, "Choose a supported time span.");
+    const rawHours = req.query.hours ?? "24";
+    if (typeof rawHours !== "string" || !["24", "48", "168"].includes(rawHours))
+      throw new ApiError(400, "Choose a supported time span.");
+    const hours = Number(rawHours) as HubOnlineHours;
+    if (!hubOnlineHours.includes(hours))
+      throw new ApiError(400, "Choose a supported time span.");
+    const organization = req.query._organization;
+    if (
+      organization !== undefined &&
+      (typeof organization !== "string" ||
+        !/^(0|[1-9]\d{0,18})$/.test(organization) ||
+        BigInt(organization) > 9223372036854775807n)
+    )
+      throw new ApiError(400, "Choose an organization.");
+    const response = await hubOnline(
+      idValue(req.params.id),
+      hours,
+      r.session,
+      upstream,
+      authorization,
+      organization,
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.json(response);
+  });
   app.get("/api/core/unregistered-hubs", async (req, res) => {
     const r = req as AuthRequest;
     if (!(r.session.identity.level >= 90))
@@ -1273,7 +1313,10 @@ export function createApp(
         "Update your password before viewing unregistered hubs.",
       );
     if (req.originalUrl.includes("?"))
-      throw new ApiError(400, "This operation does not accept query parameters.");
+      throw new ApiError(
+        400,
+        "This operation does not accept query parameters.",
+      );
     const { data } = await upstream(
       "core",
       "/v1/coreadmin/unregistered-hubs",

@@ -53,6 +53,13 @@ With explicit approval, VPS5 received prospective binding capture and a dedicate
 
 ## Application coverage
 
+- Hub details have an **Online** tab after **Devices**, with selectable past 24-hour,
+  48-hour and 7-day activity timelines. Five-minute intervals distinguish retained
+  activity, no recorded activity and incomplete counts; gaps do not prove that a hub
+  was offline. The tab refreshes every visible minute and uses the same caller's hub
+  read permissions. Live data requires Core's `GET /v1/hubs/{id}/online` endpoint
+  and its documented metadata-only reader privileges; an older or unavailable Core
+  service shows an explicit error instead of a fabricated empty timeline.
 - Platform administrators have a separate **Unregistered hubs** card on Overview. It groups Core's retained `REJECTED / UNKNOWN_HUB` events by exact hub type and serial, shows first/last received times and rejection counts, and removes identities already present in the hub registry. Results cover at most the latest 10,000 matching events and 100 hubs, with explicit limit notices. The card refreshes every minute while visible and shares the Overview Refresh action. An unavailable Core response is shown as an error, never as an empty result. This read requires the companion Core API endpoint, schema revision `20261105_0031`, and the attested EXECUTE-only grant on `core.admin_unregistered_hubs()` to its API role; use the companion Core rollout runbook before enabling live data.
 - The read-only caregiver portal lives at `/care`, with authorized Asset overview, completed reports, coordinated graphs and historical trends. See [caregiver implementation and release notes](CAREGIVER_PORTAL_IMPLEMENTATION.md) for supported metrics, backend configuration, prospective assignment evidence, checks and rollout limitations.
 - Caregiver bed observations use the original Admin occupied/empty bed pictograms. Asset status discs reuse Admin's event-age colors and the Asset's `lastEventAt`, independently of bed observations. The header omits the standalone role badge. This local installation maps the confirmed Standard User type through `CAREGIVER_USER_TYPE_IDS`, so it opens only `/care`; organization and platform administrators retain their existing entry points.

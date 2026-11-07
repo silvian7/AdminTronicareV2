@@ -1,0 +1,125 @@
+.hub-online {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.hub-online-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.hub-online-controls .ant-select {
+  width: 180px;
+}
+.hub-online-controls label {
+  color: #435b6c;
+}
+.hub-online-summary {
+  margin: 0;
+  color: #163246;
+  font-weight: 550;
+}
+.hub-online-chart {
+  min-width: 0;
+  padding: 14px 0 0;
+}
+.hub-online-timeline {
+  display: block;
+  width: 100%;
+  height: 80px;
+  border: 1px solid #d7e0e8;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.hub-online-bucket-active {
+  fill: #1b8a64;
+}
+.hub-online-bucket-empty {
+  fill: #e4eaf0;
+}
+.hub-online-bucket:hover {
+  stroke: #163246;
+  stroke-width: 1;
+}
+.hub-online-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 9px;
+  color: #435b6c;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.hub-online-axis > span {
+  text-align: center;
+}
+.hub-online-axis > span:first-child {
+  text-align: left;
+}
+.hub-online-axis > span:last-child {
+  text-align: right;
+}
+.hub-online-axis small {
+  display: block;
+  color: #6a7d8a;
+  font-size: 11px;
+}
+.hub-online-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: #435b6c;
+}
+.hub-online-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.hub-online-swatch {
+  display: inline-block;
+  width: 15px;
+  height: 12px;
+  border: 1px solid #c8d2dc;
+  border-radius: 2px;
+}
+.hub-online-swatch-active {
+  background: #1b8a64;
+  border-color: #1b8a64;
+}
+.hub-online-swatch-empty {
+  background: #e4eaf0;
+}
+.hub-online-swatch-unknown {
+  background: repeating-linear-gradient(
+    45deg,
+    #edf1f5,
+    #edf1f5 3px,
+    #8797a7 3px,
+    #8797a7 4px
+  );
+}
+.hub-online-note,
+.hub-online-observed {
+  margin: 0;
+  color: #6a7d8a;
+  font-size: 13px;
+}
+@media (max-width: 575px) {
+  .hub-online-controls {
+    gap: 8px;
+  }
+  .hub-online-controls label {
+    flex-basis: 100%;
+  }
+  .hub-online-controls .ant-select {
+    width: 155px;
+  }
+  .hub-online-axis > span:nth-child(2),
+  .hub-online-axis > span:nth-child(4) {
+    display: none;
+  }
+}

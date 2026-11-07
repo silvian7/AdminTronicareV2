@@ -1,6 +1,55 @@
-# VPS5 deployment — 6 November 2026
+# VPS5 deployment — 7 November 2026
 
-Admin is live at <https://admin.tronicare.com> from clean commit
+Admin's Hub **Online** tab and its shared Core endpoint are deployed at
+<https://admin.tronicare.com>.
+
+- Immutable Admin image: `sha256:7146cf9cd481987c87727a3cdeedeb593d31780a63eeda106f004496ccd1c288`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261107-hub-online.env`;
+  `/opt/tronicare-admin/current` points to the matching release directory.
+- Source is a validated working tree based on
+  `47f43d4efbed8192eba011d6b5213ed08bc07f14`, with source snapshot SHA-256
+  `c69eb4c7abf7b94e0f39175ad6ba7a968a67b5eaf560682ae61f617ace5e15e4`.
+- Image archive SHA-256: `c5d17ae81d1de34a3e417b9a0cc546648aa3666225dc486908a8323401857f19`.
+- The previous `vps5-20261106-a6bad31` selection and image remain available.
+
+The production build, 1,284 unit tests, 33 local browser cases, contract checks
+and two additional read-only synthetic browser cases against the public bundle
+passed. All eight public client files match the verified image. Public live and
+readiness checks return 200; anonymous session and Hub Online requests return 401.
+The entry bundle is `/assets/index-BVqQQpTv.js`.
+
+Admin retained its existing runtime configuration, session storage, standalone
+caregiver API and caregiver PostgreSQL container identities.
+
+The shared Core API now runs
+`smandi/core-py@sha256:c4d59aa94676884fc908d2f96b881ccd9c6f005ef43b524eb193d1e79d81cd38`
+in `kubernetes-admin@dev` / `tronicare-migration`. Its four-file feature overlay
+preserves the restored maintenance image `c0eb2262…` and schema revision
+`20261107_0034`. The API is ready with one replica. Ingest, Worker and Outbox
+deployment specifications were retained after maintenance had restored them.
+
+The Core API role received SELECT on five receipt metadata columns only:
+`telemetry_batch.id`, `telemetry_batch.received_at`, `telemetry_item.batch_id`,
+`telemetry_item.resolved_hub_id` and `telemetry_item.replay_authorization_uuid`.
+Raw payload access remains denied. No schema migration was needed. The final
+image passed 54 focused container tests and five isolated PostgreSQL cases.
+The time-first indexed query has an eight-second SQL deadline and ten-second
+outer deadline. Core readiness returns 200 and anonymous history requests return
+401 for all three spans.
+
+The deployed reader returned valid 24-hour, 48-hour and seven-day buckets using
+its actual API database login in a read-only snapshot. The three reads completed
+in 0.374, 0.907 and 2.798 seconds. HTTPS ingress checks confirmed access protection
+for every span, and public Admin readiness returned 200.
+
+No active platform session was available locally or on production for a signed-in
+browser check. The public bundle's desktop/mobile behavior was checked with
+synthetic responses; live metadata checks and access-protection checks are
+recorded separately in the private rollout evidence.
+
+## Previous Admin release — 6 November 2026
+
+The previous Admin release was built from clean commit
 `a6bad31e37f814b1d5d6641b07011c209a0a9aef`.
 
 - Immutable Admin image: `sha256:0d166c64ce94ccffc3d2a7b74c937107d4f3537982bc8277ee27f14a5930782e`.

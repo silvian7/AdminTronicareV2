@@ -1,5 +1,57 @@
 # Implementation validation
 
+## Hub Online activity — 7 November 2026
+
+Hub details now place **Online** immediately after **Devices**, with rolling
+24-hour, 48-hour and seven-day views. The responsive timeline distinguishes
+five-minute intervals with retained activity, no recorded activity and incomplete
+counts. URL state, visible-minute refresh, manual refresh, retry and session/hub
+isolation are covered. Activity gaps are not presented as confirmed disconnections.
+
+- Admin unit tests: **1,284 passed**, one opt-in Redis test skipped.
+- Browser checks: **10 new Online cases** and **23 existing hub/device cases passed**.
+- TypeScript, contracts, production client/server build, Linux Docker build,
+  changed-file formatting and diff checks passed. Desktop and mobile layouts were
+  visually inspected.
+- The companion Core implementation passed **54 API/bucket tests** and **five
+  isolated PostgreSQL 18 cases**, including metadata-only privileges, missing-grant
+  errors, exact scope, boundaries, replay exclusion and the 100,001-item limit probe.
+- Core's broader compatibility run had **566 passes and one frozen source-provenance
+  hash assertion failure**. Historical frozen artifacts were preserved. Its global
+  OpenAPI coverage check also retains seven existing undocumented routes; the new
+  route has targeted schema/reference coverage.
+
+Only the current provenance hashes for the two changed Core API/store files were
+refreshed. The remaining provenance mismatch is confined to four unrelated dirty
+files in the companion workspace. A feature-only backend patch applies cleanly to
+its recorded base without including that unrelated work.
+
+Local Admin was rebuilt and production Admin and Core were deployed with the new
+tab and `GET /v1/hubs/{id}/online` endpoint. Production health, artifact hashes and
+two read-only synthetic browser checks pass. The final Core image passed all 54
+focused cases again, preserves the restored maintenance baseline and admits the
+existing `20261107_0034` schema. Only the API image changed; other shared Core
+deployment specifications were retained.
+
+Five metadata-only SELECT privileges were added for the API role; raw payload
+access remains denied and no schema migration was needed. A live-data performance
+check exposed a full inbox scan for longer ranges. A time-first LATERAL lookup
+using existing indexes passed all three spans; SQL and outer deadlines remain
+bounded at eight and ten seconds. Core readiness returns 200 and anonymous
+history requests return 401 for 24, 48 and 168 hours.
+
+The deployed receipt reader passed all three spans using its configured API
+database login in a read-only repeatable-read snapshot: 288, 576 and 2,016
+buckets, completing in 0.374, 0.907 and 2.798 seconds respectively. Bucket/count
+invariants passed; metadata SELECT access was confirmed, while raw columns and
+grant options remained denied. The exact pod/image identity was rechecked after
+the probe. HTTPS ingress protection and public Admin readiness also passed.
+
+There were no active platform sessions locally or on production for a signed-in
+browser check. Desktop/mobile browser coverage uses synthetic API responses;
+separate live metadata checks exercise the real retained receipts without
+changing authentication or business data.
+
 ## User edit access discovery and VPS5 update — 3 November 2026
 
 The user edit page now links directly from **All assets / Manage asset access**
