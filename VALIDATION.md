@@ -1,5 +1,59 @@
 # Implementation validation
 
+## Incoming and outgoing quarantine inspection — 7 November 2026
+
+Service status now provides separate read-only inspectors for incoming and
+outgoing quarantine metadata. Incoming covers Core rejected/blocked/permanent
+telemetry, MQTT parser quarantine, failed bridge batches and primary/mirror
+routes, and individual bridge deliveries including unbatched shadow records.
+Outgoing covers Core's uncertain and permanently failed intents across all four
+destinations. Destination/source/status changes and refresh reset paging and
+details; session/source changes cannot display stale details.
+
+- Admin unit/BFF/decoder tests: **1,384 passed**, one opt-in Redis test skipped;
+  this includes 100 new quarantine cases.
+- Browser coverage: **20 cases passed**, followed by three focused layout/source
+  checks after visual polish. Desktop/mobile screenshots were inspected.
+- TypeScript, contract synchronization (11 documents / 22 resources), formatting
+  and diff checks passed for the implemented Admin views.
+- Isolated PostgreSQL 18 checks: **10 passed** across outgoing and incoming Core
+  and MqttBridge readers. These exercise metadata-only privileges, missing-grant
+  failures, exact identities, microsecond cursors, sparse 100,000-record paging,
+  acknowledgement versions, mirror-only failures and the newest-100 attempt cap.
+- Final candidate-container checks: **125 Core cases** and **85 MqttBridge cases
+  passed**, verifying all installed service/Foundation sources and migrations.
+  Each suite includes 14 checks for bounded empty-body handling, invalid headers,
+  unexpected data and stalled request streams. Incoming reads reject unexpected
+  bodies immediately and time out empty-stream validation after one second.
+
+Payloads, protected MQTT topics, free-form errors, lease tokens and credentials
+are excluded from the projections. Incoming lists explicitly report bounded scan
+coverage and permit continuation through empty checked ranges. Incoming order is
+by descending record ID; outgoing order is by quarantine time and ID. History
+recovery metadata remains unavailable rather than being inferred from the source
+quarantine state. No replay or acknowledgement mutation is exposed.
+
+The broader Core compatibility run had **606 passes and one pre-existing frozen
+source-provenance assertion failure** for an unchanged models binding. Only this
+task's current API hash was refreshed; historical artifacts and unrelated current
+bindings were preserved. Core's global OpenAPI route coverage retains seven
+existing undocumented routes; all six added Core/Bridge GET operations and Core
+schema references have targeted coverage.
+
+Admin, Core API and MqttBridge API are deployed. All eight public client hashes,
+18 public health/access checks, and installed-reader live-data checks passed.
+The missing Bridge ingress Prefix was added to its existing status API service;
+actual HTTPS list/detail paths now enforce authentication. Runtime/dependency
+identities, worker specifications and replica counts were preserved. Core's
+39 missing metadata column reads were granted without expanding raw access or
+deferred ACLs; Bridge's existing permissions were retained. No schema migration,
+message replay or acknowledgement was performed.
+
+Production had no stored or eligible platform session during the final inventory,
+so signed-in production BFF/browser verification was unavailable. The 20 browser
+cases use synthetic sessions; installed-reader live-data and HTTPS access checks
+are recorded separately. No authentication or session changes were made.
+
 ## Hub Online activity — 7 November 2026
 
 Hub details now place **Online** immediately after **Devices**, with rolling

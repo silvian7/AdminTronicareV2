@@ -1,11 +1,59 @@
 # VPS5 deployment — 7 November 2026
 
+Incoming and outgoing quarantine inspectors are deployed at
+<https://admin.tronicare.com/services> for platform administrators.
+
+- Admin image: `sha256:1dc9f3d7b5b606e4ef1fb8343de9d3d72ced9650f9967433dbf76bca40005a72`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261107-quarantine.env`;
+  `/opt/tronicare-admin/current` points to its matching release directory.
+- Source: validated working tree based on `8d2fc4b83f7555793338d91994eb5365155b2a73`,
+  snapshot SHA-256 `70dc24d761b6e7536d8c2b2c4b324f010869d5852a8c63cc1a95e816f15e81f8`.
+- Image archive SHA-256: `8c39e7fd4dbf685bb0a425284c44efcede9ed07decff85bfb83fe359df4b3e56`.
+- Entry bundle: `/assets/index-u5b66R9D.js`; all eight public client files match
+  the verified image. All 18 public health/access checks passed.
+
+Core API runs
+`smandi/core-py@sha256:74bc1a4569cb0c4c6f81bf789e17d2bf5c8851bc526e7a66c06b128cd8b298bf`.
+MqttBridge API runs
+`smandi/mqttbridge-py@sha256:0f823b83fbc939e3a89f6c15299efac706259c499da838266d1e07e2152a5d07`.
+Both are healthy in the existing migration namespace. Only their viewer hunks
+and required authorization dependencies were overlaid on the verified running
+baselines. Installed service/Foundation sources and migrations matched their
+qualified manifests. The final images passed 125 Core and 85 MqttBridge tests.
+
+The bridge's existing status ingress gained only the incoming-quarantine Prefix
+to the same API service. Both new Bridge paths now return 401 without credentials;
+all four new Core paths do likewise. Other ingress rules, network policies and
+service settings were retained.
+
+Admin retained runtime settings, session storage, caregiver API and caregiver
+PostgreSQL container identities. All worker/ingest/outbox specifications and
+replica counts were preserved. Core received 39 missing metadata-column SELECT
+privileges; raw access, grant options, role memberships and deferred-table ACLs
+were not expanded. Bridge required no grants. No schema migration or message
+replay/acknowledgement occurred.
+
+The 1,384 Admin unit tests (one opt-in Redis skip), 20 browser cases, three focused
+visual checks and 10 isolated PostgreSQL checks passed. Deployed readers passed
+live metadata and attempt checks for outgoing Core and all four incoming sources.
+Empty capped incoming ranges retain continuation rather than claiming no older
+quarantines. Raw message bodies/topics are excluded; History recovery status is
+explicitly unavailable in this version.
+
+No active production platform session was available for a signed-in BFF/browser
+smoke check. Browser behavior was verified with synthetic sessions; live reader,
+public artifact and access-protection checks passed independently.
+
+## Previous Admin release — 7 November 2026 (Hub Online)
+
+The following records the prior release at its rollout.
+
 Admin's Hub **Online** tab and its shared Core endpoint are deployed at
 <https://admin.tronicare.com>.
 
 - Immutable Admin image: `sha256:7146cf9cd481987c87727a3cdeedeb593d31780a63eeda106f004496ccd1c288`.
-- Active selection: `/opt/tronicare-admin/releases/vps5-20261107-hub-online.env`;
-  `/opt/tronicare-admin/current` points to the matching release directory.
+- Previous selection: `/opt/tronicare-admin/releases/vps5-20261107-hub-online.env`;
+  `/opt/tronicare-admin/current` pointed to the matching release directory.
 - Source is a validated working tree based on
   `47f43d4efbed8192eba011d6b5213ed08bc07f14`, with source snapshot SHA-256
   `c69eb4c7abf7b94e0f39175ad6ba7a968a67b5eaf560682ae61f617ace5e15e4`.

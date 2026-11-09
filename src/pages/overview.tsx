@@ -48,6 +48,8 @@ import {
 } from "../../shared/service-outboxes";
 import { exceedsTenMinutes, formatLatency } from "../../shared/latency";
 import { UnregisteredHubs } from "../components/unregistered-hubs";
+import { QuarantinedMessages } from "../components/quarantined-messages";
+import { IncomingQuarantinedMessages } from "../components/incoming-quarantined-messages";
 
 function Metric({
   resource,
@@ -319,6 +321,7 @@ interface ServiceRow {
 }
 export function Services() {
   const { identity } = useAdmin();
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const query = useQuery({
     queryKey: ["service-status"],
     queryFn: ({ signal }) =>
@@ -350,6 +353,7 @@ export function Services() {
     void query.refetch();
     void coreQuery.refetch();
     void outboxesQuery.refetch();
+    setRefreshVersion((version) => version + 1);
   };
   const warnings = [
     ...(query.isError ? [] : (query.data?.data ?? []))
@@ -464,6 +468,8 @@ export function Services() {
         />
       </Card>
       <CoreOutboxes query={coreQuery} />
+      <IncomingQuarantinedMessages refreshVersion={refreshVersion} />
+      <QuarantinedMessages refreshVersion={refreshVersion} />
       <ServiceOutboxes query={outboxesQuery} />
     </>
   );

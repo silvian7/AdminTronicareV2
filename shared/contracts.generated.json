@@ -6522,11 +6522,11 @@
     },
     "mqttbridge": {
       "file": "mqttbridge/openapi.json",
-      "sha256": "4cad06d345360124080992b8654a157a1b243f0626fc519c4e9a80cd73b44d2d"
+      "sha256": "799db089f0965a502cc8683e2a8f2d5af8b3b7492b0c4e0b3036a138b9cac713"
     },
     "core": {
       "file": "core/compat.openapi.json",
-      "sha256": "d062df48bf63302d7ce28c0daa87ab78160559ae435bbcfa4f681720437874ef"
+      "sha256": "5477414c428afb1e6ac3f5a9902f9e70b3ebeb392c92a2dbe4c268253ba45afa"
     }
   }
 }

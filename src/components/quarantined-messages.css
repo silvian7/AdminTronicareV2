@@ -1,0 +1,63 @@
+.quarantined-messages .quarantine-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  margin-block: 16px;
+}
+
+.quarantine-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.quarantine-filter-wide {
+  min-width: 280px;
+}
+
+.quarantine-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.quarantine-identifier,
+.quarantine-details .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+}
+
+.quarantined-messages .ant-table-cell {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.quarantined-messages button.quarantine-identifier {
+  max-width: 100%;
+  height: auto;
+  padding-inline: 0;
+  white-space: normal;
+  text-align: left;
+}
+
+.quarantine-details .quarantine-section {
+  margin-top: 24px;
+}
+
+.quarantine-details .ant-table-cell {
+  vertical-align: top;
+}
+
+@media (max-width: 575px) {
+  .quarantine-filter {
+    min-width: 0;
+    width: 100%;
+  }
+}
+.quarantined-messages {
+  margin-top: 24px;
+}

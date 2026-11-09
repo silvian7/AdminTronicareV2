@@ -27,6 +27,18 @@ import { createUpstream, type Transport } from "./upstream";
 import { registerCareRoutes } from "./care";
 import { coreOutboxes } from "./core-outboxes";
 import { unregisteredHubs } from "./unregistered-hubs";
+import {
+  quarantineQuery,
+  quarantinedMessage,
+  quarantinedMessages,
+} from "./quarantined-messages";
+import {
+  incomingQuarantinePath,
+  incomingQuarantineQuery,
+  incomingQuarantineService,
+  incomingQuarantinedMessage,
+  incomingQuarantinedMessages,
+} from "./incoming-quarantined-messages";
 import { hubOnline } from "./hub-online";
 import { hubOnlineHours, type HubOnlineHours } from "../shared/hub-online";
 import {
@@ -1299,6 +1311,117 @@ export function createApp(
     );
     res.setHeader("Cache-Control", "no-store");
     res.json(response);
+  });
+  const requireQuarantineAccess = (req: Request) => {
+    const r = req as AuthRequest;
+    if (
+      !(r.session.identity.level >= 90) ||
+      r.session.identity.caregiverReadOnly
+    )
+      throw new ApiError(
+        403,
+        "Quarantined messages are available to platform administrators.",
+      );
+    if (r.session.identity.mustChangePassword)
+      throw new ApiError(
+        403,
+        "Update your password before viewing quarantined messages.",
+      );
+    return r.session;
+  };
+  app.get("/api/quarantine/incoming", async (req, res) => {
+    const session = requireQuarantineAccess(req);
+    const query = incomingQuarantineQuery(req.query);
+    let data: unknown;
+    try {
+      ({ data } = await upstream(
+        incomingQuarantineService(query.source),
+        incomingQuarantinePath(query.source),
+        session.token,
+        {
+          query: { ...query },
+          validateResponse: (body) => {
+            incomingQuarantinedMessages(
+              JSON.parse(body),
+              query.source,
+              query.state,
+            );
+          },
+        },
+      ));
+    } catch (error) {
+      if (error instanceof ApiError && [404, 405].includes(error.status))
+        throw new ApiError(
+          503,
+          "Incoming quarantined messages are unavailable.",
+        );
+      throw error;
+    }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(incomingQuarantinedMessages(data, query.source, query.state));
+  });
+  app.get("/api/quarantine/incoming/:id", async (req, res) => {
+    const session = requireQuarantineAccess(req);
+    const query = incomingQuarantineQuery(req.query, true);
+    const id = idValue(req.params.id);
+    const { data } = await upstream(
+      incomingQuarantineService(query.source),
+      `${incomingQuarantinePath(query.source)}/${id}`,
+      session.token,
+      {
+        query: { source: query.source },
+        validateResponse: (body) => {
+          incomingQuarantinedMessage(JSON.parse(body), query.source, id);
+        },
+      },
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.json(incomingQuarantinedMessage(data, query.source, id));
+  });
+  app.get("/api/core/quarantined-messages", async (req, res) => {
+    const session = requireQuarantineAccess(req);
+    const query = quarantineQuery(req.query);
+    let data: unknown;
+    try {
+      ({ data } = await upstream(
+        "core",
+        "/v1/coreadmin/quarantined-messages",
+        session.token,
+        {
+          query: { ...query },
+          validateResponse: (body) => {
+            quarantinedMessages(JSON.parse(body), query);
+          },
+        },
+      ));
+    } catch (error) {
+      if (error instanceof ApiError && [404, 405].includes(error.status))
+        throw new ApiError(503, "Quarantined messages are unavailable.");
+      throw error;
+    }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(quarantinedMessages(data, query));
+  });
+  app.get("/api/core/quarantined-messages/:id", async (req, res) => {
+    const session = requireQuarantineAccess(req);
+    if (req.originalUrl.includes("?"))
+      throw new ApiError(
+        400,
+        "This operation does not accept query parameters.",
+      );
+    const id = idValue(req.params.id);
+    const { data } = await upstream(
+      "core",
+      `/v1/coreadmin/quarantined-messages/${id}`,
+      session.token,
+      {
+        validateResponse: (body) => {
+          quarantinedMessage(JSON.parse(body), id);
+        },
+      },
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.json(quarantinedMessage(data, id));
   });
   app.get("/api/core/unregistered-hubs", async (req, res) => {
     const r = req as AuthRequest;

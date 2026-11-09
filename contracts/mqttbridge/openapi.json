@@ -3,7 +3,7 @@
   "info": {
     "title": "Tronicare MqttBridge Admin API",
     "version": "0.1.0",
-    "description": "Source-derived documentation of all five HTTP operations exposed by the mqttbridge-api process. Includes management probes excluded from FastAPI's generated schema. The service disables runtime /openapi.json, Swagger UI and ReDoc. Metrics and diagnostics are unauthenticated; only info checks the case-insensitive Token header. Authentication failure is intentionally HTTP 200 with Status=false. The worker, worker-probe, importer and shadow validator are separate non-HTTP entrypoints."
+    "description": "Source-derived documentation of the MqttBridge Admin API, including management probes excluded from generated schemas. Runtime /openapi.json, Swagger UI and ReDoc are disabled. Metrics and diagnostics are unauthenticated. Info and incoming-quarantine operations validate the case-insensitive Token header. Legacy info authentication failure intentionally returns HTTP 200 with Status=false. The incoming-quarantine GETs require fresh platform authorization, reject one-time-password, caregiver and internal contexts, and use standard 401/403/400/404/503 failures. Worker, worker-probe, importer and shadow validator remain separate entrypoints."
   },
   "servers": [
     {
@@ -19,6 +19,10 @@
     {
       "name": "Health",
       "description": "Management probes for the admin API process."
+    },
+    {
+      "name": "Incoming quarantine",
+      "description": "Platform-only, metadata-only incoming parser and Core delivery inspection."
     }
   ],
   "x-source-files": [
@@ -30,7 +34,10 @@
     "services/mqttbridge/src/tronicare_mqttbridge/observability/admin_metrics.py",
     "packages/foundation/src/tronicare_foundation/health.py",
     "services/mqttbridge/tests/test_api.py",
-    "services/mqttbridge/tests/contract/test_packaged_openapi.py"
+    "services/mqttbridge/tests/contract/test_packaged_openapi.py",
+    "packages/foundation/src/tronicare_foundation/incoming_quarantine.py",
+    "services/mqttbridge/src/tronicare_mqttbridge/adapters/postgres/incoming_quarantine.py",
+    "docs/openapi/incoming_quarantine.py"
   ],
   "paths": {
     "/v1/mqttbridgeadmin/info": {
@@ -464,6 +471,758 @@
                       ]
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mqttbridgeadmin/incoming-quarantined-messages": {
+      "get": {
+        "operationId": "mqttbridgeadmin_incoming_quarantined_messages",
+        "tags": [
+          "Incoming quarantine"
+        ],
+        "summary": "List one incoming quarantine metadata family",
+        "description": "Requires fresh platform administration authorization; one-time-password, caregiver-only and internal compatibility callers are denied. Retained metadata only: no MQTT topic, raw or normalized payload, exact HTTP body, free-form error/response detail, URL, lease or credential. No acknowledgement, replay, discard or other mutation is exposed. Missing privilege or unavailable dependencies return unavailable. Exactly one source family is queried per page; no cross-database snapshot is claimed. Records are ordered by descending source ID. A thin PK window examines at most 100,000 rows plus one probe before state/asOf filtering. If scanLimited=true, short or empty data does not prove absence of older quarantines: hasMore/nextCursor continue below the scanned range. Cursors bind source, state and a microsecond asOf watermark.",
+        "parameters": [
+          {
+            "name": "Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "MQTT_INGRESS",
+                "BRIDGE_CORE_DELIVERY",
+                "BRIDGE_CORE_DELIVERY_ITEM"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PERMANENT_FAILURE"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact retained metadata and honest coverage.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "MQTT_INGRESS",
+                        "BRIDGE_CORE_DELIVERY",
+                        "BRIDGE_CORE_DELIVERY_ITEM"
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[1-9][0-9]{0,18}$",
+                            "description": "Exact canonical positive signed int64 decimal string."
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "MQTT_INGRESS",
+                              "BRIDGE_CORE_DELIVERY",
+                              "BRIDGE_CORE_DELIVERY_ITEM"
+                            ]
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "PERMANENT_FAILURE"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                          },
+                          "quarantinedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                          },
+                          "attemptCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 2147483647
+                          },
+                          "outcomeCode": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 128,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "errorCode": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 128,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parentId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[1-9][0-9]{0,18}$",
+                                "description": "Exact canonical positive signed int64 decimal string."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "itemCount": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 2147483647
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parserFamily": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 128,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "route": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "PRIMARY",
+                                  "MIRROR",
+                                  "PRIMARY_AND_MIRROR"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "disposition": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "ACTIVE",
+                                  "SHADOW"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "source",
+                          "state",
+                          "createdAt",
+                          "quarantinedAt",
+                          "updatedAt",
+                          "attemptCount",
+                          "outcomeCode",
+                          "errorCode",
+                          "parentId",
+                          "itemCount",
+                          "parserFamily",
+                          "route",
+                          "disposition"
+                        ]
+                      }
+                    },
+                    "limit": {
+                      "const": 50
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,1024}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                    },
+                    "payloadAvailable": {
+                      "const": false
+                    },
+                    "scanLimit": {
+                      "const": 100000
+                    },
+                    "scannedRowCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "scanLimited": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "data",
+                    "limit",
+                    "hasMore",
+                    "nextCursor",
+                    "observedAt",
+                    "payloadAvailable",
+                    "scanLimit",
+                    "scannedRowCount",
+                    "scanLimited"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mqttbridgeadmin/incoming-quarantined-messages/{id}": {
+      "get": {
+        "operationId": "mqttbridgeadmin_incoming_quarantined_message",
+        "tags": [
+          "Incoming quarantine"
+        ],
+        "summary": "Inspect exact incoming metadata and bounded attempt history",
+        "description": "Requires fresh platform administration authorization; one-time-password, caregiver-only and internal compatibility callers are denied. Retained metadata only: no MQTT topic, raw or normalized payload, exact HTTP body, free-form error/response detail, URL, lease or credential. No acknowledgement, replay, discard or other mutation is exposed. Missing privilege or unavailable dependencies return unavailable. Exactly one source family is queried per page; no cross-database snapshot is claimed. Returns the newest 100 retained attempts by startedAt descending, with deterministic component/attempt ties. Components distinguish parser, Core processing, primary and mirror delivery. Unbatched delivery items retain null parentId and may have no retained attempts. Batch records include mirror-only permanent failures; item records independently include terminal ACTIVE and SHADOW deliveries.",
+        "parameters": [
+          {
+            "name": "Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[!-~]+$"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "MQTT_INGRESS",
+                "BRIDGE_CORE_DELIVERY",
+                "BRIDGE_CORE_DELIVERY_ITEM"
+              ]
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "description": "Exact canonical positive signed int64 decimal string."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact retained metadata and honest coverage.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "MQTT_INGRESS",
+                        "BRIDGE_CORE_DELIVERY",
+                        "BRIDGE_CORE_DELIVERY_ITEM"
+                      ]
+                    },
+                    "message": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[1-9][0-9]{0,18}$",
+                          "description": "Exact canonical positive signed int64 decimal string."
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "MQTT_INGRESS",
+                            "BRIDGE_CORE_DELIVERY",
+                            "BRIDGE_CORE_DELIVERY_ITEM"
+                          ]
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "PERMANENT_FAILURE"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                        },
+                        "quarantinedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                        },
+                        "attemptCount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "outcomeCode": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "parentId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[1-9][0-9]{0,18}$",
+                              "description": "Exact canonical positive signed int64 decimal string."
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "itemCount": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "parserFamily": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "route": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "PRIMARY",
+                                "MIRROR",
+                                "PRIMARY_AND_MIRROR"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "disposition": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "ACTIVE",
+                                "SHADOW"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "source",
+                        "state",
+                        "createdAt",
+                        "quarantinedAt",
+                        "updatedAt",
+                        "attemptCount",
+                        "outcomeCode",
+                        "errorCode",
+                        "parentId",
+                        "itemCount",
+                        "parserFamily",
+                        "route",
+                        "disposition",
+                        "version"
+                      ]
+                    },
+                    "attempts": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "attemptNumber": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 2147483647
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                          },
+                          "completedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "RUNNING",
+                              "PARSED",
+                              "NO_OUTPUT",
+                              "RETRY_WAIT",
+                              "PERMANENT_FAILURE",
+                              "LEASE_EXPIRED",
+                              "LEASE_LOST",
+                              "PROCESSED",
+                              "DISCARDED",
+                              "REJECTED",
+                              "BLOCKED",
+                              "RETRY_SCHEDULED",
+                              "SUCCEEDED"
+                            ]
+                          },
+                          "outcomeCode": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 128,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "errorCode": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "maxLength": 128,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "protocolStatus": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 100,
+                                "maximum": 599
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "durationMs": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 2147483647
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "component": {
+                            "type": "string",
+                            "enum": [
+                              "PARSER",
+                              "CORE_PROCESSING",
+                              "CORE_PRIMARY",
+                              "CORE_MIRROR"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "attemptNumber",
+                          "startedAt",
+                          "completedAt",
+                          "outcome",
+                          "outcomeCode",
+                          "errorCode",
+                          "protocolStatus",
+                          "durationMs",
+                          "component"
+                        ]
+                      }
+                    },
+                    "attemptLimit": {
+                      "const": 100
+                    },
+                    "attemptsHasMore": {
+                      "type": "boolean"
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+                    },
+                    "payloadAvailable": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "message",
+                    "attempts",
+                    "attemptLimit",
+                    "attemptsHasMore",
+                    "observedAt",
+                    "payloadAvailable"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bounded failure without protected data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
