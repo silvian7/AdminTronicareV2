@@ -1,4 +1,46 @@
-# VPS5 deployment — 7 November 2026
+# VPS5 deployment — 9 November 2026
+
+The caregiver portal is restored for platform administrators. The previous
+caregiver API rejected otherwise valid Assets inventory records whose organization
+ID is `0` (unassigned), causing the entire subjects collection to return HTTP 503.
+The fixed adapter accepts those inventory records and excludes them from caregiver
+eligibility while retaining strict ID validation and caller authorization.
+
+- Caregiver image: `sha256:8c418b48ebaa6c694953594d636c6132a5381e5217ce6dde510d77121fab5fb4`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261109-care-unassigned.env`;
+  `/opt/tronicare-admin/current` points to its matching release directory.
+- Previous selection: `/opt/tronicare-admin/releases/vps5-20261107-quarantine.env`.
+- The candidate contains the exact previous caregiver image plus one
+  `care_assets.py` replacement. Source SHA-256:
+  `d75d00438c85c0cb4bde37ca4ac70d670a1220dcd5ac0d5b0e362fcd811e1a4d`.
+- Image archive SHA-256:
+  `12527944318eeffd2f81e5360473607f812f455311f81c6f5c539969f8db001d`.
+
+The 124 focused caregiver and Assets adapter regression tests passed. With the
+existing signed-in superadmin session, the caregiver upstream, local Admin proxy
+and public HTTPS proxy changed from 503 to 200, returning 18 assigned subjects
+and reporting report availability. All 16 unassigned inventory records remain
+excluded from caregiver subjects.
+
+Only the caregiver API container was recreated. Its runtime configuration,
+networks and mounts were preserved; Admin, Redis and caregiver PostgreSQL retained
+their container identities and settings. No migration, grant or business-data
+change was performed. Release metadata, rollout and authenticated verification
+receipts are stored in the active release directory. Admin remains the quarantine
+release documented below; its previous release directory retains its full source
+and validation evidence.
+
+For subsequent operations, use both Compose files and the active selection above.
+To roll back only this caregiver fix, retain the current Admin and databases and
+select the previous caregiver image through the previous release environment:
+
+```sh
+docker compose --env-file releases/vps5-20261107-quarantine.env \
+  -p tronicare-admin-vps5 -f compose.yaml -f compose.care.yaml \
+  up -d --no-deps --pull never --wait --wait-timeout 120 care-api
+```
+
+## Previous Admin release — 7 November 2026 (Quarantine)
 
 Incoming and outgoing quarantine inspectors are deployed at
 <https://admin.tronicare.com/services> for platform administrators.
