@@ -1,4 +1,125 @@
-# VPS5 deployment — 9 November 2026
+# VPS5 deployment — 12 November 2026
+
+Temperature sensor readings now display exactly one decimal place in current
+related readings, sensor details and history. Formatting uses the verified
+HardwareType (`temp`, `temperature`, `tempbase`, `bedtemp`, `bedtempmax`,
+`bed_temperature` or `in100temp`). Other real readings and raw/API values keep
+their precision. Unknown or inaccessible type metadata retains the raw display.
+
+- Admin image: `sha256:b1a94cb9eb1b6e4f106f86e249e7a5b69fe84f159ee51ebbf8d36e3bbdb49483`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261112-temperature-decimal.env`.
+- `/opt/tronicare-admin/current` points to the matching release directory.
+- Entry bundle: `/assets/index-DkuIWGaR.js`; all eight public client artifacts
+  match the verified Linux production build.
+- Source snapshot SHA-256:
+  `800d336a7204c0d16d9fcebf80b7b190f431f994aa57d55633c3b82083fa6c30`.
+
+This client-only update preserves the server bundle from the sensor Workspace
+fix below, including SHA-256
+`7707b49018a319c9679ffcd68b27b68f11377b76dc1b357196488383f4c16fa6`.
+Runtime settings and Redis/caregiver/database containers were preserved.
+Validation passed: 16 focused formatting tests, TypeScript, the Linux production
+build, and all 37 sensor/history/device browser checks against the production
+client. Strict query-count assertions were retained; the earlier development
+server run's duplicate metadata reads were absent in the production artifact.
+Public health and anonymous access checks passed. A signed-in browser refresh
+of Sensor `1407374883553622` with MStronic selected displayed **23.7**.
+
+To roll back only the temperature presentation update while retaining the
+sensor Workspace fix and persistence, run from `/opt/tronicare-admin`:
+
+```sh
+docker compose --env-file releases/vps5-20261112-temperature-decimal/rollback.env \
+  -p tronicare-admin-vps5 -f compose.yaml -f compose.care.yaml \
+  up -d --no-deps --pull never --wait --wait-timeout 120 admin
+```
+
+## Previous Admin release — 12 November 2026 (Sensor Workspace filter)
+
+Unassigned sensors now remain visible to platform administrators in their
+Device's selected organization Workspace. The previous asset-only filter hid
+these sensors because `IDAsset=0` cannot match an organization's Assets list.
+The fallback requires an exact, readable, unassigned parent Device belonging to
+the selected organization. Existing ordinary-user scope is preserved; parent
+reads have a 100-device cap, four concurrent reads and a 12-second deadline.
+
+- Admin image: `sha256:5e22755f5f109c0ed03945473d4076eb5f34ae478e610bb426939c46db4ffa8b`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261112-sensor-workspace.env`.
+- `/opt/tronicare-admin/current` points to the matching release directory.
+- Source snapshot SHA-256:
+  `a777a9bc85778bfb2eede464b93ce3b7b02f452218a48c8a96fd995c55d081ff`.
+- Server bundle SHA-256:
+  `7707b49018a319c9679ffcd68b27b68f11377b76dc1b357196488383f4c16fa6`.
+
+This replaces only the server bundle on the preceding Workspace-persistence
+image below. The prior server was reproduced exactly before applying only
+`server/app.ts` and the new `server/sensor-workspace.ts`. All eight client files,
+runtime settings and Redis/caregiver/database containers were preserved.
+
+Validation passed: 1,422 unit tests, one optional test skipped, selected-source
+TypeScript, server bundling, Linux runtime syntax, and two browser checks through
+the real BFF using entirely synthetic upstreams. Public health and anonymous
+access checks passed; all eight public client artifacts remain unchanged.
+A signed-in live browser refresh with Workspace **MStronic** selected showed
+**Sensors (1)** on Device `1407374883553415`, including bedtempmax Sensor
+`1407374883553622`. Its displayed last reported reading remained 23.66776547419453
+at 12/11/2026 15:59:51 Europe/Brussels.
+
+To roll back this sensor-filter fix while retaining persistence and the current
+caregiver stack, run from `/opt/tronicare-admin`:
+
+```sh
+docker compose --env-file releases/vps5-20261112-sensor-workspace/rollback.env \
+  -p tronicare-admin-vps5 -f compose.yaml -f compose.care.yaml \
+  up -d --no-deps --pull never --wait --wait-timeout 120 admin
+```
+
+## Previous Admin release — 12 November 2026 (Workspace persistence)
+
+The Organization / Workspace filter now persists in the browser separately for
+each account and active membership, including All accessible organizations and
+Unassigned.
+
+- Admin image: `sha256:b4e65c7a80f1f64efe6ed1f48efcfd5bd16a0835e2ffc39d2009d783f2d5452b`.
+- Active selection: `/opt/tronicare-admin/releases/vps5-20261112-workspace-persistence.env`.
+- `/opt/tronicare-admin/current` points to the matching release directory.
+- Entry bundle: `/assets/index-Cew6fqDT.js`; all eight public client files match
+  the verified production build.
+- Selected source snapshot SHA-256:
+  `f1a7f45a1575db1a715144a7bdd985d6aaf86711fc0a4f04dbbcad920f98c0d8`.
+
+This is a client-only update on the exact running Admin image
+`sha256:511c10d1fdfffc17a42c71d1cc1ce693e924fcd37dc759ca37805abb5a4010db`.
+The frontend differs from its verified prior source in only the two persistence
+files selected from commit `4a78fb1`: `src/context.tsx` and
+`src/workspace-preference.ts`. The existing quarantine and history behavior is
+retained. The server bundle's SHA-256 remains
+`1ebda846453b54f5bc63ae18cec64931f6cdb3e03edc6751c9827b133e0c1a15`.
+The server retains its existing release provenance.
+
+The selected source passed 62 focused unit/session tests and the Linux build.
+All 16 workspace and organization-switch browser checks passed against the
+exported production client. Public `/`, `/care`, `/health/live` and
+`/health/ready` return 200; anonymous `/api/session` and `/api/care/subjects`
+return 401. No authenticated business requests were needed for these checks.
+
+Only Admin was recreated. Its environment, mounts and host settings were
+preserved; Redis, the caregiver API and caregiver PostgreSQL retained their
+container identities, images and settings. The new selection retains the latest
+caregiver image and private configuration. Source, build, staging, rollout and
+public verification evidence are stored in the active release directory.
+
+For subsequent Admin operations, retain both Compose files and the active
+selection. To roll back this client update while keeping the current caregiver
+API and databases, run from `/opt/tronicare-admin`:
+
+```sh
+docker compose --env-file releases/vps5-20261112-workspace-persistence/rollback.env \
+  -p tronicare-admin-vps5 -f compose.yaml -f compose.care.yaml \
+  up -d --no-deps --pull never --wait --wait-timeout 120 admin
+```
+
+## Previous caregiver release — 9 November 2026
 
 The caregiver portal is restored for platform administrators. The previous
 caregiver API rejected otherwise valid Assets inventory records whose organization

@@ -35,7 +35,10 @@ import {
   formatDisplayDateTime,
 } from "../../shared/date-time";
 import { hubLastEventTime } from "../../shared/hub-status";
-import { sensorLastReadingTime } from "../../shared/sensor-reading";
+import {
+  sensorLastReadingTime,
+  sensorRealDisplay,
+} from "../../shared/sensor-reading";
 import { linkedHubAssetIds } from "../../shared/hub-assets";
 import {
   millisecondsToSeconds,
@@ -791,6 +794,23 @@ export function ReferenceTag({
 export function SensorCurrentValue({ row }: { row: RecordData }) {
   return <SensorReadingValue row={row} />;
 }
+export function SensorRealValue({ row }: { row: RecordData }) {
+  const { record: sensorType } = useReferenceRecord(
+    "sensortypes",
+    valueOf(row, "IDSensorType"),
+  );
+  return (
+    <FieldValue
+      field={resourceMap.sensors.fields.find(
+        (field) => canonical(field.key) === "ValueReal",
+      )!}
+      value={sensorRealDisplay(
+        valueOf(row, "ValueReal"),
+        sensorType ? valueOf(sensorType, "HardwareType") : undefined,
+      )}
+    />
+  );
+}
 function LocalEventTime({ timestamp }: { timestamp: number | null }) {
   if (timestamp === null) return <span className="muted">—</span>;
   const date = new Date(timestamp);
@@ -874,7 +894,14 @@ function SensorReadingValue({
         field={resourceMap.sensors.fields.find(
           (f) => canonical(f.key) === name,
         )!}
-        value={value}
+        value={
+          name === "ValueReal"
+            ? sensorRealDisplay(
+                value,
+                sensorType ? valueOf(sensorType, "HardwareType") : undefined,
+              )
+            : value
+        }
       />
     );
   if (valueType === "1") return renderValue("ValueBool", boolean);

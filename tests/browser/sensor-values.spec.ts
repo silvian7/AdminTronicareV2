@@ -39,6 +39,7 @@ async function syntheticHierarchy(
   page: Page,
   options: {
     sensors: RecordData[];
+    history?: RecordData[];
     canReadTypes?: boolean;
     types: Record<string, { data?: RecordData; status?: number }>;
   },
@@ -54,6 +55,7 @@ async function syntheticHierarchy(
       { entity: "hubs", rights: "r" },
       { entity: "devices", rights: "r" },
       { entity: "sensors", rights: "r" },
+      ...(options.history ? [{ entity: "sensorshistory", rights: "r" }] : []),
       ...(options.canReadTypes === false
         ? []
         : [{ entity: "sensortypes", rights: "r" }]),
@@ -75,11 +77,14 @@ async function syntheticHierarchy(
     Label: deviceLabel,
   };
   const reads: URL[] = [];
+  const mutations: string[] = [];
   const typeReads: string[] = [];
   let denyTypes = false;
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    if (route.request().method() !== "GET")
+      mutations.push(`${route.request().method()} ${path}`);
     reads.push(url);
     const reply = (body: unknown, status = 200) =>
       route.fulfill({
@@ -100,6 +105,13 @@ async function syntheticHierarchy(
     if (path === "/api/resources/devices/51") return reply({ data: device });
     if (path === "/api/resources/sensors")
       return reply({ data: options.sensors, total: options.sensors.length });
+    if (path === "/api/history")
+      return reply({
+        data: options.history ?? [],
+        snapshot: null,
+        highWaterId: null,
+        hasMore: false,
+      });
     if (path.startsWith("/api/resources/sensors/")) {
       const id = path.split("/").at(-1)!;
       const record = options.sensors.find((row) => row.id === id);
@@ -124,6 +136,7 @@ async function syntheticHierarchy(
   });
   return {
     reads,
+    mutations,
     typeReads,
     denyTypeReads: () => {
       denyTypes = true;
@@ -191,6 +204,82 @@ async function expectRawValues(cell: Locator, real = exactReal) {
   await expect(cell).toContainText(`Integer: ${exactInteger}`);
   await expect(cell).toContainText(`Real: ${real}`);
 }
+
+test("temperature readings use one decimal across views while generic real values and API precision stay exact", async ({
+  page,
+}) => {
+  const rawTemperature = "23.66776547419453";
+  const temperatureType = {
+    ...sensorType("75", "4"),
+    m_sHardwareType: " BedTempMax ",
+  };
+  const genericType = {
+    ...sensorType("74", "4"),
+    m_sHardwareType: "voltage",
+    m_sTag: "TEMPERATURE-LOOKING-GENERIC-TYPE",
+  };
+  const sensors = [
+    sensor("61", "75", "Synthetic bed temperature", {
+      m_rValueReal: rawTemperature,
+      m_dhDhLastEvent: "2026-11-12T14:59:51Z",
+    }),
+    sensor("62", "74", "Synthetic generic real value", {
+      m_rValueReal: rawTemperature,
+    }),
+    sensor("63", "75", "Synthetic zero temperature", {
+      m_rValueReal: "0",
+    }),
+  ];
+  const mock = await syntheticHierarchy(page, {
+    sensors,
+    history: sensors.map((row, index) => ({
+      ...row,
+      m_nIDSensorHistory: String(index + 501),
+    })),
+    types: {
+      "74": { data: genericType },
+      "75": { data: temperatureType },
+    },
+  });
+
+  const sensorResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/resources/sensors",
+  );
+  await page.goto("/sensors");
+  const reply = await (await sensorResponse).json();
+  expect(reply.data[0].m_rValueReal).toBe(rawTemperature);
+  expect(reply.data[1].m_rValueReal).toBe(rawTemperature);
+  await sensorRow(page, "61")
+    .getByRole("cell", { name: "61", exact: true })
+    .click();
+  const realDetail = () =>
+    page
+      .locator(".ant-descriptions-item-label")
+      .filter({ hasText: /^Value Real$/ })
+      .locator("xpath=following-sibling::*[1]");
+  await expect(realDetail()).toHaveText("23.7");
+  await page.goto("/sensors/62");
+  await expect(realDetail()).toHaveText(rawTemperature);
+
+  await page.goto("/devices/51?tab=sensors");
+  await expect(await valueCell(page, "61")).toHaveText("23.7");
+  await expect(await valueCell(page, "62")).toHaveText(rawTemperature);
+  await expect(await valueCell(page, "63")).toHaveText("0.0");
+
+  await page.goto("/sensor-history?idsensor=61");
+  await page.getByRole("button", { name: /Load history$/ }).click();
+  for (const [id, value] of [
+    ["501", "23.7"],
+    ["502", rawTemperature],
+    ["503", "0.0"],
+  ])
+    await expect(
+      page.locator(`tr[data-row-key="${id}"]`).getByRole("cell").nth(1),
+    ).toHaveText(value);
+  expect(sensors[0].m_rValueReal).toBe(rawTemperature);
+  expect(sensors[1].m_rValueReal).toBe(rawTemperature);
+  expect(mock.mutations).toEqual([]);
+});
 
 test("hub-to-device navigation shows sensor values selected by their type without losing precision", async ({
   page,

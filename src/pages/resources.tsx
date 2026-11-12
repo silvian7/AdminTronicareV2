@@ -86,6 +86,7 @@ import {
   OrganizationIdentity,
   ReferenceSelect,
   SensorCurrentValue,
+  SensorRealValue,
   SensorLastReading,
   SensorTypeTag,
   SharedGatewayIndicator,
@@ -639,6 +640,9 @@ export function ResourceList({ resource }: { resource: Resource }) {
             ) : resource.name === "sensors" &&
               canonical(f.key) === "IDDevice" ? (
               <DeviceIdentity value={value} />
+            ) : resource.name === "sensors" &&
+              canonical(f.key) === "ValueReal" ? (
+              <SensorRealValue row={row} />
             ) : resource.name === "organizations" &&
               canonical(f.key) === "IDOrganizationType" ? (
               <ReferenceTag resource="organizationstypes" value={value} />
@@ -2109,6 +2113,9 @@ export function ResourceDetail({ resource }: { resource: Resource }) {
                   ) : resource.name === "sensors" &&
                     canonical(f.key) === "DhLastEvent" ? (
                     <SensorLastReading row={record ?? {}} />
+                  ) : resource.name === "sensors" &&
+                    canonical(f.key) === "ValueReal" ? (
+                    <SensorRealValue row={record ?? {}} />
                   ) : resource.name === "rules" &&
                     canonical(f.key) === "IDSensor" ? (
                     <SensorTypeTag value={record?.[f.key]} />

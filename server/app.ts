@@ -61,6 +61,7 @@ import {
   validateSelectedMembership,
 } from "./session-organizations";
 import { assetEquipmentHubs } from "./asset-equipment-hubs";
+import { sensorsInWorkspace } from "./sensor-workspace";
 import {
   operationId,
   virtualEventBody,
@@ -963,9 +964,20 @@ export function createApp(
           .filter((row) => row.m_nIDOrganization === organization)
           .map((row) => row.m_nIDAsset),
       );
-      records = records.filter(
-        (row) => row.m_bIsTemplate === true || ids.has(valueOf(row, "IDAsset")),
-      );
+      if (resource.name === "sensors") {
+        const scoped = await sensorsInWorkspace(
+          records,
+          ids,
+          organization,
+          r.session,
+          upstream,
+        );
+        records = scoped.records;
+        limited ||= scoped.limited;
+      } else
+        records = records.filter(
+          (row) => row.m_bIsTemplate === true || ids.has(valueOf(row, "IDAsset")),
+        );
     }
     const search =
       typeof req.query._q === "string"
