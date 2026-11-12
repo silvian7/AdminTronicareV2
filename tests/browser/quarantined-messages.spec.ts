@@ -10,6 +10,11 @@ const endpoint = "/api/core/quarantined-messages";
 const nextCursor = "c3ludGhldGljX25leHRfcGFnZQ";
 const observedAt = "2026-11-07T12:00:00.000Z";
 
+function legacyMessage<T extends QuarantinedMessage>(message: T) {
+  const { localOnly, retentionDays: _retentionDays, ...rest } = message;
+  return { ...rest, state: localOnly ? "PERMANENT_FAILURE" : rest.state };
+}
+
 function messages(): QuarantinedMessage[] {
   return Array.from({ length: 51 }, (_, index) => {
     const quarantinedAt = new Date(
@@ -21,7 +26,14 @@ function messages(): QuarantinedMessage[] {
       originItemId: String(8000 + index),
       destination:
         index < 2 ? "EXTERNAL_HISTORY" : index % 2 ? "RULES" : "ASSETS",
-      state: index % 2 ? "PERMANENT_FAILURE" : "AMBIGUOUS",
+      state:
+        index === 1
+          ? "LOCAL_ONLY"
+          : index % 2
+            ? "PERMANENT_FAILURE"
+            : "AMBIGUOUS",
+      localOnly: index === 1,
+      retentionDays: index === 1 ? 7 : null,
       createdAt: "2026-11-07T07:00:00.000Z",
       quarantinedAt,
       updatedAt: "2026-11-07T11:00:00.000Z",
@@ -52,10 +64,16 @@ function details(message: QuarantinedMessage): QuarantinedMessageDetail {
           attemptNumber: message.attemptCount - index,
           startedAt,
           completedAt: new Date(Date.parse(startedAt) + 1_000).toISOString(),
-          outcome: index === 0 ? "AMBIGUOUS" : "RETRYABLE_FAILURE",
-          protocolStatus: 503,
+          outcome: message.localOnly
+            ? "PERMANENT_FAILURE"
+            : index === 0
+              ? "AMBIGUOUS"
+              : "RETRYABLE_FAILURE",
+          protocolStatus: message.localOnly ? null : 503,
           durationMs: 1000,
-          errorCode: "SYNTHETIC_DELIVERY_CODE",
+          errorCode: message.localOnly
+            ? "HISTORY_TYPE_RETAINED"
+            : "SYNTHETIC_DELIVERY_CODE",
         };
       },
     ),
@@ -72,6 +90,7 @@ async function fixture(
     level?: number;
     caregiver?: boolean;
     mustChangePassword?: boolean;
+    legacyBackend?: boolean;
   } = {},
 ) {
   const level = options.level ?? 90;
@@ -138,7 +157,11 @@ async function fixture(
         observedAt,
         recoveryDetailsAvailable: recovery,
       };
-      return reply(response);
+      return reply(
+        options.legacyBackend
+          ? { ...response, data: response.data.map(legacyMessage) }
+          : response,
+      );
     }
     if (path.startsWith(`${endpoint}/`)) {
       reads.push({ method: request.method(), path, query: url.searchParams });
@@ -164,7 +187,11 @@ async function fixture(
       return detailError
         ? reply({ message: "Synthetic details unavailable." }, 503)
         : response
-          ? reply(response)
+          ? reply(
+              options.legacyBackend
+                ? { ...response, message: legacyMessage(response.message) }
+                : response,
+            )
           : reply({ message: "Message is unavailable." }, 404);
     }
     if (path === "/api/quarantine/incoming")
@@ -229,12 +256,12 @@ async function fixture(
 
 const card = (page: Page) =>
   page.getByRole("region", {
-    name: "Outgoing quarantined messages",
+    name: "Outgoing message status",
     exact: true,
   });
 const drawer = (page: Page) =>
   page.getByRole("dialog", {
-    name: "Outgoing quarantined message",
+    name: "Outgoing message",
     exact: true,
   });
 async function select(page: Page, label: string, value: string) {
@@ -257,7 +284,7 @@ test("platform administrators can inspect retained outcomes and bounded delivery
   const panel = card(page);
   await expect(panel).toBeVisible();
   await expect(panel).toContainText("across all workspaces");
-  await expect(panel).toContainText("Unsupported history retained");
+  await expect(panel).toContainText("Local-only history");
   await expect(
     panel.getByRole("button", { name: /^View quarantined message/ }),
   ).toHaveCount(50);
@@ -331,14 +358,45 @@ test("cursor paging and filters reset detail and return to the newest messages",
     panel.getByRole("button", { name: /^View quarantined message/ }),
   ).toHaveCount(2);
   expect(mock.reads.at(-1)?.query.has("cursor")).toBe(false);
-  await select(page, "Quarantine status", "Permanent failure");
+  await select(page, "Outgoing status", "Local-only history");
   await expect(
     panel.getByRole("button", { name: /^View quarantined message/ }),
   ).toHaveCount(1);
-  await expect(panel).toContainText("Unsupported history retained");
+  await expect(panel).toContainText("Local-only history");
   expect(mock.reads.at(-1)?.query.get("destination")).toBe("EXTERNAL_HISTORY");
-  expect(mock.reads.at(-1)?.query.get("state")).toBe("PERMANENT_FAILURE");
+  expect(mock.reads.at(-1)?.query.get("state")).toBe("LOCAL_ONLY");
 });
+
+for (const legacyBackend of [false, true]) {
+  test(`local-only history is informational with ${legacyBackend ? "legacy" : "current"} metadata`, async ({
+    page,
+  }) => {
+    const mock = await fixture(page, { legacyBackend });
+    await page.goto("/services");
+    const panel = card(page);
+    const message = mock.rows()[1];
+    const row = panel.getByRole("row").filter({ hasText: message.id });
+    await expect(row.locator(".ant-tag-blue")).toHaveText("Local-only history");
+    await expect(row).toContainText("Not required");
+    await panel
+      .getByRole("button", {
+        name: `View quarantined message ${message.id}`,
+        exact: true,
+      })
+      .click();
+    const detail = drawer(page);
+    await expect(detail).toContainText(
+      legacyBackend
+        ? "Kept locally; external delivery is not required."
+        : "Kept locally for 7 days; external delivery is not required.",
+    );
+    await expect(detail).toContainText("No HTTP request");
+    await expect(
+      detail.getByText("Permanent failure", { exact: true }),
+    ).toHaveCount(0);
+    if (legacyBackend) await expect(detail).not.toContainText("7 days");
+  });
+}
 
 test("manual and page refresh clear detail and pagination; list errors hide stale rows", async ({
   page,
@@ -381,7 +439,7 @@ test("manual and page refresh clear detail and pagination; list errors hide stal
     .getByRole("button", { name: "Retry quarantined messages", exact: true })
     .click();
   await expect(panel).toContainText(
-    "No quarantined messages match these filters.",
+    "No outgoing messages match these filters.",
   );
 });
 

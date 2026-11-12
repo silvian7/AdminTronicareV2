@@ -9,6 +9,10 @@ import {
 import type { Identity, Resource, Operation } from "../shared/resources";
 import { canAccess } from "../shared/resources";
 import { getSession } from "./api";
+import {
+  loadWorkspaceOrganization,
+  saveWorkspaceOrganization,
+} from "./workspace-preference";
 
 interface AdminContextValue {
   identity: Identity;
@@ -23,11 +27,13 @@ interface AdminContextValue {
 const AdminContext = createContext<AdminContextValue | null>(null);
 export function AdminProvider({ children }: { children: ReactNode }) {
   const session = getSession()!;
-  const [organization, setOrganization] = useState(
-    session.identity.level >= 90
-      ? (session.activeOrganizationId ?? "")
-      : session.identity.organizationId,
+  const [organization, setOrganizationState] = useState(() =>
+    loadWorkspaceOrganization(session),
   );
+  const setOrganization = (id: string) => {
+    setOrganizationState(id);
+    saveWorkspaceOrganization(session, id);
+  };
   const organizationGuard = useRef<(() => boolean | Promise<boolean>) | null>(
     null,
   );

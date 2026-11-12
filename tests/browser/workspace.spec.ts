@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { Identity, RecordData } from "../../shared/resources";
 
-async function syntheticWorkspace(page: Page, level = 90) {
+async function syntheticWorkspace(page: Page, level = 90, userId = "100") {
   const identity: Identity = {
-    id: "100",
+    id: userId,
     name: "Synthetic workspace administrator",
     organizationId: "0",
     userTypeId: String(level),
@@ -105,7 +105,7 @@ async function syntheticWorkspace(page: Page, level = 90) {
     // Every API call is synthetic, including unrelated dashboard panels.
     return reply({ data: [], total: 0 });
   });
-  return { reads, updates };
+  return { identity, reads, updates };
 }
 
 async function chooseOrganization(page: Page, label: string) {
@@ -118,6 +118,188 @@ async function chooseOrganization(page: Page, label: string) {
     page.locator(".organization-picker .ant-select-selection-item"),
   ).toHaveText(label);
 }
+
+test("the selected organization survives reload and reopening Admin in another tab", async ({
+  page,
+}) => {
+  const { reads, updates } = await syntheticWorkspace(page);
+  await page.goto("/assets");
+  await chooseOrganization(page, "Synthetic organization seven");
+  await page.goto("/assets");
+  await expect(
+    page.getByRole("link", { name: "Synthetic assigned asset", exact: true }),
+  ).toBeVisible();
+
+  const beforeReload = reads.length;
+  await page.reload();
+  await expect(
+    page.locator(".organization-picker .ant-select-selection-item"),
+  ).toHaveText("Synthetic organization seven");
+  await expect(
+    page.getByRole("link", { name: "Synthetic assigned asset", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Synthetic unassigned asset", exact: true }),
+  ).toHaveCount(0);
+  const reloadedAssetReads = reads
+    .slice(beforeReload)
+    .filter((url) => url.pathname === "/api/resources/assets");
+  expect(reloadedAssetReads.length).toBeGreaterThan(0);
+  expect(
+    reloadedAssetReads.every(
+      (url) => url.searchParams.get("_organization") === "7",
+    ),
+  ).toBe(true);
+
+  const reopened = await page.context().newPage();
+  try {
+    const next = await syntheticWorkspace(reopened);
+    await reopened.goto("/assets");
+    await expect(
+      reopened.locator(".organization-picker .ant-select-selection-item"),
+    ).toHaveText("Synthetic organization seven");
+    await expect(
+      reopened.getByRole("link", {
+        name: "Synthetic assigned asset",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      reopened.getByRole("link", {
+        name: "Synthetic unassigned asset",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    const reopenedAssetReads = next.reads.filter(
+      (url) => url.pathname === "/api/resources/assets",
+    );
+    expect(reopenedAssetReads.length).toBeGreaterThan(0);
+    expect(
+      reopenedAssetReads.every(
+        (url) => url.searchParams.get("_organization") === "7",
+      ),
+    ).toBe(true);
+    expect(next.updates).toEqual([]);
+  } finally {
+    await reopened.close();
+  }
+  expect(updates).toEqual([]);
+});
+
+test("Unassigned and All accessible organizations remain distinct saved selections", async ({
+  page,
+}) => {
+  const { reads, updates } = await syntheticWorkspace(page);
+  await page.goto("/assets");
+  await chooseOrganization(page, "Unassigned");
+  await page.goto("/assets");
+  await page.reload();
+  await expect(
+    page.locator(".organization-picker .ant-select-selection-item"),
+  ).toHaveText("Unassigned");
+  await expect(
+    page.getByRole("link", { name: "Synthetic unassigned asset", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Synthetic assigned asset", exact: true }),
+  ).toHaveCount(0);
+
+  await chooseOrganization(page, "All accessible organizations");
+  await page.goto("/assets");
+  const beforeReload = reads.length;
+  await page.reload();
+  await expect(
+    page.locator(".organization-picker .ant-select-selection-item"),
+  ).toHaveText("All accessible organizations");
+  for (const label of [
+    "Synthetic unassigned asset",
+    "Synthetic assigned asset",
+  ])
+    await expect(
+      page.getByRole("link", { name: label, exact: true }),
+    ).toBeVisible();
+  const reloadedAssetReads = reads
+    .slice(beforeReload)
+    .filter((url) => url.pathname === "/api/resources/assets");
+  expect(reloadedAssetReads.length).toBeGreaterThan(0);
+  expect(
+    reloadedAssetReads.every((url) => !url.searchParams.has("_organization")),
+  ).toBe(true);
+  expect(updates).toEqual([]);
+});
+
+test("saved workspace selections belong to the signed-in account", async ({
+  page,
+}) => {
+  await syntheticWorkspace(page);
+  await page.goto("/assets");
+  await chooseOrganization(page, "Synthetic organization seven");
+
+  const otherAccount = await page.context().newPage();
+  try {
+    await syntheticWorkspace(otherAccount, 90, "101");
+    await otherAccount.goto("/assets");
+    await expect(
+      otherAccount.locator(".organization-picker .ant-select-selection-item"),
+    ).toHaveText("All accessible organizations");
+    await chooseOrganization(otherAccount, "Unassigned");
+    await otherAccount.reload();
+    await expect(
+      otherAccount.locator(".organization-picker .ant-select-selection-item"),
+    ).toHaveText("Unassigned");
+
+    await page.goto("/assets");
+    await expect(
+      page.locator(".organization-picker .ant-select-selection-item"),
+    ).toHaveText("Synthetic organization seven");
+    await expect(
+      page.getByRole("link", { name: "Synthetic assigned asset", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", {
+        name: "Synthetic unassigned asset",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  } finally {
+    await otherAccount.close();
+  }
+});
+
+test("an ordinary session ignores its account's saved platform workspace", async ({
+  page,
+}) => {
+  const { identity, reads, updates } = await syntheticWorkspace(page);
+  await page.goto("/assets");
+  await chooseOrganization(page, "Synthetic organization seven");
+  identity.level = 30;
+  identity.userTypeId = "30";
+
+  const beforeReload = reads.length;
+  await page.goto("/assets");
+  await expect(
+    page.getByRole("combobox", { name: "Organization", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.locator(".organization-picker .ant-select-selection-item"),
+  ).toHaveText("Unassigned");
+  await expect(
+    page.getByRole("link", { name: "Synthetic unassigned asset", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Synthetic assigned asset", exact: true }),
+  ).toHaveCount(0);
+  const reloadedAssetReads = reads
+    .slice(beforeReload)
+    .filter((url) => url.pathname === "/api/resources/assets");
+  expect(reloadedAssetReads.length).toBeGreaterThan(0);
+  expect(
+    reloadedAssetReads.every(
+      (url) => url.searchParams.get("_organization") === "0",
+    ),
+  ).toBe(true);
+  expect(updates).toEqual([]);
+});
 
 test("platform administrators can scope the workspace to Unassigned and return to all organizations", async ({
   page,

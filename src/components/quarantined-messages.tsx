@@ -18,6 +18,7 @@ import { ReloadOutlined } from "@ant-design/icons";
 import {
   decodeQuarantinedMessage,
   decodeQuarantinedMessages,
+  isLocalOnlyHistoryAttempt,
   type QuarantineDestination,
   type QuarantinedMessage,
   type QuarantinedMessageDetail,
@@ -42,6 +43,7 @@ const destinations: Record<QuarantineDestination, string> = {
 const states: Record<QuarantineState, string> = {
   AMBIGUOUS: "Uncertain delivery",
   PERMANENT_FAILURE: "Permanent failure",
+  LOCAL_ONLY: "Local-only history",
 };
 const deferredStates = {
   PENDING: "Pending",
@@ -71,19 +73,17 @@ function time(value: string | null) {
 }
 
 function reason(value: string | null) {
-  return value === "HISTORY_TYPE_RETAINED"
-    ? "Unsupported history retained"
-    : (value ?? "Not recorded");
+  return value ?? "Not recorded";
 }
 
 function Status({ message }: { message: QuarantinedMessage }) {
   return (
     <Tag
       color={
-        message.state === "AMBIGUOUS"
-          ? "gold"
-          : message.errorCode === "HISTORY_TYPE_RETAINED"
-            ? "default"
+        message.localOnly
+          ? "blue"
+          : message.state === "AMBIGUOUS"
+            ? "gold"
             : "red"
       }
     >
@@ -127,11 +127,11 @@ function MessageDetails({ data }: { data: QuarantinedMessageDetail }) {
         <Descriptions.Item label="Destination">
           {destinations[message.destination]}
         </Descriptions.Item>
-        <Descriptions.Item label="Quarantine status">
+        <Descriptions.Item label="Outgoing status">
           <Status message={message} />
         </Descriptions.Item>
         <Descriptions.Item label="Reason">
-          {reason(message.errorCode)}
+          {message.localOnly ? "Local-only history" : reason(message.errorCode)}
         </Descriptions.Item>
         <Descriptions.Item label="Origin item ID">
           {message.originItemId}
@@ -139,7 +139,7 @@ function MessageDetails({ data }: { data: QuarantinedMessageDetail }) {
         <Descriptions.Item label="Created">
           {time(message.createdAt)}
         </Descriptions.Item>
-        <Descriptions.Item label="Quarantined">
+        <Descriptions.Item label="Recorded">
           {time(message.quarantinedAt)}
         </Descriptions.Item>
         <Descriptions.Item label="Updated">
@@ -149,7 +149,9 @@ function MessageDetails({ data }: { data: QuarantinedMessageDetail }) {
           {message.attemptCount}
         </Descriptions.Item>
         <Descriptions.Item label="Owner acknowledgement">
-          {message.acknowledgedAt ? (
+          {message.localOnly ? (
+            "Not required"
+          ) : message.acknowledgedAt ? (
             <Space direction="vertical" size={4}>
               <span>Owner acknowledgement recorded</span>
               {time(message.acknowledgedAt)}
@@ -168,6 +170,19 @@ function MessageDetails({ data }: { data: QuarantinedMessageDetail }) {
           <span className="quarantine-identifier">{message.payloadSha256}</span>
         </Descriptions.Item>
       </Descriptions>
+      {message.localOnly && (
+        <Alert
+          className="quarantine-section"
+          type="info"
+          showIcon
+          message="Local-only history"
+          description={
+            message.retentionDays === 7
+              ? "Kept locally for 7 days; external delivery is not required."
+              : "Kept locally; external delivery is not required."
+          }
+        />
+      )}
       {!data.recoveryDetailsAvailable &&
         message.destination === "EXTERNAL_HISTORY" &&
         message.state === "AMBIGUOUS" && (
@@ -242,13 +257,19 @@ function MessageDetails({ data }: { data: QuarantinedMessageDetail }) {
               title: "Outcome",
               width: 175,
               dataIndex: "outcome",
-              render: (value: keyof typeof outcomes) => outcomes[value],
+              render: (value: keyof typeof outcomes, attempt) =>
+                isLocalOnlyHistoryAttempt(message, attempt)
+                  ? "Local-only history"
+                  : outcomes[value],
             },
             {
               title: "Protocol status",
               width: 115,
               dataIndex: "protocolStatus",
-              render: (value: number | null) => value ?? "Not recorded",
+              render: (value: number | null, attempt) =>
+                isLocalOnlyHistoryAttempt(message, attempt)
+                  ? "No HTTP request"
+                  : (value ?? "Not recorded"),
             },
             {
               title: "Duration",
@@ -261,7 +282,10 @@ function MessageDetails({ data }: { data: QuarantinedMessageDetail }) {
               title: "Reason",
               dataIndex: "errorCode",
               width: 220,
-              render: reason,
+              render: (value: string | null, attempt) =>
+                isLocalOnlyHistoryAttempt(message, attempt)
+                  ? "Local-only history"
+                  : reason(value),
             },
           ]}
         />
@@ -349,9 +373,9 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
   return (
     <>
       <Card
-        title="Outgoing quarantined messages"
+        title="Outgoing message status"
         role="region"
-        aria-label="Outgoing quarantined messages"
+        aria-label="Outgoing message status"
         className="quarantined-messages"
         extra={
           <Button
@@ -365,8 +389,9 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
         }
       >
         <Typography.Paragraph type="secondary">
-          Global Core outgoing delivery quarantine across all workspaces.
-          Messages are listed newest first. Times are shown in Brussels time.
+          Global Core outgoing message status across all workspaces, including
+          local-only history and delivery failures. Messages are listed newest
+          first. Times are shown in Brussels time.
         </Typography.Paragraph>
         <LastRefreshed
           dataUpdatedAt={query.dataUpdatedAt}
@@ -393,7 +418,7 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
             />
           </div>
           <div className="quarantine-filter">
-            <label htmlFor={stateId}>Quarantine status</label>
+            <label htmlFor={stateId}>Outgoing status</label>
             <Select
               id={stateId}
               value={state}
@@ -461,7 +486,7 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
                       destinations[value],
                   },
                   {
-                    title: "Quarantine status",
+                    title: "Outgoing status",
                     width: 165,
                     render: (_, message) => <Status message={message} />,
                   },
@@ -469,10 +494,11 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
                     title: "Reason",
                     dataIndex: "errorCode",
                     width: 220,
-                    render: reason,
+                    render: (value: string | null, message) =>
+                      message.localOnly ? "Local-only history" : reason(value),
                   },
                   {
-                    title: "Quarantined",
+                    title: "Recorded",
                     width: 185,
                     dataIndex: "quarantinedAt",
                     render: time,
@@ -498,14 +524,16 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
                     title: "Owner acknowledgement",
                     width: 220,
                     render: (_, message) =>
-                      message.acknowledgedAt
-                        ? "Owner acknowledgement recorded"
-                        : "Not recorded",
+                      message.localOnly
+                        ? "Not required"
+                        : message.acknowledgedAt
+                          ? "Owner acknowledgement recorded"
+                          : "Not recorded",
                   },
                 ]}
               />
             ) : (
-              <Empty description="No quarantined messages match these filters." />
+              <Empty description="No outgoing messages match these filters." />
             )}
             <div className="quarantine-pagination">
               <Typography.Text type="secondary">
@@ -540,7 +568,7 @@ function QuarantineView({ refreshVersion }: { refreshVersion: number }) {
         ) : null}
       </Card>
       <Drawer
-        title="Outgoing quarantined message"
+        title="Outgoing message"
         open={selected !== null}
         onClose={() => setSelected(null)}
         width="min(800px, 100vw)"

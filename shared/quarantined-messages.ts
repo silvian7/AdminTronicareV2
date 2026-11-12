@@ -4,7 +4,11 @@ export const quarantineDestinations = [
   "MQTT_INFORMATION",
   "EXTERNAL_HISTORY",
 ] as const;
-export const quarantineStates = ["AMBIGUOUS", "PERMANENT_FAILURE"] as const;
+export const quarantineStates = [
+  "AMBIGUOUS",
+  "PERMANENT_FAILURE",
+  "LOCAL_ONLY",
+] as const;
 export type QuarantineDestination = (typeof quarantineDestinations)[number];
 export type QuarantineState = (typeof quarantineStates)[number];
 export interface QuarantineFilters {
@@ -25,6 +29,8 @@ export interface QuarantinedMessage {
   originItemId: string;
   destination: QuarantineDestination;
   state: QuarantineState;
+  localOnly: boolean;
+  retentionDays: 7 | null;
   createdAt: string;
   quarantinedAt: string;
   updatedAt: string;
@@ -48,6 +54,18 @@ export interface QuarantineAttempt {
   protocolStatus: number | null;
   durationMs: number | null;
   errorCode: string | null;
+}
+
+export function isLocalOnlyHistoryAttempt(
+  message: Pick<QuarantinedMessage, "destination">,
+  attempt: QuarantineAttempt,
+): boolean {
+  return (
+    message.destination === "EXTERNAL_HISTORY" &&
+    attempt.outcome === "PERMANENT_FAILURE" &&
+    attempt.errorCode === "HISTORY_TYPE_RETAINED" &&
+    attempt.protocolStatus === null
+  );
 }
 export interface QuarantinedMessagesResponse {
   data: QuarantinedMessage[];
@@ -169,17 +187,40 @@ function message(
       matchesCurrentSource: bool(recovery.matchesCurrentSource),
     };
   }
+  const destination = choice(row.destination, quarantineDestinations);
+  const sourceState = choice(row.state, quarantineStates);
+  const errorCode = code(row.errorCode);
+  const localOnly =
+    destination === "EXTERNAL_HISTORY" &&
+    (sourceState === "PERMANENT_FAILURE" || sourceState === "LOCAL_ONLY") &&
+    errorCode === "HISTORY_TYPE_RETAINED";
+  const hasLocalOnly = Object.hasOwn(row, "localOnly");
+  const hasRetentionDays = Object.hasOwn(row, "retentionDays");
+  if (
+    hasLocalOnly !== hasRetentionDays ||
+    (hasLocalOnly && bool(row.localOnly) !== localOnly) ||
+    (sourceState === "LOCAL_ONLY" && (!localOnly || !hasLocalOnly))
+  )
+    invalid();
+  const retentionDays =
+    !hasRetentionDays || row.retentionDays === null
+      ? null
+      : integer(row.retentionDays, 7) === 7 && localOnly
+        ? 7
+        : invalid();
   return {
     id: identifier(row.id),
     messageUuid: row.messageUuid,
     originItemId: identifier(row.originItemId),
-    destination: choice(row.destination, quarantineDestinations),
-    state: choice(row.state, quarantineStates),
+    destination,
+    state: localOnly ? "LOCAL_ONLY" : sourceState,
+    localOnly,
+    retentionDays,
     createdAt,
     quarantinedAt,
     updatedAt,
     attemptCount: integer(row.attemptCount),
-    errorCode: code(row.errorCode),
+    errorCode,
     acknowledgedAt,
     deferredDelivery,
   };
@@ -193,7 +234,8 @@ export function decodeQuarantinedMessages(
   const observedAt = timestamp(value.observedAt);
   const recoveryDetailsAvailable = bool(value.recoveryDetailsAvailable);
   if (!Array.isArray(value.data) || value.data.length > 50) invalid();
-  const data = Array.from(value.data as unknown[], (row) =>
+  const sourceRows = value.data as unknown[];
+  const data = Array.from(sourceRows, (row) =>
     message(row, observedAt, recoveryDetailsAvailable),
   );
   const ids = new Set<string>();
@@ -201,7 +243,9 @@ export function decodeQuarantinedMessages(
     if (
       ids.has(row.id) ||
       (filters.destination && filters.destination !== row.destination) ||
-      (filters.state && filters.state !== row.state) ||
+      (filters.state &&
+        filters.state !== row.state &&
+        filters.state !== object(sourceRows[index]).state) ||
       (index > 0 && data[index - 1].quarantinedAt < row.quarantinedAt)
     )
       invalid();

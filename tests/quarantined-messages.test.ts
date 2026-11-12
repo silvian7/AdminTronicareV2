@@ -5,6 +5,7 @@ import { MemorySessions } from "../server/sessions";
 import {
   decodeQuarantinedMessage,
   decodeQuarantinedMessages,
+  isLocalOnlyHistoryAttempt,
   type QuarantinedMessage,
   type QuarantinedMessageDetail,
   type QuarantinedMessagesResponse,
@@ -20,6 +21,8 @@ const row = (): QuarantinedMessage => ({
   messageUuid: "00000000-0000-4000-8000-000000000001",
   destination: "EXTERNAL_HISTORY",
   state: "AMBIGUOUS",
+  localOnly: false,
+  retentionDays: null,
   createdAt: "2026-11-06T09:00:00.000Z",
   quarantinedAt: "2026-11-06T10:00:00.000Z",
   updatedAt: "2026-11-06T10:00:00.000Z",
@@ -88,6 +91,95 @@ async function setup(
 }
 
 describe("quarantine decoders", () => {
+  it("projects legacy retained history without claiming the new retention policy", () => {
+    const { localOnly: _local, retentionDays: _days, ...legacy } = row();
+    const data = [
+      {
+        ...legacy,
+        state: "PERMANENT_FAILURE",
+        errorCode: "HISTORY_TYPE_RETAINED",
+      },
+    ];
+    const decoded = decodeQuarantinedMessages(
+      { ...sample(), data },
+      { state: "PERMANENT_FAILURE" },
+    );
+    expect(decoded.data[0]).toMatchObject({
+      state: "LOCAL_ONLY",
+      localOnly: true,
+      retentionDays: null,
+    });
+  });
+  it("accepts the new explicit local-only state and seven-day policy", () => {
+    const local = {
+      ...row(),
+      state: "LOCAL_ONLY",
+      localOnly: true,
+      retentionDays: 7,
+      errorCode: "HISTORY_TYPE_RETAINED",
+    };
+    expect(
+      decodeQuarantinedMessages(
+        { ...sample(), data: [local] },
+        { state: "LOCAL_ONLY" },
+      ).data[0],
+    ).toMatchObject(local);
+  });
+  it.each([
+    {
+      destination: "RULES",
+      state: "LOCAL_ONLY",
+      localOnly: true,
+      retentionDays: 7,
+      errorCode: "HISTORY_TYPE_RETAINED",
+    },
+    {
+      state: "LOCAL_ONLY",
+      localOnly: true,
+      retentionDays: 7,
+      errorCode: "DELIVERY_REJECTED",
+    },
+    { state: "AMBIGUOUS", localOnly: true, retentionDays: 7 },
+    {
+      state: "LOCAL_ONLY",
+      localOnly: true,
+      retentionDays: 14,
+      errorCode: "HISTORY_TYPE_RETAINED",
+    },
+  ])("rejects inconsistent local-only metadata %j", (changes) => {
+    expect(() =>
+      decodeQuarantinedMessages({
+        ...sample(),
+        data: [{ ...row(), ...changes }],
+      }),
+    ).toThrow();
+  });
+  it("keeps other destinations and HTTP failures as real failure evidence", () => {
+    const other = {
+      ...row(),
+      destination: "RULES",
+      state: "PERMANENT_FAILURE",
+      errorCode: "HISTORY_TYPE_RETAINED",
+    };
+    expect(
+      decodeQuarantinedMessages({ ...sample(), data: [other] }).data[0]
+        .localOnly,
+    ).toBe(false);
+    const attempt = {
+      ...detail().attempts[0],
+      outcome: "PERMANENT_FAILURE" as const,
+      errorCode: "HISTORY_TYPE_RETAINED",
+      protocolStatus: null,
+    };
+    expect(isLocalOnlyHistoryAttempt(row(), attempt)).toBe(true);
+    expect(
+      isLocalOnlyHistoryAttempt({ ...row(), destination: "RULES" }, attempt),
+    ).toBe(false);
+    expect(
+      isLocalOnlyHistoryAttempt(row(), { ...attempt, protocolStatus: 400 }),
+    ).toBe(false);
+    expect(attempt.outcome).toBe("PERMANENT_FAILURE");
+  });
   it("preserves bigint identities and strips private/unrecognized properties", () => {
     const value = {
       ...sample(),
@@ -302,6 +394,36 @@ describe("quarantine decoders", () => {
 });
 
 describe("quarantine BFF", () => {
+  it("forwards the new local-only filter without widening destination scope", async () => {
+    const { api, fixture } = await setup();
+    fixture.respondNext(
+      Response.json({
+        ...sample(),
+        data: [
+          {
+            ...row(),
+            state: "LOCAL_ONLY",
+            localOnly: true,
+            retentionDays: 7,
+            errorCode: "HISTORY_TYPE_RETAINED",
+          },
+        ],
+      }),
+    );
+    const response = await api
+      .get(route)
+      .query({ destination: "EXTERNAL_HISTORY", state: "LOCAL_ONLY" });
+    expect(response.status).toBe(200);
+    expect(response.body.data[0]).toMatchObject({
+      state: "LOCAL_ONLY",
+      localOnly: true,
+      retentionDays: 7,
+    });
+    expect(Object.fromEntries(fixture.calls.at(-1)!.url.searchParams)).toEqual({
+      destination: "EXTERNAL_HISTORY",
+      state: "LOCAL_ONLY",
+    });
+  });
   it("requires authentication for list and detail before contacting Core", async () => {
     const fixture = fixtureTransport();
     const api = supertest(
